@@ -586,6 +586,21 @@ export default echarts.extendComponentView({
                 }
             }, this);
             this._ticket = asyncTicket;
+            //xsy-bi 源码修改点-开始 添加雷达图tip 数据 index
+            if (params && params.seriesType === 'radar') {
+                if (el.shape.points === undefined || el.shape.points.length === el.parent._children.length) {
+                    each(el.parent._children, function (children, idx) {
+                        if (children.position[0] === el.position[0] && children.position[1] === el.position[1]) {
+                            params.radarDataIndex = idx;
+                            return false;
+                        }
+                    });
+                }
+                else {
+                    params.radarDataIndex = -1;
+                }
+            }
+            //xsy-bi 源码修改点-结束
             html = formatter(params, asyncTicket, callback);
         }
 

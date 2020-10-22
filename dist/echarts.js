@@ -24152,6 +24152,9 @@ var dataFormatMixin = {
         if (typeof formatter === 'function') {
             params.status = status;
             params.dimensionIndex = dimIndex;
+            //xsy-bi源码修改点-开始 添加label格式化索引，此处待优化，使用代码处可替换为dimensionIndex
+            params.radarDataIndex = dimIndex;
+            //xsy-bi源码修改点-结束
             return formatter(params);
         }
         else if (typeof formatter === 'string') {
@@ -29392,7 +29395,29 @@ echartsProto._initEvents = function () {
             //    componentIndex: number
             // }
             // Otherwise event query can not work.
-
+            //xsy-bi源码修改点-开始 添加雷达图点击事件对应数据索引
+            if (params && params.seriesType === 'radar') {
+                var shapePoints = e.topTarget.shape.points;
+                var parentChildren = e.topTarget.parent._children;
+                if (
+                    shapePoints === undefined
+                    || shapePoints === parentChildren.length
+                ) {
+                    each(parentChildren, function (children, idx) {
+                        if (
+                            children.position[0] === e.topTarget.position[0]
+                            && children.position[1] === e.topTarget.position[1]
+                        ) {
+                            params.radarDataIndex = idx;
+                            return false;
+                        }
+                    });
+                }
+                else {
+                    params.radarDataIndex = -1;
+                }
+            }
+            //xsy-bi源码修改点-结束
             if (params) {
                 var componentType = params.componentType;
                 var componentIndex = params.componentIndex;
@@ -29515,7 +29540,7 @@ function updateHoverLayerStatus(ecIns, ecModel) {
         elCount++;
     });
 
-    if (elCount > ecModel.get('hoverLayerThreshold') && !env$1.node) {
+    if (elCount > ecModel.get('hoverLayerThreshold') && !env$1.node && !env$1.worker) {
         ecModel.eachSeries(function (seriesModel) {
             if (seriesModel.preventUsingHoverLayer) {
                 return;
@@ -34682,13 +34707,109 @@ function retrieveColumnLayout(barWidthAndOffset, axis, seriesModel) {
         return result;
     }
 }
+//xsy-bi源码修改点-开始 柱状图条形图组内排序
+/**
+ * 根据外部参数进行组内排序，为绘制做准备
+ * @param seriesModels
+ * @returns {{layoutDataList: [], groupOrder: string, columnOffsetList: []}}
+ */
+function getLayoutDada(seriesModels) {
+    var layoutInfo = {
+        layoutDataList: [],
+        columnOffsetList: [],
+        groupOrder: 'auto',
+        stacked: false
+    };
+    var layoutDataList = layoutInfo.layoutDataList;
+    var columnOffsetList = layoutInfo.columnOffsetList;
+    var barWidthAndOffset = makeColumnLayout(seriesModels);
+    each$1(seriesModels, function (seriesModel, index) {
+        var data = seriesModel.getData();
+        var cartesian = seriesModel.coordinateSystem;
+        var baseAxis = cartesian.getBaseAxis();
+        var valueAxis = cartesian.getOtherAxis(baseAxis);
+        var valueDim = data.mapDimension(valueAxis.dim);
+        var baseDim = data.mapDimension(baseAxis.dim);
+        var stacked = isDimensionStacked(data, valueDim);
+        var stackId = getSeriesStackId(seriesModel);
+        var columnLayoutInfo = barWidthAndOffset[getAxisKey(baseAxis)][stackId];
+        var groupOrder = seriesModel.get('groupOrder') || 'auto'; //'desc' 'asc'  'auto'
+        layoutInfo.groupOrder = groupOrder;
+        layoutInfo.stacked = stacked;
+        for (var idx = 0, len = data.count(); idx < len; idx++) {
+            if (layoutDataList[idx] === undefined) {
+                layoutDataList[idx] = [];
+                columnOffsetList[idx] = [];
+            }
+            var value = data.get(valueDim, idx);
+            var baseValue = data.get(baseDim, idx);
+            columnOffsetList[idx].push(columnLayoutInfo.offset);//位置信息一定要全部收集，绘制会按照顺序取值
+            if (isNaN(value) || isNaN(baseValue)) {
+                //后续data.getItemLayout的相关使用，未对返回值做防御校验，故此当值为NaN时，正常set，维持原有代码逻辑
+                data.setItemLayout(idx, {
+                    x: undefined,
+                    y: undefined,
+                    width: undefined,
+                    height: undefined
+                });
+                continue;
+            }
+            layoutDataList[idx].push({
+                value: value,
+                idx: idx,
+                baseValue: baseValue, //index
+                coordinateSystem: cartesian,
+                seriesModelData: data,
+                columnLayoutInfo: columnLayoutInfo,
+                baseAxis: baseAxis,
+                valueAxis: valueAxis,
+                seriesModel: seriesModel,
+                seriesModelIndex: index
+            });
+        }
+    });
+    if (layoutInfo.groupOrder !== 'auto') {
+        orderLayoutData(layoutInfo);
+    }
+    return layoutInfo;
+}
 
 /**
- * @param {string} seriesType
- * @param {module:echarts/model/Global} ecModel
+ * 收集信息进行排序处理
+ * @param layoutInfo
  */
-function layout(seriesType, ecModel) {
-
+function orderLayoutData(layoutInfo) {
+    var groupOrder = layoutInfo.groupOrder;
+    var layoutDataList = layoutInfo.layoutDataList;
+    var columnOffsetList = layoutInfo.columnOffsetList;
+    each$1(columnOffsetList, function (columnOffsetListItem) {
+        columnOffsetListItem.sort(function (a, b) {
+            if (groupOrder !== 'auto') {//升序,坐标点自左向右
+                return a - b;
+            }
+        });
+    });
+    each$1(layoutDataList, function (layoutDataListItem) {
+        layoutDataListItem.sort(function (a, b) {
+            if (groupOrder === 'desc') {//降序
+                // if (stacked){//堆叠相反
+                //     return a.value - b.value;
+                // }
+                return b.value - a.value;
+            }
+            if (groupOrder === 'asc') {//升序
+                // if (stacked){//堆叠相反
+                //     return b.value - a.value;
+                // }
+                return a.value - b.value;
+            }
+        });
+    });
+}
+/**
+ * 绘制图形
+ */
+function doInitLayout(seriesType, ecModel) {
     var seriesModels = prepareLayoutBarSeries(seriesType, ecModel);
     var barWidthAndOffset = makeColumnLayout(seriesModels);
 
@@ -34703,42 +34824,48 @@ function layout(seriesType, ecModel) {
         var columnLayoutInfo = barWidthAndOffset[getAxisKey(baseAxis)][stackId];
         var columnOffset = columnLayoutInfo.offset;
         var columnWidth = columnLayoutInfo.width;
-        var valueAxis = cartesian.getOtherAxis(baseAxis);
-
-        var barMinHeight = seriesModel.get('barMinHeight') || 0;
-
-        lastStackCoords[stackId] = lastStackCoords[stackId] || [];
         data.setLayout({
             bandWidth: columnLayoutInfo.bandWidth,
             offset: columnOffset,
             size: columnWidth
         });
-
-        var valueDim = data.mapDimension(valueAxis.dim);
-        var baseDim = data.mapDimension(baseAxis.dim);
-        var stacked = isDimensionStacked(data, valueDim /*, baseDim*/);
-        var isValueAxisH = valueAxis.isHorizontal();
-
-        var valueAxisStart = getValueAxisStart(baseAxis, valueAxis, stacked);
-
-        for (var idx = 0, len = data.count(); idx < len; idx++) {
-            var value = data.get(valueDim, idx);
-            var baseValue = data.get(baseDim, idx);
-
+    }, this);
+    var orderLayoutData = getLayoutDada(seriesModels);
+    var layoutDataList = orderLayoutData.layoutDataList;
+    var columnOffsetList = orderLayoutData.columnOffsetList;
+    each$1(layoutDataList, function (layoutDataListItem, index) {
+        if (layoutDataListItem === undefined) {
+            return;
+        }
+        var columnOffsetListItem = columnOffsetList[index];
+        each$1(layoutDataListItem, function (dataItem, itemIndex) {
+            var columnLayoutInfo = dataItem.columnLayoutInfo;
+            var data = dataItem.seriesModelData;
+            var value = dataItem.value;
+            var idx = dataItem.idx;
+            var baseValue = dataItem.baseValue;
+            var seriesModel = dataItem.seriesModel;
+            var cartesian = dataItem.coordinateSystem;
+            var columnOffset = columnOffsetListItem[itemIndex];
+            var columnWidth = columnLayoutInfo.width;
+            var baseAxis = cartesian.getBaseAxis();
+            var valueAxis = cartesian.getOtherAxis(baseAxis);
+            var valueDim = data.mapDimension(valueAxis.dim);
+            var stacked = isDimensionStacked(data, valueDim);
+            var isValueAxisH = valueAxis.isHorizontal();
+            var valueAxisStart = getValueAxisStart(baseAxis, valueAxis, stacked);
+            var stackId = getSeriesStackId(seriesModel);
             var sign = value >= 0 ? 'p' : 'n';
+            lastStackCoords[stackId] = lastStackCoords[stackId] || [];
             var baseCoord = valueAxisStart;
-
-            // Because of the barMinHeight, we can not use the value in
-            // stackResultDimension directly.
+            var barMinHeight = seriesModel.get('barMinHeight') || 0;
             if (stacked) {
-                // Only ordinal axis can be stacked.
                 if (!lastStackCoords[stackId][baseValue]) {
                     lastStackCoords[stackId][baseValue] = {
                         p: valueAxisStart, // Positive stack
                         n: valueAxisStart  // Negative stack
                     };
                 }
-                // Should also consider #4243
                 baseCoord = lastStackCoords[stackId][baseValue][sign];
             }
 
@@ -34746,7 +34873,6 @@ function layout(seriesType, ecModel) {
             var y;
             var width;
             var height;
-
             if (isValueAxisH) {
                 var coord = cartesian.dataToPoint([value, baseValue]);
                 x = baseCoord;
@@ -34757,7 +34883,6 @@ function layout(seriesType, ecModel) {
                 if (Math.abs(width) < barMinHeight) {
                     width = (width < 0 ? -1 : 1) * barMinHeight;
                 }
-                // Ignore stack from NaN value
                 if (!isNaN(width)) {
                     stacked && (lastStackCoords[stackId][baseValue][sign] += width);
                 }
@@ -34773,23 +34898,133 @@ function layout(seriesType, ecModel) {
                     // Include zero to has a positive bar
                     height = (height <= 0 ? -1 : 1) * barMinHeight;
                 }
-                // Ignore stack from NaN value
                 if (!isNaN(height)) {
                     stacked && (lastStackCoords[stackId][baseValue][sign] += height);
                 }
-            }
 
+            }
             data.setItemLayout(idx, {
                 x: x,
                 y: y,
                 width: width,
                 height: height
             });
-        }
-
+        }, this);
     }, this);
 }
-
+/**
+ * @param {string} seriesType
+ * @param {module:echarts/model/Global} ecModel
+ */
+function layout(seriesType, ecModel) {
+    //TOOD 组内排序修改源码标记
+    doInitLayout(seriesType, ecModel);
+    return;
+    // var seriesModels = prepareLayoutBarSeries(seriesType, ecModel);
+    // var barWidthAndOffset = makeColumnLayout(seriesModels);
+    //
+    // var lastStackCoords = {};
+    // var lastStackCoordsOrigin = {};
+    //
+    // zrUtil.each(seriesModels, function (seriesModel) {
+    //
+    //     var data = seriesModel.getData();
+    //     var cartesian = seriesModel.coordinateSystem;
+    //     var baseAxis = cartesian.getBaseAxis();
+    //
+    //     var stackId = getSeriesStackId(seriesModel);
+    //     var columnLayoutInfo = barWidthAndOffset[getAxisKey(baseAxis)][stackId];
+    //     var columnOffset = columnLayoutInfo.offset;
+    //     var columnWidth = columnLayoutInfo.width;
+    //     var valueAxis = cartesian.getOtherAxis(baseAxis);
+    //
+    //     var barMinHeight = seriesModel.get('barMinHeight') || 0;
+    //
+    //     lastStackCoords[stackId] = lastStackCoords[stackId] || [];
+    //     lastStackCoordsOrigin[stackId] = lastStackCoordsOrigin[stackId] || []; // Fix #4243
+    //
+    //     data.setLayout({
+    //         bandWidth: columnLayoutInfo.bandWidth,
+    //         offset: columnOffset,
+    //         size: columnWidth
+    //     });
+    //
+    //     var valueDim = data.mapDimension(valueAxis.dim);
+    //     var baseDim = data.mapDimension(baseAxis.dim);
+    //     var stacked = isDimensionStacked(data, valueDim /*, baseDim*/);
+    //     var isValueAxisH = valueAxis.isHorizontal();
+    //
+    //     var valueAxisStart = getValueAxisStart(baseAxis, valueAxis, stacked);
+    //
+    //     for (var idx = 0, len = data.count(); idx < len; idx++) {
+    //         var value = data.get(valueDim, idx);
+    //         var baseValue = data.get(baseDim, idx);
+    //
+    //         var sign = value >= 0 ? 'p' : 'n';
+    //         var baseCoord = valueAxisStart;
+    //
+    //         // Because of the barMinHeight, we can not use the value in
+    //         // stackResultDimension directly.
+    //         if (stacked) {
+    //             // Only ordinal axis can be stacked.
+    //             if (!lastStackCoords[stackId][baseValue]) {
+    //                 lastStackCoords[stackId][baseValue] = {
+    //                     p: valueAxisStart, // Positive stack
+    //                     n: valueAxisStart  // Negative stack
+    //                 };
+    //             }
+    //             // Should also consider #4243
+    //             baseCoord = lastStackCoords[stackId][baseValue][sign];
+    //         }
+    //
+    //         var x;
+    //         var y;
+    //         var width;
+    //         var height;
+    //
+    //         if (isValueAxisH) {
+    //             var coord = cartesian.dataToPoint([value, baseValue]);
+    //             x = baseCoord;
+    //             y = coord[1] + columnOffset;
+    //             width = coord[0] - valueAxisStart;
+    //             height = columnWidth;
+    //
+    //             if (Math.abs(width) < barMinHeight) {
+    //                 width = (width < 0 ? -1 : 1) * barMinHeight;
+    //             }
+    //             // Ignore stack from NaN value
+    //             if (!isNaN(width)) {
+    //                 stacked && (lastStackCoords[stackId][baseValue][sign] += width);
+    //             }
+    //         }
+    //         else {
+    //             var coord = cartesian.dataToPoint([baseValue, value]);
+    //             x = coord[0] + columnOffset;
+    //             y = baseCoord;
+    //             width = columnWidth;
+    //             height = coord[1] - valueAxisStart;
+    //
+    //             if (Math.abs(height) < barMinHeight) {
+    //                 // Include zero to has a positive bar
+    //                 height = (height <= 0 ? -1 : 1) * barMinHeight;
+    //             }
+    //             // Ignore stack from NaN value
+    //             if (!isNaN(height)) {
+    //                 stacked && (lastStackCoords[stackId][baseValue][sign] += height);
+    //             }
+    //         }
+    //
+    //         data.setItemLayout(idx, {
+    //             x: x,
+    //             y: y,
+    //             width: width,
+    //             height: height
+    //         });
+    //     }
+    //
+    // }, this);
+}
+//xsy-bi源码修改点-结束
 // TODO: Do not support stack in large mode yet.
 var largeLayout = {
 
@@ -35677,8 +35912,10 @@ function rotateTextRect(textRect, rotate) {
     var boundingBox = textRect.plain();
     var beforeWidth = boundingBox.width;
     var beforeHeight = boundingBox.height;
-    var afterWidth = beforeWidth * Math.abs(Math.cos(rotateRadians)) + Math.abs(beforeHeight * Math.sin(rotateRadians));
-    var afterHeight = beforeWidth * Math.abs(Math.sin(rotateRadians)) + Math.abs(beforeHeight * Math.cos(rotateRadians));
+    var afterWidth = beforeWidth * Math.abs(Math.cos(rotateRadians))
+        + Math.abs(beforeHeight * Math.sin(rotateRadians));
+    var afterHeight = beforeWidth * Math.abs(Math.sin(rotateRadians))
+        + Math.abs(beforeHeight * Math.cos(rotateRadians));
     var rotatedRect = new BoundingRect(boundingBox.x, boundingBox.y, afterWidth, afterHeight);
 
     return rotatedRect;
@@ -41731,7 +41968,8 @@ var builders = {
         var nameDirection = opt.nameDirection;
         var textStyleModel = axisModel.getModel('nameTextStyle');
         var gap = axisModel.get('nameGap') || 0;
-
+        //xsy-bi源码修改点： y轴添加水平Gap控制nameHorizontalGap.
+        var nameHorizontalGap = axisModel.get('nameHorizontalGap') || 0;
         var extent = this.axisModel.axis.getExtent();
         var gapSignal = extent[0] > extent[1] ? -1 : 1;
         var pos = [
@@ -41741,7 +41979,8 @@ var builders = {
                 ? extent[1] + gapSignal * gap
                 : (extent[0] + extent[1]) / 2, // 'middle'
             // Reuse labelOffset.
-            isNameLocationCenter(nameLocation) ? opt.labelOffset + nameDirection * gap : 0
+            //xsy-bi源码修改点： y轴添加水平Gap控制nameHorizontalGap.
+            isNameLocationCenter(nameLocation) ? opt.labelOffset + nameDirection * gap : nameHorizontalGap
         ];
 
         var labelLayout;
@@ -45323,6 +45562,9 @@ function adjustSingleSide(list, cx, cy, r, dir, viewWidth, viewHeight, viewLeft,
     });
 
     function shiftDown(start, end, delta, dir) {
+        //xsy-bi源码修改点-开始 饼图多label优化问题
+        var couldShiftUp = (list[0].y - delta / 2) >= list[0].height * 0.61;
+        //xsy-bi源码修改点-结束
         for (var j = start; j < end; j++) {
             if (list[j].y + delta > viewTop + viewHeight) {
                 break;
@@ -45332,6 +45574,7 @@ function adjustSingleSide(list, cx, cy, r, dir, viewWidth, viewHeight, viewLeft,
             if (j > start
                 && j + 1 < end
                 && list[j + 1].y > list[j].y + list[j].height
+                && couldShiftUp //xsy-bi源码修改点-开始
             ) {
                 shiftUp(j, delta / 2);
                 return;
@@ -59596,8 +59839,15 @@ var PointerPath = Path.extend({
 
         y: 0
     },
-
+    //xsy-bi源码修改点-开始 添加指针图圆润指针
     buildPath: function (ctx, shape) {
+        if (shape.type === 'arc') {
+            this.buildArcPath(ctx, shape);
+            return;
+        }
+        this.buildCommonPath(ctx, shape);
+    },
+    buildCommonPath: function (ctx, shape) {
         var mathCos = Math.cos;
         var mathSin = Math.sin;
 
@@ -59623,7 +59873,56 @@ var PointerPath = Path.extend({
         );
         ctx.lineTo(x, y);
         return;
+    },
+    buildArcPath: function (ctx, shape) {
+        var mathCos = Math.cos;
+        var mathSin = Math.sin;
+        var r = shape.r;
+        var width = shape.width;
+        var angle = shape.angle;
+        // var x = shape.x - mathCos(angle) * width;
+        // var y = shape.y - mathSin(angle) * width;
+        var hArcWidth = shape.endWidth === undefined ? shape.width / 4 : shape.endWidth;
+        var hArcX = shape.x + mathCos(angle) * (r - hArcWidth);
+        var hArcY = shape.y + mathSin(angle) * (r - hArcWidth);
+
+        angle = shape.angle - Math.PI / 2;
+        ctx.moveTo(
+            shape.x - mathCos(angle) * width,
+            shape.y - mathSin(angle) * width
+        );
+        ctx.arc(
+            shape.x,
+            shape.y,
+            width,
+            shape.angle + Math.PI / 2,
+            shape.angle - Math.PI / 2,
+            false
+        );
+        ctx.arc(
+            hArcX,
+            hArcY,
+            hArcWidth,
+            shape.angle - Math.PI / 2,
+            shape.angle + Math.PI / 2,
+            false
+        );
+        ctx.closePath();
+        ctx.moveTo(
+            shape.x - mathCos(angle) * width / 2,
+            shape.y - mathSin(angle) * width / 2
+        );
+        ctx.arc(
+            shape.x,
+            shape.y,
+            width / 2,
+            shape.angle + Math.PI,
+            shape.angle - Math.PI,
+            true
+        );
+        return;
     }
+    //xsy-bi源码修改点-结束
 });
 
 /*
@@ -59957,6 +60256,10 @@ var GaugeView = Chart.extend({
             pointer.setShape({
                 x: posInfo.cx,
                 y: posInfo.cy,
+                //xsy-bi源码修改点-开始 添加指针图圆润指针
+                type: pointerModel.get('type'),
+                endWidth: pointerModel.get('endWidth'),
+                //xsy-bi源码修改点-结束
                 width: parsePercent$1(
                     pointerModel.get('width'), posInfo.r
                 ),
@@ -60452,6 +60755,99 @@ function getSortedIndices(data, sort) {
 }
 
 function labelLayout$1(data) {
+    //xsy-bi源码修改点-开始:漏斗图增加参数verticalAlignment，为true的时候，漏斗图每个文字垂直对齐，根据原有数据生成新的points点
+    var points0 = [[0, 0], [0, 0], [0, 0], [0, 0]];
+    data.each(function (idx) {
+        var itemModel = data.getItemModel(idx);
+        var labelModel = itemModel.getModel('label');
+        var layout = data.getItemLayout(idx);
+        var points = layout.points;
+        var labelPosition = labelModel.get('position');
+        var orient = itemModel.get('orient');
+        if (labelPosition === 'left') {
+            if (points0[3][0] === 0 || points[3][0] < points0[3][0]) {
+                points0[3][0] = points[3][0];
+            }
+            if (points0[0][0] === 0 || points[0][0] < points0[0][0]) {
+                points0[0][0] = points[0][0];
+            }
+        }
+        else if (labelPosition === 'right') {
+            if (points0[1][0] === 0 || points[1][0] > points0[1][0]) {
+                points0[1][0] = points[1][0];
+            }
+            if (points0[2][0] === 0 || points[2][0] > points0[2][0]) {
+                points0[2][0] = points[2][0];
+            }
+        }
+        else if (labelPosition === 'top') {
+            if (points0[3][1] === 0 || points[3][1] < points0[3][1]) {
+                points0[3][1] = points[3][1];
+            }
+            if (points0[0][1] === 0 || points[0][1] < points0[0][1]) {
+                points0[0][1] = points[0][1];
+            }
+        }
+        else if (labelPosition === 'bottom') {
+            if (points0[1][1] === 0 || points[1][1] > points0[1][1]) {
+                points0[1][1] = points[1][1];
+            }
+            if (points0[2][1] === 0 || points[2][1] > points0[2][1]) {
+                points0[2][1] = points[2][1];
+            }
+        }
+        else if (labelPosition === 'leftTop') {
+            if (orient === 'horizontal') {
+                if (points0[0][1] === 0 || points[0][1] < points0[0][1]) {
+                    points0[0][1] = points[0][1];
+                }
+            }
+            else {
+                if (points0[0][0] === 0 || points[0][0] < points0[0][0]) {
+                    points0[0][0] = points[0][0];
+                }
+            }
+        }
+        else if (labelPosition === 'rightTop') {
+            if (orient === 'horizontal') {
+                if (points0[3][1] === 0 || points[3][1] > points0[3][1]) {
+                    points0[3][1] = points[3][1];
+                }
+            }
+            else {
+                if (points0[1][0] === 0 || points[1][0] > points0[1][0]) {
+                    points0[1][0] = points[1][0];
+                }
+            }
+
+        }
+        else if (labelPosition === 'rightBottom') {
+            if (orient === 'horizontal') {
+                if (points0[2][1] === 0 || points[2][1] > points0[2][1]) {
+                    points0[2][1] = points[2][1];
+                }
+            }
+            else {
+                if (points0[2][0] === 0 || points[2][0] > points0[2][0]) {
+                    points0[2][0] = points[2][0];
+                }
+            }
+        }
+        else if (labelPosition === 'leftBottom') {
+            if (orient === 'horizontal') {
+                if (points0[1][1] === 0 || points[1][1] > points0[1][1]) {
+                    points0[1][1] = points[1][1];
+                }
+            }
+            else {
+                if (points0[3][0] === 0 || points[3][0] < points0[3][0]) {
+                    points0[3][0] = points[3][0];
+                }
+            }
+
+        }
+    });
+    //xsy-bi源码修改点-结束:漏斗图增加参数verticalAlignment，为true的时候，漏斗图每个文字垂直对齐，根据原有数据生成新的points点
     data.each(function (idx) {
         var itemModel = data.getItemModel(idx);
         var labelModel = itemModel.getModel('label');
@@ -60459,6 +60855,8 @@ function labelLayout$1(data) {
         var orient = itemModel.get('orient');
 
         var labelLineModel = itemModel.getModel('labelLine');
+        //xsy-bi源码修改点
+        var verticalAlignment = labelModel.get('verticalAlignment');
 
         var layout = data.getItemLayout(idx);
         var points = layout.points;
@@ -60512,7 +60910,14 @@ function labelLayout$1(data) {
                 // Left side
                 x1 = (points[3][0] + points[0][0]) / 2;
                 y1 = (points[3][1] + points[0][1]) / 2;
-                x2 = x1 - labelLineLen;
+                //xsy-bi源码修改点-开始
+                if (verticalAlignment === true) {
+                    x2 = (points0[3][0] + points0[0][0]) / 2 - labelLineLen;
+                }
+                else {
+                    x2 = x1 - labelLineLen;
+                }
+                //xsy-bi源码修改点-结束
                 textX = x2 - 5;
                 textAlign = 'right';
             }
@@ -60520,6 +60925,15 @@ function labelLayout$1(data) {
                 // Right side
                 x1 = (points[1][0] + points[2][0]) / 2;
                 y1 = (points[1][1] + points[2][1]) / 2;
+                //xsy-bi源码修改点-开始
+                //xsy-bi源码修改点-开始
+                if (verticalAlignment === true) {
+                    x2 = (points0[1][0] + points0[2][0]) / 2 + labelLineLen;
+                }
+                else {
+                    x2 = x1 + labelLineLen;
+                }
+                //xsy-bi源码修改点-结束
                 x2 = x1 + labelLineLen;
                 textX = x2 + 5;
                 textAlign = 'left';
@@ -60528,7 +60942,14 @@ function labelLayout$1(data) {
                 // Top side
                 x1 = (points[3][0] + points[0][0]) / 2;
                 y1 = (points[3][1] + points[0][1]) / 2;
-                y2 = y1 - labelLineLen;
+                //xsy-bi源码修改点-开始
+                if (verticalAlignment === true) {
+                    y2 = (points0[3][1] + points0[0][1]) / 2 - labelLineLen;
+                }
+                else {
+                    y2 = y1 - labelLineLen;
+                }
+                //xsy-bi源码修改点-结束
                 textY = y2 - 5;
                 textAlign = 'center';
             }
@@ -60536,7 +60957,14 @@ function labelLayout$1(data) {
                 // Bottom side
                 x1 = (points[1][0] + points[2][0]) / 2;
                 y1 = (points[1][1] + points[2][1]) / 2;
-                y2 = y1 + labelLineLen;
+                //xsy-bi源码修改点-开始
+                if (verticalAlignment === true) {
+                    y2 = (points0[1][1] + points0[2][1]) / 2 + labelLineLen;
+                }
+                else {
+                    y2 = y1 + labelLineLen;
+                }
+                //xsy-bi源码修改点-结束
                 textY = y2 + 5;
                 textAlign = 'center';
             }
@@ -60545,12 +60973,27 @@ function labelLayout$1(data) {
                 x1 = orient === 'horizontal' ? points[3][0] : points[1][0];
                 y1 = orient === 'horizontal' ? points[3][1] : points[1][1];
                 if (orient === 'horizontal') {
-                    y2 = y1 - labelLineLen;
+                    //xsy-bi源码修改点-开始
+                    if (verticalAlignment === true) {
+                        y2 = points0[3][1] - labelLineLen;
+                    }
+                    else {
+                        y2 = y1 - labelLineLen;
+                    }
+                    //xsy-bi源码修改点-结束
                     textY = y2 - 5;
                     textAlign = 'center';
                 }
                 else {
-                    x2 = x1 + labelLineLen;
+                    //xsy-bi源码修改点-开始
+                    //xsy-bi源码修改点-开始
+                    if (verticalAlignment === true) {
+                        x2 = points0[1][0] + labelLineLen;
+                    }
+                    else {
+                        x2 = x1 + labelLineLen;
+                    }
+                    //xsy-bi源码修改点-结束
                     textX = x2 + 5;
                     textAlign = 'top';
                 }
@@ -60560,12 +61003,26 @@ function labelLayout$1(data) {
                 x1 = points[2][0];
                 y1 = points[2][1];
                 if (orient === 'horizontal') {
-                    y2 = y1 + labelLineLen;
+                    //xsy-bi源码修改点-开始
+                    if (verticalAlignment === true) {
+                        y2 = points0[2][1] + labelLineLen;
+                    }
+                    else {
+                        y2 = y1 + labelLineLen;
+                    }
+                    //xsy-bi源码修改点-结束
                     textY = y2 + 5;
                     textAlign = 'center';
                 }
                 else {
-                    x2 = x1 + labelLineLen;
+                    //xsy-bi源码修改点-开始
+                    if (verticalAlignment === true) {
+                        x2 = points0[2][0] + labelLineLen;
+                    }
+                    else {
+                        x2 = x1 + labelLineLen;
+                    }
+                    //xsy-bi源码修改点-结束
                     textX = x2 + 5;
                     textAlign = 'bottom';
                 }
@@ -60575,12 +61032,26 @@ function labelLayout$1(data) {
                 x1 = points[0][0];
                 y1 = orient === 'horizontal' ? points[0][1] : points[1][1];
                 if (orient === 'horizontal') {
-                    y2 = y1 - labelLineLen;
+                    //xsy-bi源码修改点-开始
+                    if (verticalAlignment === true) {
+                        y2 = points0[0][1] - labelLineLen;
+                    }
+                    else {
+                        y2 = y1 - labelLineLen;
+                    }
+                    //xsy-bi源码修改点-结束
                     textY = y2 - 5;
                     textAlign = 'center';
                 }
                 else {
-                    x2 = x1 - labelLineLen;
+                    //xsy-bi源码修改点-开始
+                    if (verticalAlignment === true) {
+                        x2 = points0[0][0] - labelLineLen;
+                    }
+                    else {
+                        x2 = x1 - labelLineLen;
+                    }
+                    //xsy-bi源码修改点-结束
                     textX = x2 - 5;
                     textAlign = 'right';
                 }
@@ -60590,12 +61061,26 @@ function labelLayout$1(data) {
                 x1 = orient === 'horizontal' ? points[1][0] : points[3][0];
                 y1 = orient === 'horizontal' ? points[1][1] : points[2][1];
                 if (orient === 'horizontal') {
-                    y2 = y1 + labelLineLen;
+                    //xsy-bi源码修改点-开始
+                    if (verticalAlignment === true) {
+                        y2 = points0[1][1] + labelLineLen;
+                    }
+                    else {
+                        y2 = y1 + labelLineLen;
+                    }
+                    //xsy-bi源码修改点-结束
                     textY = y2 + 5;
                     textAlign = 'center';
                 }
                 else {
-                    x2 = x1 - labelLineLen;
+                    //xsy-bi源码修改点-开始
+                    if (verticalAlignment === true) {
+                        x2 = points0[3][0] - labelLineLen;
+                    }
+                    else {
+                        x2 = x1 - labelLineLen;
+                    }
+                    //xsy-bi源码修改点-结束
                     textX = x2 - 5;
                     textAlign = 'right';
                 }
@@ -60677,6 +61162,8 @@ var funnelLayout = function (ecModel, api, payload) {
             if (orient === 'horizontal') {
                 var val = data.get(valueDim, idx) || 0;
                 var itemHeight = linearMap(val, [min, max], sizeExtent, true);
+                //xsy-bi源码修改点:添加漏斗图最小宽度，优先级高于顶层
+                itemHeight = getItemMinSizeBySizeKey('minHeight', idx, itemHeight);
                 var y0;
                 switch (funnelAlign) {
                     case 'top':
@@ -60697,6 +61184,8 @@ var funnelLayout = function (ecModel, api, payload) {
             }
             var val = data.get(valueDim, idx) || 0;
             var itemWidth = linearMap(val, [min, max], sizeExtent, true);
+            //xsy-bi源码修改点:添加漏斗图最小宽度，优先级高于顶层
+            itemWidth = getItemMinSizeBySizeKey('minWidth', idx, itemWidth);
             var x0;
             switch (funnelAlign) {
                 case 'left':
@@ -60737,9 +61226,13 @@ var funnelLayout = function (ecModel, api, payload) {
                 var width = itemModel.get('itemStyle.width');
                 if (width == null) {
                     width = itemSize;
+                    //xsy-bi源码修改点:添加漏斗图最小宽度，优先级高于顶层
+                    width = getItemMinSizeBySizeKey('minWidth', idx, width);
                 }
                 else {
                     width = parsePercent$1(width, viewWidth);
+                    //xsy-bi源码修改点:添加漏斗图最小宽度，优先级高于顶层
+                    width = getItemMinSizeBySizeKey('minWidth', idx, width);
                     if (sort === 'ascending') {
                         width = -width;
                     }
@@ -60758,9 +61251,13 @@ var funnelLayout = function (ecModel, api, payload) {
                 var height = itemModel.get('itemStyle.height');
                 if (height == null) {
                     height = itemSize;
+                    //xsy-bi源码修改点:添加漏斗图最小高度，优先级高于顶层
+                    height = getItemMinSizeBySizeKey('minHeight', idx, height);
                 }
                 else {
                     height = parsePercent$1(height, viewHeight);
+                    //xsy-bi源码修改点:添加漏斗图最小高度，优先级高于顶层
+                    height = getItemMinSizeBySizeKey('minHeight', idx, height);
                     if (sort === 'ascending') {
                         height = -height;
                     }
@@ -60777,7 +61274,18 @@ var funnelLayout = function (ecModel, api, payload) {
                 });
             }
         }
-
+        //xsy-bi 源码修改点-开始：添加漏斗图最小宽度，最小高度，优先级高于顶层
+        function getItemMinSizeBySizeKey(sizeKey, idx, baseItemSize) {
+            var minSize = seriesModel.get(sizeKey);
+            var itemModel = data.getItemModel(idx);
+            var itemMinSize = itemModel.get('itemStyle.' + sizeKey);
+            var currentMinSize = itemMinSize !== undefined ? itemMinSize : minSize;
+            if (currentMinSize !== undefined && baseItemSize < currentMinSize) {
+                return currentMinSize;
+            }
+            return baseItemSize;
+        }
+        //xsy-bi 源码修改点-结束：添加漏斗图最小宽度，最小高度，优先级高于顶层
         labelLayout$1(data);
     });
 };
@@ -84412,6 +84920,21 @@ extendComponentView({
                 }
             }, this);
             this._ticket = asyncTicket;
+            //xsy-bi 源码修改点-开始 添加雷达图tip 数据 index
+            if (params && params.seriesType === 'radar') {
+                if (el.shape.points === undefined || el.shape.points.length === el.parent._children.length) {
+                    each$21(el.parent._children, function (children, idx) {
+                        if (children.position[0] === el.position[0] && children.position[1] === el.position[1]) {
+                            params.radarDataIndex = idx;
+                            return false;
+                        }
+                    });
+                }
+                else {
+                    params.radarDataIndex = -1;
+                }
+            }
+            //xsy-bi 源码修改点-结束
             html = formatter(params, asyncTicket, callback);
         }
 
