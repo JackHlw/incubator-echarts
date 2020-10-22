@@ -1631,7 +1631,29 @@ echartsProto._initEvents = function () {
             //    componentIndex: number
             // }
             // Otherwise event query can not work.
-
+            //xsy-bi源码修改点-开始 添加雷达图点击事件对应数据索引
+            if (params && params.seriesType === 'radar') {
+                var shapePoints = e.topTarget.shape.points;
+                var parentChildren = e.topTarget.parent._children;
+                if (
+                    shapePoints === undefined
+                    || shapePoints === parentChildren.length
+                ) {
+                    each(parentChildren, function (children, idx) {
+                        if (
+                            children.position[0] === e.topTarget.position[0]
+                            && children.position[1] === e.topTarget.position[1]
+                        ) {
+                            params.radarDataIndex = idx;
+                            return false;
+                        }
+                    });
+                }
+                else {
+                    params.radarDataIndex = -1;
+                }
+            }
+            //xsy-bi源码修改点-结束
             if (params) {
                 var componentType = params.componentType;
                 var componentIndex = params.componentIndex;

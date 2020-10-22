@@ -334,6 +334,10 @@ var GaugeView = ChartView.extend({
             pointer.setShape({
                 x: posInfo.cx,
                 y: posInfo.cy,
+                //xsy-bi源码修改点-开始 添加指针图圆润指针
+                type: pointerModel.get('type'),
+                endWidth: pointerModel.get('endWidth'),
+                //xsy-bi源码修改点-结束
                 width: parsePercent(
                     pointerModel.get('width'), posInfo.r
                 ),

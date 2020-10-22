@@ -102,6 +102,9 @@ export default {
         if (typeof formatter === 'function') {
             params.status = status;
             params.dimensionIndex = dimIndex;
+            //xsy-bi源码修改点-开始 添加label格式化索引，此处待优化，使用代码处可替换为dimensionIndex
+            params.radarDataIndex = dimIndex;
+            //xsy-bi源码修改点-结束
             return formatter(params);
         }
         else if (typeof formatter === 'string') {

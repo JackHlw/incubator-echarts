@@ -270,7 +270,8 @@ var builders = {
         var nameDirection = opt.nameDirection;
         var textStyleModel = axisModel.getModel('nameTextStyle');
         var gap = axisModel.get('nameGap') || 0;
-
+        //xsy-bi源码修改点： y轴添加水平Gap控制nameHorizontalGap.
+        var nameHorizontalGap = axisModel.get('nameHorizontalGap') || 0;
         var extent = this.axisModel.axis.getExtent();
         var gapSignal = extent[0] > extent[1] ? -1 : 1;
         var pos = [
@@ -280,7 +281,8 @@ var builders = {
                 ? extent[1] + gapSignal * gap
                 : (extent[0] + extent[1]) / 2, // 'middle'
             // Reuse labelOffset.
-            isNameLocationCenter(nameLocation) ? opt.labelOffset + nameDirection * gap : 0
+            //xsy-bi源码修改点： y轴添加水平Gap控制nameHorizontalGap.
+            isNameLocationCenter(nameLocation) ? opt.labelOffset + nameDirection * gap : nameHorizontalGap
         ];
 
         var labelLayout;

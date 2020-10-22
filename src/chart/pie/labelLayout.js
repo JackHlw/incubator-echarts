@@ -30,6 +30,9 @@ function adjustSingleSide(list, cx, cy, r, dir, viewWidth, viewHeight, viewLeft,
     });
 
     function shiftDown(start, end, delta, dir) {
+        //xsy-bi源码修改点-开始 饼图多label优化问题
+        var couldShiftUp = (list[0].y - delta / 2) >= list[0].height * 0.61;
+        //xsy-bi源码修改点-结束
         for (var j = start; j < end; j++) {
             if (list[j].y + delta > viewTop + viewHeight) {
                 break;
@@ -39,6 +42,7 @@ function adjustSingleSide(list, cx, cy, r, dir, viewWidth, viewHeight, viewLeft,
             if (j > start
                 && j + 1 < end
                 && list[j + 1].y > list[j].y + list[j].height
+                && couldShiftUp //xsy-bi源码修改点-开始
             ) {
                 shiftUp(j, delta / 2);
                 return;
