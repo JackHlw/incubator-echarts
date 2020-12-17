@@ -70,10 +70,6 @@ export interface BaseBarSeriesOption<StateOption, ExtraStateOption = DefaultExtr
 
     large?: boolean
     largeThreshold?: number
-    /**
-     * Ascending or descending within a group
-     */
-    groupOrder?:  'asc' | 'desc'
 }
 
 class BaseBarSeriesModel<Opts extends BaseBarSeriesOption<unknown> = BaseBarSeriesOption<unknown>>
