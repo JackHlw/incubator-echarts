@@ -105,7 +105,8 @@ interface layoutItemInfo {
     barMinHeight: number
 }
 interface layoutInfo {
-    layoutDataList: [layoutItemInfo[]?]
+    orderLayoutDataList: [layoutItemInfo[]?]
+    noOrderLayoutDataList: [layoutItemInfo[]?]
     columnOffsetList: [number?]
     groupOrder?: 'asc' | 'desc'
 }
@@ -471,7 +472,8 @@ export function layout(seriesType: string, ecModel: GlobalModel) {
     const barWidthAndOffset = makeColumnLayout(seriesModels);
     const lastStackCoords: Dictionary<{p: number, n: number}[]> = {};
     const layoutInfo: layoutInfo = {
-        layoutDataList: [],
+        orderLayoutDataList: [],
+        noOrderLayoutDataList: [],
         columnOffsetList: []
     };
     zrUtil.each(seriesModels, function (seriesModel, seriesIndex) {
@@ -518,11 +520,15 @@ function collectingLayoutData(
     // Because of the barMinHeight, we can not use the value in
     const isValueAxisH = valueAxis.isHorizontal();
 
-    const layoutDataList = layoutInfo.layoutDataList;
+    const orderLayoutDataList = layoutInfo.orderLayoutDataList;
+    const noOrderLayoutDataList = layoutInfo.noOrderLayoutDataList;
     const columnOffsetList = layoutInfo.columnOffsetList;
+    const seriesOrder = seriesModel.get('groupOrder');
     let dataToPointList: number[];
-
-    layoutInfo.groupOrder = seriesModel.get('groupOrder');
+    let layoutDataListItem: layoutItemInfo;
+    if (seriesOrder !== undefined){
+        layoutInfo.groupOrder = seriesOrder;
+    }
     columnOffsetList[seriesIndex] = columnLayoutInfo.offset;
     let value;
     let baseValue;
@@ -535,12 +541,13 @@ function collectingLayoutData(
             data.setItemLayout(idx, {});
             continue;
         }
-        if (layoutDataList[baseValue] === undefined) {
-            layoutDataList[baseValue] = [];
+        if (orderLayoutDataList[baseValue] === undefined) {
+            orderLayoutDataList[baseValue] = [];
+            noOrderLayoutDataList[baseValue] = [];
         }
         sign = value >= 0 ? 'p' : 'n';
         dataToPointList = isValueAxisH ? [value, baseValue] : [baseValue, value];
-        layoutDataList[baseValue].push({
+        layoutDataListItem = {
             idx: idx,
             value: value,
             baseValue: baseValue,
@@ -553,15 +560,20 @@ function collectingLayoutData(
             valueAxisStart: valueAxisStart,
             isValueAxisH: isValueAxisH,
             barMinHeight: barMinHeight
-        });
+        };
+        if (seriesOrder !== undefined){
+            orderLayoutDataList[baseValue].push(layoutDataListItem);
+            continue;
+        }
+        noOrderLayoutDataList[baseValue].push(layoutDataListItem);
     }
 }
 function orderLayoutData(layoutInfo: layoutInfo) {
     const groupOrder = layoutInfo.groupOrder;
-    const layoutDataList = layoutInfo.layoutDataList;
+    const orderLayoutDataList = layoutInfo.orderLayoutDataList;
     const columnOffsetList = layoutInfo.columnOffsetList;
     columnOffsetList.sort((a, b) => a - b);
-    zrUtil.each(layoutDataList, function (layoutDataListItem) {
+    zrUtil.each(orderLayoutDataList, function (layoutDataListItem) {
         layoutDataListItem.sort(function (a, b) {
             if (groupOrder === 'desc') {
                 return b.value - a.value;
@@ -573,7 +585,7 @@ function orderLayoutData(layoutInfo: layoutInfo) {
     });
 }
 function setLayoutItemLists(layoutInfo: layoutInfo, lastStackCoords: Dictionary<{p: number, n: number}[]>) {
-    const layoutDataList = layoutInfo.layoutDataList;
+    const layoutDataList = [].concat(layoutInfo.orderLayoutDataList, layoutInfo.noOrderLayoutDataList);
     const columnOffsetList = layoutInfo.columnOffsetList;
     zrUtil.each(layoutDataList, function (layoutDataSingleList) {
         setLayoutItemSingleList(layoutDataSingleList, columnOffsetList, lastStackCoords);
