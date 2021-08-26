@@ -34,17 +34,43 @@ export interface ECData {
     dataType?: SeriesDataType;
     focus?: InnerFocus;
     blurScope?: BlurScope;
+
+    // Required by `tooltipConfig` and `focus`.
+    componentMainType?: ComponentMainType;
+    componentIndex?: number;
+    componentHighDownName?: string;
+
+    // To make a tooltipConfig, seach `setTooltipConfig`.
+    // Used to find component tooltip option, which is used as
+    // the parent of tooltipConfig.option for cascading.
+    // If not provided, do not use component as its parent.
+    // (Set manatary to make developers not to forget them).
     tooltipConfig?: {
-        // To make a tooltipConfig, seach `setTooltipConfig`.
-        // Used to find component tooltip option, which is used as
-        // the parent of tooltipConfig.option for cascading.
-        // If not provided, do not use component as its parent.
-        // (Set manatary to make developers not to forget them).
-        componentMainType: ComponentMainType;
-        componentIndex: number;
         // Target item name to locate tooltip.
         name: string;
         option: ComponentItemTooltipOption<unknown>;
     };
 }
+
 export const getECData = makeInner<ECData, Element>();
+
+export const setCommonECData = (seriesIndex: number, dataType: SeriesDataType, dataIdx: number, el: Element) => {
+    if (el) {
+        const ecData = getECData(el);
+        // Add data index and series index for indexing the data by element
+        // Useful in tooltip
+        ecData.dataIndex = dataIdx;
+        ecData.dataType = dataType;
+        ecData.seriesIndex = seriesIndex;
+
+        // TODO: not store dataIndex on children.
+        if (el.type === 'group') {
+            el.traverse(function (child: Element): void {
+                const childECData = getECData(child);
+                childECData.seriesIndex = seriesIndex;
+                childECData.dataIndex = dataIdx;
+                childECData.dataType = dataType;
+            });
+        }
+    }
+};
