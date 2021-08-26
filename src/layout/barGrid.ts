@@ -28,7 +28,7 @@ import Axis2D from '../coord/cartesian/Axis2D';
 import GlobalModel from '../model/Global';
 import type Cartesian2D from '../coord/cartesian/Cartesian2D';
 import { StageHandler, Dictionary } from '../util/types';
-import List from '../data/List';
+import List from '../data/SeriesData';
 
 const STACK_PREFIX = '__ec_stack_';
 const LARGE_BAR_MIN_WIDTH = 0.5;
@@ -183,9 +183,10 @@ function getValueAxesMinGaps(barSeries: BarSeriesModel[]) {
 
         const data = seriesModel.getData();
         const key = baseAxis.dim + '_' + baseAxis.index;
-        const dim = data.mapDimension(baseAxis.dim);
-        for (let i = 0, cnt = data.count(); i < cnt; ++i) {
-            const value = data.get(dim, i) as number;
+        const dimIdx = data.getDimensionIndex(data.mapDimension(baseAxis.dim));
+        const store = data.getStore();
+        for (let i = 0, cnt = store.count(); i < cnt; ++i) {
+            const value = store.get(dimIdx, i) as number;
             if (!axisValues[key]) {
                 // No previous data for the axis
                 axisValues[key] = [value];
@@ -467,8 +468,10 @@ function retrieveColumnLayout(
 export {retrieveColumnLayout};
 
 export function layout(seriesType: string, ecModel: GlobalModel) {
+
     const seriesModels = prepareLayoutBarSeries(seriesType, ecModel);
     const barWidthAndOffset = makeColumnLayout(seriesModels);
+
     const lastStackCoords: Dictionary<{p: number, n: number}[]> = {};
     const layoutInfo: layoutInfo = {
         layoutDataList: [],
@@ -478,6 +481,7 @@ export function layout(seriesType: string, ecModel: GlobalModel) {
         const data = seriesModel.getData();
         const cartesian = seriesModel.coordinateSystem as Cartesian2D;
         const baseAxis = cartesian.getBaseAxis();
+
         const stackId = getSeriesStackId(seriesModel);
         const columnLayoutInfo = barWidthAndOffset[getAxisKey(baseAxis)][stackId];
         data.setLayout({
@@ -527,9 +531,12 @@ function collectingLayoutData(
     let value;
     let baseValue;
     let sign :'p' | 'n';
-    for (let idx = 0, len = data.count(); idx < len; idx++) {
-        value = data.get(valueDim, idx) as number;
-        baseValue = data.get(baseDim, idx) as number;
+    const store = data.getStore();
+    const valueDimIdx = data.getDimensionIndex(valueDim);
+    const baseDimIdx = data.getDimensionIndex(baseDim);
+    for (let idx = 0, len = store.count(); idx < len; idx++) {
+        value = store.get(valueDimIdx, idx) as number;
+        baseValue = store.get(baseDimIdx, idx) as number;
         if (isNaN(value) || isNaN(baseValue)) {
             //When the value is NaN, it is still set to maintain the original code logic
             data.setItemLayout(idx, {});
@@ -666,8 +673,8 @@ export const largeLayout: StageHandler = {
         const coordLayout = cartesian.master.getRect();
         const baseAxis = cartesian.getBaseAxis();
         const valueAxis = cartesian.getOtherAxis(baseAxis);
-        const valueDim = data.mapDimension(valueAxis.dim);
-        const baseDim = data.mapDimension(baseAxis.dim);
+        const valueDimI = data.getDimensionIndex(data.mapDimension(valueAxis.dim));
+        const baseDimI = data.getDimensionIndex(data.mapDimension(baseAxis.dim));
         const valueAxisHorizontal = valueAxis.isHorizontal();
         const valueDimIdx = valueAxisHorizontal ? 0 : 1;
 
@@ -689,12 +696,13 @@ export const largeLayout: StageHandler = {
                 const valuePair = [];
                 let pointsOffset = 0;
                 let idxOffset = 0;
+                const store = data.getStore();
 
                 while ((dataIndex = params.next()) != null) {
-                    valuePair[valueDimIdx] = data.get(valueDim, dataIndex);
-                    valuePair[1 - valueDimIdx] = data.get(baseDim, dataIndex);
+                    valuePair[valueDimIdx] = store.get(valueDimI, dataIndex);
+                    valuePair[1 - valueDimIdx] = store.get(baseDimI, dataIndex);
 
-                    coord = cartesian.dataToPoint(valuePair, null, coord);
+                    coord = cartesian.dataToPoint(valuePair, null);
                     // Data index might not be in order, depends on `progressiveChunkMode`.
                     largeBackgroundPoints[pointsOffset] =
                         valueAxisHorizontal ? coordLayout.x + coordLayout.width : coord[0];
