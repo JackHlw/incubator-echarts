@@ -28,7 +28,7 @@ import type { ZRenderType } from 'zrender/src/zrender';
 import type { TooltipOption } from './TooltipModel';
 import Model from '../../model/Model';
 import type { ZRRawEvent } from 'zrender/src/core/types';
-import type { ColorString, ZRColor } from '../../util/types';
+import type { ZRColor } from '../../util/types';
 import type CanvasPainter from 'zrender/src/canvas/Painter';
 import type SVGPainter from 'zrender/src/svg/Painter';
 import {
@@ -60,7 +60,7 @@ function mirrorPos(pos: string): string {
 }
 
 function assembleArrow(
-    backgroundColor: ColorString,
+    tooltipModel: Model<TooltipOption>,
     borderColor: ZRColor,
     arrowPosition: TooltipOption['position']
 ) {
@@ -68,28 +68,39 @@ function assembleArrow(
         return '';
     }
 
+    const backgroundColor = tooltipModel.get('backgroundColor');
+    const borderWidth = tooltipModel.get('borderWidth');
+
     borderColor = convertToColorString(borderColor);
     const arrowPos = mirrorPos(arrowPosition);
-    let positionStyle = `${arrowPos}:-6px;`;
+    const arrowSize = Math.max(Math.round(borderWidth) * 1.5, 6);
+    let positionStyle = '';
     let transformStyle = CSS_TRANSFORM_VENDOR + ':';
+    let rotateDeg;
     if (indexOf(['left', 'right'], arrowPos) > -1) {
         positionStyle += 'top:50%';
-        transformStyle += `translateY(-50%) rotate(${arrowPos === 'left' ? -225 : -45}deg)`;
+        transformStyle += `translateY(-50%) rotate(${rotateDeg = arrowPos === 'left' ? -225 : -45}deg)`;
     }
     else {
         positionStyle += 'left:50%';
-        transformStyle += `translateX(-50%) rotate(${arrowPos === 'top' ? 225 : 45}deg)`;
+        transformStyle += `translateX(-50%) rotate(${rotateDeg = arrowPos === 'top' ? 225 : 45}deg)`;
     }
+    const rotateRadian = rotateDeg * Math.PI / 180;
+    const arrowWH = arrowSize + borderWidth;
+    const rotatedWH = arrowWH * Math.abs(Math.cos(rotateRadian)) + arrowWH * Math.abs(Math.sin(rotateRadian));
+    const arrowOffset = Math.round(((rotatedWH - Math.SQRT2 * borderWidth) / 2
+        + Math.SQRT2 * borderWidth - (rotatedWH - arrowWH) / 2) * 100) / 100;
+    positionStyle += `;${arrowPos}:-${arrowOffset}px`;
 
-    const borderStyle = `${borderColor} solid 1px;`;
+    const borderStyle = `${borderColor} solid ${borderWidth}px;`;
     const styleCss = [
-        'position:absolute;width:10px;height:10px;',
+        `position:absolute;width:${arrowSize}px;height:${arrowSize}px;`,
         `${positionStyle};${transformStyle};`,
         `border-bottom:${borderStyle}`,
         `border-right:${borderStyle}`,
-        `background-color:${backgroundColor};`,
-        'box-shadow:8px 8px 16px -3px #000;'
+        `background-color:${backgroundColor};`
     ];
+
     return `<div style="${styleCss.join('')}"></div>`;
 }
 
@@ -100,36 +111,30 @@ function assembleTransition(duration: number, onlyFade?: boolean): string {
     if (!onlyFade) {
         transitionOption = ` ${duration}s ${transitionCurve}`;
         transitionText += env.transformSupported
-            ? `,${TRANSFORM_VENDOR}${transitionOption}`
+            ? `,${CSS_TRANSFORM_VENDOR}${transitionOption}`
             : `,left${transitionOption},top${transitionOption}`;
     }
 
     return CSS_TRANSITION_VENDOR + ':' + transitionText;
 }
 
-function assembleTransform(el: HTMLElement, x: number, y: number, toString?: boolean) {
+function assembleTransform(x: number, y: number, toString?: boolean) {
     // If using float on style, the final width of the dom might
     // keep changing slightly while mouse move. So `toFixed(0)` them.
-    let x0;
-    let y0;
+    const x0 = x.toFixed(0) + 'px';
+    const y0 = y.toFixed(0) + 'px';
     // not support transform, use `left` and `top` instead.
     if (!env.transformSupported) {
-        x0 = x.toFixed(0);
-        y0 = y.toFixed(0);
         return toString
-            ? `top:${y0}px;left:${x0}px;`
-            : [['top', `${y0}px`], ['left', `${x0}px`]];
+            ? `top:${y0};left:${x0};`
+            : [['top', y0], ['left', x0]];
     }
     // support transform
-    // FIXME: the padding of parent element will affect the position of tooltip
-    const stl = getComputedStyle(el.parentElement);
-    x0 = (x - parseInt(stl.paddingLeft, 10)).toFixed(0);
-    y0 = (y - parseInt(stl.paddingTop, 10)).toFixed(0);
     const is3d = env.transform3dSupported;
-    const translate = `translate${is3d ? '3d' : ''}(${x0}px,${y0}px${is3d ? ',0' : ''})`;
+    const translate = `translate${is3d ? '3d' : ''}(${x0},${y0}${is3d ? ',0' : ''})`;
     return toString
-        ? CSS_TRANSFORM_VENDOR + ':' + translate + ';'
-        : [[TRANSFORM_VENDOR, translate]];
+        ? 'top:0;left:0;' + CSS_TRANSFORM_VENDOR + ':' + translate + ';'
+        : [['top', 0], ['left', 0], [TRANSFORM_VENDOR, translate]];
 }
 
 /**
@@ -281,7 +286,6 @@ class TooltipHTMLContent {
      */
     private _longHideTimeout: number;
 
-
     constructor(
         container: HTMLElement,
         api: ExtensionAPI,
@@ -304,8 +308,7 @@ class TooltipHTMLContent {
             document.body.appendChild(el);
         }
         else {
-            // PENDING
-            container.prepend(el);
+            container.appendChild(el);
         }
 
         this._container = container;
@@ -388,7 +391,7 @@ class TooltipHTMLContent {
             style.cssText = gCssText
                 + assembleCssText(tooltipModel, !this._firstShow, this._longHide)
                 // initial transform
-                + assembleTransform(el, styleCoord[0], styleCoord[1], true)
+                + assembleTransform(styleCoord[0], styleCoord[1], true)
                 + `border-color:${convertToColorString(nearPointColor)};`
                 + (tooltipModel.get('extraCssText') || '')
                 // If mouse occasionally move over the tooltip, a mouseout event will be
@@ -396,7 +399,7 @@ class TooltipHTMLContent {
                 // stop, "unfocusAdjacency". Here `pointer-events: none` is used to solve
                 // it. Although it is not supported by IE8~IE10, fortunately it is a rare
                 // scenario.
-                + `;pointer-event:${this._enterable ? 'auto' : 'none'}`;
+                + `;pointer-events:${this._enterable ? 'auto' : 'none'}`;
         }
 
         this._show = true;
@@ -405,24 +408,26 @@ class TooltipHTMLContent {
     }
 
     setContent(
-        content: string | HTMLElement[],
+        content: string | HTMLElement | HTMLElement[],
         markers: unknown,
         tooltipModel: Model<TooltipOption>,
         borderColor?: ZRColor,
         arrowPosition?: TooltipOption['position']
     ) {
+        const el = this.el;
+
         if (content == null) {
+            el.innerHTML = '';
             return;
         }
 
-        const el = this.el;
-
+        let arrow = '';
         if (isString(arrowPosition) && tooltipModel.get('trigger') === 'item'
             && !shouldTooltipConfine(tooltipModel)) {
-            content += assembleArrow(tooltipModel.get('backgroundColor'), borderColor, arrowPosition);
+            arrow = assembleArrow(tooltipModel, borderColor, arrowPosition);
         }
         if (isString(content)) {
-            el.innerHTML = content;
+            el.innerHTML = content + arrow;
         }
         else if (content) {
             // Clear previous
@@ -435,6 +440,14 @@ class TooltipHTMLContent {
                     el.appendChild(content[i]);
                 }
             }
+            // no arrow if empty
+            if (arrow && el.childNodes.length) {
+                // no need to create a new parent element, but it's not supported by IE 10 and older.
+                // const arrowEl = document.createRange().createContextualFragment(arrow);
+                const arrowEl = document.createElement('div');
+                arrowEl.innerHTML = arrow;
+                el.appendChild(arrowEl);
+            }
         }
     }
 
@@ -444,7 +457,7 @@ class TooltipHTMLContent {
 
     getSize() {
         const el = this.el;
-        return [el.clientWidth, el.clientHeight];
+        return [el.offsetWidth, el.offsetHeight];
     }
 
     moveTo(zrX: number, zrY: number) {
@@ -453,10 +466,7 @@ class TooltipHTMLContent {
 
         if (styleCoord[0] != null && styleCoord[1] != null) {
             const style = this.el.style;
-            const transforms = assembleTransform(
-                this.el,
-                styleCoord[0], styleCoord[1]
-            ) as string[][];
+            const transforms = assembleTransform(styleCoord[0], styleCoord[1]) as string[][];
             each(transforms, (transform) => {
               style[transform[0] as any] = transform[1];
             });
@@ -507,21 +517,6 @@ class TooltipHTMLContent {
 
     dispose() {
         this.el.parentNode.removeChild(this.el);
-    }
-
-    getOuterSize() {
-        let width = this.el.clientWidth;
-        let height = this.el.clientHeight;
-
-        // Consider browser compatibility.
-        // IE8 does not support getComputedStyle.
-        const stl = getComputedStyle(this.el);
-        if (stl) {
-            width += parseInt(stl.borderLeftWidth, 10) + parseInt(stl.borderRightWidth, 10);
-            height += parseInt(stl.borderTopWidth, 10) + parseInt(stl.borderBottomWidth, 10);
-        }
-
-        return {width: width, height: height};
     }
 
 }

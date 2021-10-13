@@ -33,27 +33,27 @@ import {
     OptionDataItemObject,
     GraphEdgeItemObject,
     OptionDataValueNumeric,
-    DefaultEmphasisFocus
+    DefaultEmphasisFocus,
+    CallbackDataParams
 } from '../../util/types';
 import GlobalModel from '../../model/Global';
-import List from '../../data/List';
+import SeriesData from '../../data/SeriesData';
 import { LayoutRect } from '../../util/layout';
 import { createTooltipMarkup } from '../../component/tooltip/tooltipMarkup';
 
 
 type FocusNodeAdjacency = boolean | 'inEdges' | 'outEdges' | 'allEdges';
 
-export interface SankeyNodeStateOption {
+export interface SankeyNodeStateOption<TCbParams = never> {
     label?: SeriesLabelOption
-    itemStyle?: ItemStyleOption
+    itemStyle?: ItemStyleOption<TCbParams>
 }
 
 export interface SankeyEdgeStateOption {
     lineStyle?: SankeyEdgeStyleOption
 }
 
-interface SankeyBothStateOption extends SankeyNodeStateOption, SankeyEdgeStateOption {
-}
+interface SankeyBothStateOption<TCbParams> extends SankeyNodeStateOption<TCbParams>, SankeyEdgeStateOption {}
 
 interface SankeyEdgeStyleOption extends LineStyleOption {
     curveness?: number
@@ -92,7 +92,8 @@ export interface SankeyLevelOption extends SankeyNodeStateOption, SankeyEdgeStat
 }
 
 export interface SankeySeriesOption
-    extends SeriesOption<SankeyBothStateOption, ExtraStateOption>, SankeyBothStateOption,
+    extends SeriesOption<SankeyBothStateOption<CallbackDataParams>, ExtraStateOption>,
+    SankeyBothStateOption<CallbackDataParams>,
     BoxLayoutOptionMixin {
     type?: 'sankey'
 
@@ -148,9 +149,6 @@ class SankeySeriesModel extends SeriesModel<SankeySeriesOption> {
 
     /**
      * Init a graph data structure from data in option series
-     *
-     * @param  {Object} option  the object used to config echarts view
-     * @return {module:echarts/data/List} storage initial data
      */
     getInitialData(option: SankeySeriesOption, ecModel: GlobalModel) {
         const links = option.edges || option.links;
@@ -173,7 +171,7 @@ class SankeySeriesModel extends SeriesModel<SankeySeriesOption> {
             const graph = createGraphFromNodeEdge(nodes, links, this, true, beforeLink);
             return graph.data;
         }
-        function beforeLink(nodeData: List, edgeData: List) {
+        function beforeLink(nodeData: SeriesData, edgeData: SeriesData) {
             nodeData.wrapMethod('getItemModel', function (model: Model, idx: number) {
                 const seriesModel = model.parentModel as SankeySeriesModel;
                 const layout = seriesModel.getData().getItemLayout(idx);
@@ -204,7 +202,8 @@ class SankeySeriesModel extends SeriesModel<SankeySeriesOption> {
     }
 
     setNodePosition(dataIndex: number, localPosition: number[]) {
-        const dataItem = this.option.data[dataIndex];
+        const nodes = this.option.data || this.option.nodes;
+        const dataItem = nodes[dataIndex];
         dataItem.localX = localPosition[0];
         dataItem.localY = localPosition[1];
     }
@@ -260,9 +259,7 @@ class SankeySeriesModel extends SeriesModel<SankeySeriesOption> {
         }
     }
 
-    optionUpdated() {
-        const option = this.option;
-    }
+    optionUpdated() {}
 
     // Override Series.getDataParams()
     getDataParams(dataIndex: number, dataType: 'node' | 'edge') {
