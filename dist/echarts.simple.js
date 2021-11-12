@@ -48,6 +48,8 @@
     };
 
     function __extends(d, b) {
+        if (typeof b !== "function" && b !== null)
+            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
         extendStatics(d, b);
         function __() { this.constructor = d; }
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
@@ -64,12 +66,14 @@
         return __assign.apply(this, arguments);
     };
 
-    function __spreadArrays() {
-        for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-        for (var r = Array(s), k = 0, i = 0; i < il; i++)
-            for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
-                r[k] = a[j];
-        return r;
+    function __spreadArray(to, from, pack) {
+        if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+            if (ar || !(i in from)) {
+                if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+                ar[i] = from[i];
+            }
+        }
+        return to.concat(ar || from);
     }
 
     var Browser = (function () {
@@ -93,6 +97,8 @@
             this.touchEventsSupported = false;
             this.pointerEventsSupported = false;
             this.domSupported = false;
+            this.transformSupported = false;
+            this.transform3dSupported = false;
         }
         return Env;
     }());
@@ -143,6 +149,14 @@
         env.pointerEventsSupported = 'onpointerdown' in window
             && (browser.edge || (browser.ie && +browser.version >= 11));
         env.domSupported = typeof document !== 'undefined';
+        var style = document.documentElement.style;
+        env.transform3dSupported = ((browser.ie && 'transition' in style)
+            || browser.edge
+            || (('WebKitCSSMatrix' in window) && ('m11' in new WebKitCSSMatrix()))
+            || 'MozPerspective' in style)
+            && !('OTransition' in style);
+        env.transformSupported = env.transform3dSupported
+            || (browser.ie && +browser.version >= 9);
     }
 
     var BUILTIN_OBJECT = {
@@ -174,6 +188,7 @@
     var nativeMap = arrayProto.map;
     var ctorFunction = function () { }.constructor;
     var protoFunction = ctorFunction ? ctorFunction.prototype : null;
+    var protoKey = '__proto__';
     var methods = {};
     function $override(name, fn) {
         methods[name] = fn;
@@ -222,7 +237,7 @@
         else if (!BUILTIN_OBJECT[typeStr] && !isPrimitive(source) && !isDom(source)) {
             result = {};
             for (var key in source) {
-                if (source.hasOwnProperty(key)) {
+                if (source.hasOwnProperty(key) && key !== protoKey) {
                     result[key] = clone(source[key]);
                 }
             }
@@ -234,7 +249,7 @@
             return overwrite ? clone(source) : target;
         }
         for (var key in source) {
-            if (source.hasOwnProperty(key)) {
+            if (source.hasOwnProperty(key) && key !== protoKey) {
                 var targetProp = target[key];
                 var sourceProp = source[key];
                 if (isObject(sourceProp)
@@ -269,7 +284,7 @@
         }
         else {
             for (var key in source) {
-                if (source.hasOwnProperty(key)) {
+                if (source.hasOwnProperty(key) && key !== protoKey) {
                     target[key] = source[key];
                 }
             }
@@ -494,7 +509,7 @@
     function isGradientObject(value) {
         return value.colorStops != null;
     }
-    function isPatternObject(value) {
+    function isImagePatternObject(value) {
         return value.image != null;
     }
     function isRegExp(value) {
@@ -670,7 +685,7 @@
         isTypedArray: isTypedArray,
         isDom: isDom,
         isGradientObject: isGradientObject,
-        isPatternObject: isPatternObject,
+        isImagePatternObject: isImagePatternObject,
         isRegExp: isRegExp,
         eqNaN: eqNaN,
         retrieve: retrieve,
@@ -1016,13 +1031,16 @@
             return this;
         };
         Eventful.prototype.triggerWithContext = function (type) {
+            var args = [];
+            for (var _i = 1; _i < arguments.length; _i++) {
+                args[_i - 1] = arguments[_i];
+            }
             if (!this._$handlers) {
                 return this;
             }
             var _h = this._$handlers[type];
             var eventProcessor = this._$eventProcessor;
             if (_h) {
-                var args = arguments;
                 var argLen = args.length;
                 var ctx = args[argLen - 1];
                 var len = _h.length;
@@ -1199,6 +1217,7 @@
             calculateZrXY(el, e, out);
         }
         else if (env.browser.firefox
+            && env.browser.version < '39'
             && e.layerX != null
             && e.layerX !== e.offsetX) {
             out.zrX = e.layerX;
@@ -1631,338 +1650,699 @@
         return x < 0 || x > painter.getWidth() || y < 0 || y > painter.getHeight();
     }
 
-    function create$1() {
-        return [1, 0, 0, 1, 0, 0];
-    }
-    function identity(out) {
-        out[0] = 1;
-        out[1] = 0;
-        out[2] = 0;
-        out[3] = 1;
-        out[4] = 0;
-        out[5] = 0;
-        return out;
-    }
-    function copy$1(out, m) {
-        out[0] = m[0];
-        out[1] = m[1];
-        out[2] = m[2];
-        out[3] = m[3];
-        out[4] = m[4];
-        out[5] = m[5];
-        return out;
-    }
-    function mul$1(out, m1, m2) {
-        var out0 = m1[0] * m2[0] + m1[2] * m2[1];
-        var out1 = m1[1] * m2[0] + m1[3] * m2[1];
-        var out2 = m1[0] * m2[2] + m1[2] * m2[3];
-        var out3 = m1[1] * m2[2] + m1[3] * m2[3];
-        var out4 = m1[0] * m2[4] + m1[2] * m2[5] + m1[4];
-        var out5 = m1[1] * m2[4] + m1[3] * m2[5] + m1[5];
-        out[0] = out0;
-        out[1] = out1;
-        out[2] = out2;
-        out[3] = out3;
-        out[4] = out4;
-        out[5] = out5;
-        return out;
-    }
-    function translate(out, a, v) {
-        out[0] = a[0];
-        out[1] = a[1];
-        out[2] = a[2];
-        out[3] = a[3];
-        out[4] = a[4] + v[0];
-        out[5] = a[5] + v[1];
-        return out;
-    }
-    function rotate(out, a, rad) {
-        var aa = a[0];
-        var ac = a[2];
-        var atx = a[4];
-        var ab = a[1];
-        var ad = a[3];
-        var aty = a[5];
-        var st = Math.sin(rad);
-        var ct = Math.cos(rad);
-        out[0] = aa * ct + ab * st;
-        out[1] = -aa * st + ab * ct;
-        out[2] = ac * ct + ad * st;
-        out[3] = -ac * st + ct * ad;
-        out[4] = ct * atx + st * aty;
-        out[5] = ct * aty - st * atx;
-        return out;
-    }
-    function scale$1(out, a, v) {
-        var vx = v[0];
-        var vy = v[1];
-        out[0] = a[0] * vx;
-        out[1] = a[1] * vy;
-        out[2] = a[2] * vx;
-        out[3] = a[3] * vy;
-        out[4] = a[4] * vx;
-        out[5] = a[5] * vy;
-        return out;
-    }
-    function invert(out, a) {
-        var aa = a[0];
-        var ac = a[2];
-        var atx = a[4];
-        var ab = a[1];
-        var ad = a[3];
-        var aty = a[5];
-        var det = aa * ad - ab * ac;
-        if (!det) {
-            return null;
+    var DEFAULT_MIN_MERGE = 32;
+    var DEFAULT_MIN_GALLOPING = 7;
+    function minRunLength(n) {
+        var r = 0;
+        while (n >= DEFAULT_MIN_MERGE) {
+            r |= n & 1;
+            n >>= 1;
         }
-        det = 1.0 / det;
-        out[0] = ad * det;
-        out[1] = -ab * det;
-        out[2] = -ac * det;
-        out[3] = aa * det;
-        out[4] = (ac * aty - ad * atx) * det;
-        out[5] = (ab * atx - aa * aty) * det;
-        return out;
+        return n + r;
     }
-    function clone$2(a) {
-        var b = create$1();
-        copy$1(b, a);
-        return b;
-    }
-
-    var matrix = /*#__PURE__*/Object.freeze({
-        __proto__: null,
-        create: create$1,
-        identity: identity,
-        copy: copy$1,
-        mul: mul$1,
-        translate: translate,
-        rotate: rotate,
-        scale: scale$1,
-        invert: invert,
-        clone: clone$2
-    });
-
-    var mIdentity = identity;
-    var EPSILON = 5e-5;
-    function isNotAroundZero(val) {
-        return val > EPSILON || val < -EPSILON;
-    }
-    var scaleTmp = [];
-    var tmpTransform = [];
-    var originTransform = create$1();
-    var abs = Math.abs;
-    var Transformable = (function () {
-        function Transformable() {
+    function makeAscendingRun(array, lo, hi, compare) {
+        var runHi = lo + 1;
+        if (runHi === hi) {
+            return 1;
         }
-        Transformable.prototype.setPosition = function (arr) {
-            this.x = arr[0];
-            this.y = arr[1];
-        };
-        Transformable.prototype.setScale = function (arr) {
-            this.scaleX = arr[0];
-            this.scaleY = arr[1];
-        };
-        Transformable.prototype.setOrigin = function (arr) {
-            this.originX = arr[0];
-            this.originY = arr[1];
-        };
-        Transformable.prototype.needLocalTransform = function () {
-            return isNotAroundZero(this.rotation)
-                || isNotAroundZero(this.x)
-                || isNotAroundZero(this.y)
-                || isNotAroundZero(this.scaleX - 1)
-                || isNotAroundZero(this.scaleY - 1);
-        };
-        Transformable.prototype.updateTransform = function () {
-            var parent = this.parent;
-            var parentHasTransform = parent && parent.transform;
-            var needLocalTransform = this.needLocalTransform();
-            var m = this.transform;
-            if (!(needLocalTransform || parentHasTransform)) {
-                m && mIdentity(m);
-                return;
+        if (compare(array[runHi++], array[lo]) < 0) {
+            while (runHi < hi && compare(array[runHi], array[runHi - 1]) < 0) {
+                runHi++;
             }
-            m = m || create$1();
-            if (needLocalTransform) {
-                this.getLocalTransform(m);
+            reverseRun(array, lo, runHi);
+        }
+        else {
+            while (runHi < hi && compare(array[runHi], array[runHi - 1]) >= 0) {
+                runHi++;
             }
-            else {
-                mIdentity(m);
-            }
-            if (parentHasTransform) {
-                if (needLocalTransform) {
-                    mul$1(m, parent.transform, m);
+        }
+        return runHi - lo;
+    }
+    function reverseRun(array, lo, hi) {
+        hi--;
+        while (lo < hi) {
+            var t = array[lo];
+            array[lo++] = array[hi];
+            array[hi--] = t;
+        }
+    }
+    function binaryInsertionSort(array, lo, hi, start, compare) {
+        if (start === lo) {
+            start++;
+        }
+        for (; start < hi; start++) {
+            var pivot = array[start];
+            var left = lo;
+            var right = start;
+            var mid;
+            while (left < right) {
+                mid = left + right >>> 1;
+                if (compare(pivot, array[mid]) < 0) {
+                    right = mid;
                 }
                 else {
-                    copy$1(m, parent.transform);
+                    left = mid + 1;
                 }
             }
-            this.transform = m;
-            this._resolveGlobalScaleRatio(m);
-        };
-        Transformable.prototype._resolveGlobalScaleRatio = function (m) {
-            var globalScaleRatio = this.globalScaleRatio;
-            if (globalScaleRatio != null && globalScaleRatio !== 1) {
-                this.getGlobalScale(scaleTmp);
-                var relX = scaleTmp[0] < 0 ? -1 : 1;
-                var relY = scaleTmp[1] < 0 ? -1 : 1;
-                var sx = ((scaleTmp[0] - relX) * globalScaleRatio + relX) / scaleTmp[0] || 0;
-                var sy = ((scaleTmp[1] - relY) * globalScaleRatio + relY) / scaleTmp[1] || 0;
-                m[0] *= sx;
-                m[1] *= sx;
-                m[2] *= sy;
-                m[3] *= sy;
+            var n = start - left;
+            switch (n) {
+                case 3:
+                    array[left + 3] = array[left + 2];
+                case 2:
+                    array[left + 2] = array[left + 1];
+                case 1:
+                    array[left + 1] = array[left];
+                    break;
+                default:
+                    while (n > 0) {
+                        array[left + n] = array[left + n - 1];
+                        n--;
+                    }
             }
-            this.invTransform = this.invTransform || create$1();
-            invert(this.invTransform, m);
-        };
-        Transformable.prototype.getLocalTransform = function (m) {
-            return Transformable.getLocalTransform(this, m);
-        };
-        Transformable.prototype.getComputedTransform = function () {
-            var transformNode = this;
-            var ancestors = [];
-            while (transformNode) {
-                ancestors.push(transformNode);
-                transformNode = transformNode.parent;
+            array[left] = pivot;
+        }
+    }
+    function gallopLeft(value, array, start, length, hint, compare) {
+        var lastOffset = 0;
+        var maxOffset = 0;
+        var offset = 1;
+        if (compare(value, array[start + hint]) > 0) {
+            maxOffset = length - hint;
+            while (offset < maxOffset && compare(value, array[start + hint + offset]) > 0) {
+                lastOffset = offset;
+                offset = (offset << 1) + 1;
+                if (offset <= 0) {
+                    offset = maxOffset;
+                }
             }
-            while (transformNode = ancestors.pop()) {
-                transformNode.updateTransform();
+            if (offset > maxOffset) {
+                offset = maxOffset;
             }
-            return this.transform;
-        };
-        Transformable.prototype.setLocalTransform = function (m) {
-            if (!m) {
+            lastOffset += hint;
+            offset += hint;
+        }
+        else {
+            maxOffset = hint + 1;
+            while (offset < maxOffset && compare(value, array[start + hint - offset]) <= 0) {
+                lastOffset = offset;
+                offset = (offset << 1) + 1;
+                if (offset <= 0) {
+                    offset = maxOffset;
+                }
+            }
+            if (offset > maxOffset) {
+                offset = maxOffset;
+            }
+            var tmp = lastOffset;
+            lastOffset = hint - offset;
+            offset = hint - tmp;
+        }
+        lastOffset++;
+        while (lastOffset < offset) {
+            var m = lastOffset + (offset - lastOffset >>> 1);
+            if (compare(value, array[start + m]) > 0) {
+                lastOffset = m + 1;
+            }
+            else {
+                offset = m;
+            }
+        }
+        return offset;
+    }
+    function gallopRight(value, array, start, length, hint, compare) {
+        var lastOffset = 0;
+        var maxOffset = 0;
+        var offset = 1;
+        if (compare(value, array[start + hint]) < 0) {
+            maxOffset = hint + 1;
+            while (offset < maxOffset && compare(value, array[start + hint - offset]) < 0) {
+                lastOffset = offset;
+                offset = (offset << 1) + 1;
+                if (offset <= 0) {
+                    offset = maxOffset;
+                }
+            }
+            if (offset > maxOffset) {
+                offset = maxOffset;
+            }
+            var tmp = lastOffset;
+            lastOffset = hint - offset;
+            offset = hint - tmp;
+        }
+        else {
+            maxOffset = length - hint;
+            while (offset < maxOffset && compare(value, array[start + hint + offset]) >= 0) {
+                lastOffset = offset;
+                offset = (offset << 1) + 1;
+                if (offset <= 0) {
+                    offset = maxOffset;
+                }
+            }
+            if (offset > maxOffset) {
+                offset = maxOffset;
+            }
+            lastOffset += hint;
+            offset += hint;
+        }
+        lastOffset++;
+        while (lastOffset < offset) {
+            var m = lastOffset + (offset - lastOffset >>> 1);
+            if (compare(value, array[start + m]) < 0) {
+                offset = m;
+            }
+            else {
+                lastOffset = m + 1;
+            }
+        }
+        return offset;
+    }
+    function TimSort(array, compare) {
+        var minGallop = DEFAULT_MIN_GALLOPING;
+        var length = 0;
+        var runStart;
+        var runLength;
+        var stackSize = 0;
+        length = array.length;
+        var tmp = [];
+        runStart = [];
+        runLength = [];
+        function pushRun(_runStart, _runLength) {
+            runStart[stackSize] = _runStart;
+            runLength[stackSize] = _runLength;
+            stackSize += 1;
+        }
+        function mergeRuns() {
+            while (stackSize > 1) {
+                var n = stackSize - 2;
+                if ((n >= 1 && runLength[n - 1] <= runLength[n] + runLength[n + 1])
+                    || (n >= 2 && runLength[n - 2] <= runLength[n] + runLength[n - 1])) {
+                    if (runLength[n - 1] < runLength[n + 1]) {
+                        n--;
+                    }
+                }
+                else if (runLength[n] > runLength[n + 1]) {
+                    break;
+                }
+                mergeAt(n);
+            }
+        }
+        function forceMergeRuns() {
+            while (stackSize > 1) {
+                var n = stackSize - 2;
+                if (n > 0 && runLength[n - 1] < runLength[n + 1]) {
+                    n--;
+                }
+                mergeAt(n);
+            }
+        }
+        function mergeAt(i) {
+            var start1 = runStart[i];
+            var length1 = runLength[i];
+            var start2 = runStart[i + 1];
+            var length2 = runLength[i + 1];
+            runLength[i] = length1 + length2;
+            if (i === stackSize - 3) {
+                runStart[i + 1] = runStart[i + 2];
+                runLength[i + 1] = runLength[i + 2];
+            }
+            stackSize--;
+            var k = gallopRight(array[start2], array, start1, length1, 0, compare);
+            start1 += k;
+            length1 -= k;
+            if (length1 === 0) {
                 return;
             }
-            var sx = m[0] * m[0] + m[1] * m[1];
-            var sy = m[2] * m[2] + m[3] * m[3];
-            if (isNotAroundZero(sx - 1)) {
-                sx = Math.sqrt(sx);
-            }
-            if (isNotAroundZero(sy - 1)) {
-                sy = Math.sqrt(sy);
-            }
-            if (m[0] < 0) {
-                sx = -sx;
-            }
-            if (m[3] < 0) {
-                sy = -sy;
-            }
-            this.rotation = Math.atan2(-m[1] / sy, m[0] / sx);
-            if (sx < 0 && sy < 0) {
-                this.rotation += Math.PI;
-                sx = -sx;
-                sy = -sy;
-            }
-            this.x = m[4];
-            this.y = m[5];
-            this.scaleX = sx;
-            this.scaleY = sy;
-        };
-        Transformable.prototype.decomposeTransform = function () {
-            if (!this.transform) {
+            length2 = gallopLeft(array[start1 + length1 - 1], array, start2, length2, length2 - 1, compare);
+            if (length2 === 0) {
                 return;
             }
-            var parent = this.parent;
-            var m = this.transform;
-            if (parent && parent.transform) {
-                mul$1(tmpTransform, parent.invTransform, m);
-                m = tmpTransform;
+            if (length1 <= length2) {
+                mergeLow(start1, length1, start2, length2);
             }
-            var ox = this.originX;
-            var oy = this.originY;
-            if (ox || oy) {
-                originTransform[4] = ox;
-                originTransform[5] = oy;
-                mul$1(tmpTransform, m, originTransform);
-                tmpTransform[4] -= ox;
-                tmpTransform[5] -= oy;
-                m = tmpTransform;
+            else {
+                mergeHigh(start1, length1, start2, length2);
             }
-            this.setLocalTransform(m);
+        }
+        function mergeLow(start1, length1, start2, length2) {
+            var i = 0;
+            for (i = 0; i < length1; i++) {
+                tmp[i] = array[start1 + i];
+            }
+            var cursor1 = 0;
+            var cursor2 = start2;
+            var dest = start1;
+            array[dest++] = array[cursor2++];
+            if (--length2 === 0) {
+                for (i = 0; i < length1; i++) {
+                    array[dest + i] = tmp[cursor1 + i];
+                }
+                return;
+            }
+            if (length1 === 1) {
+                for (i = 0; i < length2; i++) {
+                    array[dest + i] = array[cursor2 + i];
+                }
+                array[dest + length2] = tmp[cursor1];
+                return;
+            }
+            var _minGallop = minGallop;
+            var count1;
+            var count2;
+            var exit;
+            while (1) {
+                count1 = 0;
+                count2 = 0;
+                exit = false;
+                do {
+                    if (compare(array[cursor2], tmp[cursor1]) < 0) {
+                        array[dest++] = array[cursor2++];
+                        count2++;
+                        count1 = 0;
+                        if (--length2 === 0) {
+                            exit = true;
+                            break;
+                        }
+                    }
+                    else {
+                        array[dest++] = tmp[cursor1++];
+                        count1++;
+                        count2 = 0;
+                        if (--length1 === 1) {
+                            exit = true;
+                            break;
+                        }
+                    }
+                } while ((count1 | count2) < _minGallop);
+                if (exit) {
+                    break;
+                }
+                do {
+                    count1 = gallopRight(array[cursor2], tmp, cursor1, length1, 0, compare);
+                    if (count1 !== 0) {
+                        for (i = 0; i < count1; i++) {
+                            array[dest + i] = tmp[cursor1 + i];
+                        }
+                        dest += count1;
+                        cursor1 += count1;
+                        length1 -= count1;
+                        if (length1 <= 1) {
+                            exit = true;
+                            break;
+                        }
+                    }
+                    array[dest++] = array[cursor2++];
+                    if (--length2 === 0) {
+                        exit = true;
+                        break;
+                    }
+                    count2 = gallopLeft(tmp[cursor1], array, cursor2, length2, 0, compare);
+                    if (count2 !== 0) {
+                        for (i = 0; i < count2; i++) {
+                            array[dest + i] = array[cursor2 + i];
+                        }
+                        dest += count2;
+                        cursor2 += count2;
+                        length2 -= count2;
+                        if (length2 === 0) {
+                            exit = true;
+                            break;
+                        }
+                    }
+                    array[dest++] = tmp[cursor1++];
+                    if (--length1 === 1) {
+                        exit = true;
+                        break;
+                    }
+                    _minGallop--;
+                } while (count1 >= DEFAULT_MIN_GALLOPING || count2 >= DEFAULT_MIN_GALLOPING);
+                if (exit) {
+                    break;
+                }
+                if (_minGallop < 0) {
+                    _minGallop = 0;
+                }
+                _minGallop += 2;
+            }
+            minGallop = _minGallop;
+            minGallop < 1 && (minGallop = 1);
+            if (length1 === 1) {
+                for (i = 0; i < length2; i++) {
+                    array[dest + i] = array[cursor2 + i];
+                }
+                array[dest + length2] = tmp[cursor1];
+            }
+            else if (length1 === 0) {
+                throw new Error();
+            }
+            else {
+                for (i = 0; i < length1; i++) {
+                    array[dest + i] = tmp[cursor1 + i];
+                }
+            }
+        }
+        function mergeHigh(start1, length1, start2, length2) {
+            var i = 0;
+            for (i = 0; i < length2; i++) {
+                tmp[i] = array[start2 + i];
+            }
+            var cursor1 = start1 + length1 - 1;
+            var cursor2 = length2 - 1;
+            var dest = start2 + length2 - 1;
+            var customCursor = 0;
+            var customDest = 0;
+            array[dest--] = array[cursor1--];
+            if (--length1 === 0) {
+                customCursor = dest - (length2 - 1);
+                for (i = 0; i < length2; i++) {
+                    array[customCursor + i] = tmp[i];
+                }
+                return;
+            }
+            if (length2 === 1) {
+                dest -= length1;
+                cursor1 -= length1;
+                customDest = dest + 1;
+                customCursor = cursor1 + 1;
+                for (i = length1 - 1; i >= 0; i--) {
+                    array[customDest + i] = array[customCursor + i];
+                }
+                array[dest] = tmp[cursor2];
+                return;
+            }
+            var _minGallop = minGallop;
+            while (true) {
+                var count1 = 0;
+                var count2 = 0;
+                var exit = false;
+                do {
+                    if (compare(tmp[cursor2], array[cursor1]) < 0) {
+                        array[dest--] = array[cursor1--];
+                        count1++;
+                        count2 = 0;
+                        if (--length1 === 0) {
+                            exit = true;
+                            break;
+                        }
+                    }
+                    else {
+                        array[dest--] = tmp[cursor2--];
+                        count2++;
+                        count1 = 0;
+                        if (--length2 === 1) {
+                            exit = true;
+                            break;
+                        }
+                    }
+                } while ((count1 | count2) < _minGallop);
+                if (exit) {
+                    break;
+                }
+                do {
+                    count1 = length1 - gallopRight(tmp[cursor2], array, start1, length1, length1 - 1, compare);
+                    if (count1 !== 0) {
+                        dest -= count1;
+                        cursor1 -= count1;
+                        length1 -= count1;
+                        customDest = dest + 1;
+                        customCursor = cursor1 + 1;
+                        for (i = count1 - 1; i >= 0; i--) {
+                            array[customDest + i] = array[customCursor + i];
+                        }
+                        if (length1 === 0) {
+                            exit = true;
+                            break;
+                        }
+                    }
+                    array[dest--] = tmp[cursor2--];
+                    if (--length2 === 1) {
+                        exit = true;
+                        break;
+                    }
+                    count2 = length2 - gallopLeft(array[cursor1], tmp, 0, length2, length2 - 1, compare);
+                    if (count2 !== 0) {
+                        dest -= count2;
+                        cursor2 -= count2;
+                        length2 -= count2;
+                        customDest = dest + 1;
+                        customCursor = cursor2 + 1;
+                        for (i = 0; i < count2; i++) {
+                            array[customDest + i] = tmp[customCursor + i];
+                        }
+                        if (length2 <= 1) {
+                            exit = true;
+                            break;
+                        }
+                    }
+                    array[dest--] = array[cursor1--];
+                    if (--length1 === 0) {
+                        exit = true;
+                        break;
+                    }
+                    _minGallop--;
+                } while (count1 >= DEFAULT_MIN_GALLOPING || count2 >= DEFAULT_MIN_GALLOPING);
+                if (exit) {
+                    break;
+                }
+                if (_minGallop < 0) {
+                    _minGallop = 0;
+                }
+                _minGallop += 2;
+            }
+            minGallop = _minGallop;
+            if (minGallop < 1) {
+                minGallop = 1;
+            }
+            if (length2 === 1) {
+                dest -= length1;
+                cursor1 -= length1;
+                customDest = dest + 1;
+                customCursor = cursor1 + 1;
+                for (i = length1 - 1; i >= 0; i--) {
+                    array[customDest + i] = array[customCursor + i];
+                }
+                array[dest] = tmp[cursor2];
+            }
+            else if (length2 === 0) {
+                throw new Error();
+            }
+            else {
+                customCursor = dest - (length2 - 1);
+                for (i = 0; i < length2; i++) {
+                    array[customCursor + i] = tmp[i];
+                }
+            }
+        }
+        return {
+            mergeRuns: mergeRuns,
+            forceMergeRuns: forceMergeRuns,
+            pushRun: pushRun
         };
-        Transformable.prototype.getGlobalScale = function (out) {
-            var m = this.transform;
-            out = out || [];
-            if (!m) {
-                out[0] = 1;
-                out[1] = 1;
-                return out;
+    }
+    function sort(array, compare, lo, hi) {
+        if (!lo) {
+            lo = 0;
+        }
+        if (!hi) {
+            hi = array.length;
+        }
+        var remaining = hi - lo;
+        if (remaining < 2) {
+            return;
+        }
+        var runLength = 0;
+        if (remaining < DEFAULT_MIN_MERGE) {
+            runLength = makeAscendingRun(array, lo, hi, compare);
+            binaryInsertionSort(array, lo, hi, lo + runLength, compare);
+            return;
+        }
+        var ts = TimSort(array, compare);
+        var minRun = minRunLength(remaining);
+        do {
+            runLength = makeAscendingRun(array, lo, hi, compare);
+            if (runLength < minRun) {
+                var force = remaining;
+                if (force > minRun) {
+                    force = minRun;
+                }
+                binaryInsertionSort(array, lo, lo + force, lo + runLength, compare);
+                runLength = force;
             }
-            out[0] = Math.sqrt(m[0] * m[0] + m[1] * m[1]);
-            out[1] = Math.sqrt(m[2] * m[2] + m[3] * m[3]);
-            if (m[0] < 0) {
-                out[0] = -out[0];
+            ts.pushRun(lo, runLength);
+            ts.mergeRuns();
+            remaining -= runLength;
+            lo += runLength;
+        } while (remaining !== 0);
+        ts.forceMergeRuns();
+    }
+
+    var REDRAW_BIT = 1;
+    var STYLE_CHANGED_BIT = 2;
+    var SHAPE_CHANGED_BIT = 4;
+
+    var invalidZErrorLogged = false;
+    function logInvalidZError() {
+        if (invalidZErrorLogged) {
+            return;
+        }
+        invalidZErrorLogged = true;
+        console.warn('z / z2 / zlevel of displayable is invalid, which may cause unexpected errors');
+    }
+    function shapeCompareFunc(a, b) {
+        if (a.zlevel === b.zlevel) {
+            if (a.z === b.z) {
+                return a.z2 - b.z2;
             }
-            if (m[3] < 0) {
-                out[1] = -out[1];
+            return a.z - b.z;
+        }
+        return a.zlevel - b.zlevel;
+    }
+    var Storage = (function () {
+        function Storage() {
+            this._roots = [];
+            this._displayList = [];
+            this._displayListLen = 0;
+            this.displayableSortFunc = shapeCompareFunc;
+        }
+        Storage.prototype.traverse = function (cb, context) {
+            for (var i = 0; i < this._roots.length; i++) {
+                this._roots[i].traverse(cb, context);
             }
-            return out;
         };
-        Transformable.prototype.transformCoordToLocal = function (x, y) {
-            var v2 = [x, y];
-            var invTransform = this.invTransform;
-            if (invTransform) {
-                applyTransform(v2, v2, invTransform);
+        Storage.prototype.getDisplayList = function (update, includeIgnore) {
+            includeIgnore = includeIgnore || false;
+            var displayList = this._displayList;
+            if (update || !displayList.length) {
+                this.updateDisplayList(includeIgnore);
             }
-            return v2;
+            return displayList;
         };
-        Transformable.prototype.transformCoordToGlobal = function (x, y) {
-            var v2 = [x, y];
-            var transform = this.transform;
-            if (transform) {
-                applyTransform(v2, v2, transform);
+        Storage.prototype.updateDisplayList = function (includeIgnore) {
+            this._displayListLen = 0;
+            var roots = this._roots;
+            var displayList = this._displayList;
+            for (var i = 0, len = roots.length; i < len; i++) {
+                this._updateAndAddDisplayable(roots[i], null, includeIgnore);
             }
-            return v2;
+            displayList.length = this._displayListLen;
+            env.canvasSupported && sort(displayList, shapeCompareFunc);
         };
-        Transformable.prototype.getLineScale = function () {
-            var m = this.transform;
-            return m && abs(m[0] - 1) > 1e-10 && abs(m[3] - 1) > 1e-10
-                ? Math.sqrt(abs(m[0] * m[3] - m[2] * m[1]))
-                : 1;
-        };
-        Transformable.getLocalTransform = function (target, m) {
-            m = m || [];
-            mIdentity(m);
-            var ox = target.originX || 0;
-            var oy = target.originY || 0;
-            var sx = target.scaleX;
-            var sy = target.scaleY;
-            var rotation = target.rotation || 0;
-            var x = target.x;
-            var y = target.y;
-            m[4] -= ox;
-            m[5] -= oy;
-            m[0] *= sx;
-            m[1] *= sy;
-            m[2] *= sx;
-            m[3] *= sy;
-            m[4] *= sx;
-            m[5] *= sy;
-            if (rotation) {
-                rotate(m, m, rotation);
+        Storage.prototype._updateAndAddDisplayable = function (el, clipPaths, includeIgnore) {
+            if (el.ignore && !includeIgnore) {
+                return;
             }
-            m[4] += ox;
-            m[5] += oy;
-            m[4] += x;
-            m[5] += y;
-            return m;
+            el.beforeUpdate();
+            el.update();
+            el.afterUpdate();
+            var userSetClipPath = el.getClipPath();
+            if (el.ignoreClip) {
+                clipPaths = null;
+            }
+            else if (userSetClipPath) {
+                if (clipPaths) {
+                    clipPaths = clipPaths.slice();
+                }
+                else {
+                    clipPaths = [];
+                }
+                var currentClipPath = userSetClipPath;
+                var parentClipPath = el;
+                while (currentClipPath) {
+                    currentClipPath.parent = parentClipPath;
+                    currentClipPath.updateTransform();
+                    clipPaths.push(currentClipPath);
+                    parentClipPath = currentClipPath;
+                    currentClipPath = currentClipPath.getClipPath();
+                }
+            }
+            if (el.childrenRef) {
+                var children = el.childrenRef();
+                for (var i = 0; i < children.length; i++) {
+                    var child = children[i];
+                    if (el.__dirty) {
+                        child.__dirty |= REDRAW_BIT;
+                    }
+                    this._updateAndAddDisplayable(child, clipPaths, includeIgnore);
+                }
+                el.__dirty = 0;
+            }
+            else {
+                var disp = el;
+                if (clipPaths && clipPaths.length) {
+                    disp.__clipPaths = clipPaths;
+                }
+                else if (disp.__clipPaths && disp.__clipPaths.length > 0) {
+                    disp.__clipPaths = [];
+                }
+                if (isNaN(disp.z)) {
+                    logInvalidZError();
+                    disp.z = 0;
+                }
+                if (isNaN(disp.z2)) {
+                    logInvalidZError();
+                    disp.z2 = 0;
+                }
+                if (isNaN(disp.zlevel)) {
+                    logInvalidZError();
+                    disp.zlevel = 0;
+                }
+                this._displayList[this._displayListLen++] = disp;
+            }
+            var decalEl = el.getDecalElement && el.getDecalElement();
+            if (decalEl) {
+                this._updateAndAddDisplayable(decalEl, clipPaths, includeIgnore);
+            }
+            var textGuide = el.getTextGuideLine();
+            if (textGuide) {
+                this._updateAndAddDisplayable(textGuide, clipPaths, includeIgnore);
+            }
+            var textEl = el.getTextContent();
+            if (textEl) {
+                this._updateAndAddDisplayable(textEl, clipPaths, includeIgnore);
+            }
         };
-        Transformable.initDefaultProps = (function () {
-            var proto = Transformable.prototype;
-            proto.x = 0;
-            proto.y = 0;
-            proto.scaleX = 1;
-            proto.scaleY = 1;
-            proto.originX = 0;
-            proto.originY = 0;
-            proto.rotation = 0;
-            proto.globalScaleRatio = 1;
-        })();
-        return Transformable;
+        Storage.prototype.addRoot = function (el) {
+            if (el.__zr && el.__zr.storage === this) {
+                return;
+            }
+            this._roots.push(el);
+        };
+        Storage.prototype.delRoot = function (el) {
+            if (el instanceof Array) {
+                for (var i = 0, l = el.length; i < l; i++) {
+                    this.delRoot(el[i]);
+                }
+                return;
+            }
+            var idx = indexOf(this._roots, el);
+            if (idx >= 0) {
+                this._roots.splice(idx, 1);
+            }
+        };
+        Storage.prototype.delAllRoots = function () {
+            this._roots = [];
+            this._displayList = [];
+            this._displayListLen = 0;
+            return;
+        };
+        Storage.prototype.getRoots = function () {
+            return this._roots;
+        };
+        Storage.prototype.dispose = function () {
+            this._displayList = null;
+            this._roots = null;
+        };
+        return Storage;
     }());
+
+    var requestAnimationFrame;
+    requestAnimationFrame = (typeof window !== 'undefined'
+        && ((window.requestAnimationFrame && window.requestAnimationFrame.bind(window))
+            || (window.msRequestAnimationFrame && window.msRequestAnimationFrame.bind(window))
+            || window.mozRequestAnimationFrame
+            || window.webkitRequestAnimationFrame)) || function (func) {
+        return setTimeout(func, 16);
+    };
+    var requestAnimationFrame$1 = requestAnimationFrame;
 
     var easing = {
         linear: function (k) {
@@ -2912,7 +3292,10 @@
             }
         };
         Track.prototype.needsAnimate = function () {
-            return !this._isAllValueEqual && this.keyframes.length >= 2 && this.interpolable;
+            return !this._isAllValueEqual
+                && this.keyframes.length >= 2
+                && this.interpolable
+                && this.maxTime > 0;
         };
         Track.prototype.getAdditiveTrack = function () {
             return this._additiveTrack;
@@ -2968,7 +3351,7 @@
                             this.interpolable = false;
                         }
                     }
-                    else if (typeof value !== 'number') {
+                    else if (typeof value !== 'number' || isNaN(value)) {
                         this.interpolable = false;
                         return;
                     }
@@ -3018,8 +3401,8 @@
                 for (var i = 0; i < kfsLen; i++) {
                     if (arrDim === 0) {
                         if (this.isValueColor) {
-                            kfs[i].additiveValue
-                                = add1DArray([], kfs[i].value, startValue, -1);
+                            kfs[i].additiveValue =
+                                add1DArray([], kfs[i].value, startValue, -1);
                         }
                         else {
                             kfs[i].additiveValue = kfs[i].value - startValue;
@@ -3245,7 +3628,7 @@
         Animator.prototype._doneCallback = function () {
             this._setTracksFinished();
             this._clip = null;
-            var doneList = this._doneList;
+            var doneList = this._doneCbs;
             if (doneList) {
                 var len = doneList.length;
                 for (var i = 0; i < len; i++) {
@@ -3256,7 +3639,7 @@
         Animator.prototype._abortedCallback = function () {
             this._setTracksFinished();
             var animation = this.animation;
-            var abortedList = this._abortedList;
+            var abortedList = this._abortedCbs;
             if (animation) {
                 animation.removeClip(this._clip);
             }
@@ -3333,7 +3716,7 @@
                         for (var i = 0; i < tracks.length; i++) {
                             tracks[i].step(self._target, percent);
                         }
-                        var onframeList = self._onframeList;
+                        var onframeList = self._onframeCbs;
                         if (onframeList) {
                             for (var i = 0; i < onframeList.length; i++) {
                                 onframeList[i](self._target, percent);
@@ -3373,28 +3756,28 @@
         };
         Animator.prototype.during = function (cb) {
             if (cb) {
-                if (!this._onframeList) {
-                    this._onframeList = [];
+                if (!this._onframeCbs) {
+                    this._onframeCbs = [];
                 }
-                this._onframeList.push(cb);
+                this._onframeCbs.push(cb);
             }
             return this;
         };
         Animator.prototype.done = function (cb) {
             if (cb) {
-                if (!this._doneList) {
-                    this._doneList = [];
+                if (!this._doneCbs) {
+                    this._doneCbs = [];
                 }
-                this._doneList.push(cb);
+                this._doneCbs.push(cb);
             }
             return this;
         };
         Animator.prototype.aborted = function (cb) {
             if (cb) {
-                if (!this._abortedList) {
-                    this._abortedList = [];
+                if (!this._abortedCbs) {
+                    this._abortedCbs = [];
                 }
-                this._abortedList.push(cb);
+                this._abortedCbs.push(cb);
             }
             return this;
         };
@@ -3474,2225 +3857,6 @@
         };
         return Animator;
     }());
-
-    var Point = (function () {
-        function Point(x, y) {
-            this.x = x || 0;
-            this.y = y || 0;
-        }
-        Point.prototype.copy = function (other) {
-            this.x = other.x;
-            this.y = other.y;
-            return this;
-        };
-        Point.prototype.clone = function () {
-            return new Point(this.x, this.y);
-        };
-        Point.prototype.set = function (x, y) {
-            this.x = x;
-            this.y = y;
-            return this;
-        };
-        Point.prototype.equal = function (other) {
-            return other.x === this.x && other.y === this.y;
-        };
-        Point.prototype.add = function (other) {
-            this.x += other.x;
-            this.y += other.y;
-            return this;
-        };
-        Point.prototype.scale = function (scalar) {
-            this.x *= scalar;
-            this.y *= scalar;
-        };
-        Point.prototype.scaleAndAdd = function (other, scalar) {
-            this.x += other.x * scalar;
-            this.y += other.y * scalar;
-        };
-        Point.prototype.sub = function (other) {
-            this.x -= other.x;
-            this.y -= other.y;
-            return this;
-        };
-        Point.prototype.dot = function (other) {
-            return this.x * other.x + this.y * other.y;
-        };
-        Point.prototype.len = function () {
-            return Math.sqrt(this.x * this.x + this.y * this.y);
-        };
-        Point.prototype.lenSquare = function () {
-            return this.x * this.x + this.y * this.y;
-        };
-        Point.prototype.normalize = function () {
-            var len = this.len();
-            this.x /= len;
-            this.y /= len;
-            return this;
-        };
-        Point.prototype.distance = function (other) {
-            var dx = this.x - other.x;
-            var dy = this.y - other.y;
-            return Math.sqrt(dx * dx + dy * dy);
-        };
-        Point.prototype.distanceSquare = function (other) {
-            var dx = this.x - other.x;
-            var dy = this.y - other.y;
-            return dx * dx + dy * dy;
-        };
-        Point.prototype.negate = function () {
-            this.x = -this.x;
-            this.y = -this.y;
-            return this;
-        };
-        Point.prototype.transform = function (m) {
-            if (!m) {
-                return;
-            }
-            var x = this.x;
-            var y = this.y;
-            this.x = m[0] * x + m[2] * y + m[4];
-            this.y = m[1] * x + m[3] * y + m[5];
-            return this;
-        };
-        Point.prototype.toArray = function (out) {
-            out[0] = this.x;
-            out[1] = this.y;
-            return out;
-        };
-        Point.prototype.fromArray = function (input) {
-            this.x = input[0];
-            this.y = input[1];
-        };
-        Point.set = function (p, x, y) {
-            p.x = x;
-            p.y = y;
-        };
-        Point.copy = function (p, p2) {
-            p.x = p2.x;
-            p.y = p2.y;
-        };
-        Point.len = function (p) {
-            return Math.sqrt(p.x * p.x + p.y * p.y);
-        };
-        Point.lenSquare = function (p) {
-            return p.x * p.x + p.y * p.y;
-        };
-        Point.dot = function (p0, p1) {
-            return p0.x * p1.x + p0.y * p1.y;
-        };
-        Point.add = function (out, p0, p1) {
-            out.x = p0.x + p1.x;
-            out.y = p0.y + p1.y;
-        };
-        Point.sub = function (out, p0, p1) {
-            out.x = p0.x - p1.x;
-            out.y = p0.y - p1.y;
-        };
-        Point.scale = function (out, p0, scalar) {
-            out.x = p0.x * scalar;
-            out.y = p0.y * scalar;
-        };
-        Point.scaleAndAdd = function (out, p0, p1, scalar) {
-            out.x = p0.x + p1.x * scalar;
-            out.y = p0.y + p1.y * scalar;
-        };
-        Point.lerp = function (out, p0, p1, t) {
-            var onet = 1 - t;
-            out.x = onet * p0.x + t * p1.x;
-            out.y = onet * p0.y + t * p1.y;
-        };
-        return Point;
-    }());
-
-    var mathMin = Math.min;
-    var mathMax = Math.max;
-    var lt = new Point();
-    var rb = new Point();
-    var lb = new Point();
-    var rt = new Point();
-    var minTv = new Point();
-    var maxTv = new Point();
-    var BoundingRect = (function () {
-        function BoundingRect(x, y, width, height) {
-            if (width < 0 && isFinite(width)) {
-                x = x + width;
-                width = -width;
-            }
-            if (height < 0 && isFinite(height)) {
-                y = y + height;
-                height = -height;
-            }
-            this.x = x;
-            this.y = y;
-            this.width = width;
-            this.height = height;
-        }
-        BoundingRect.prototype.union = function (other) {
-            var x = mathMin(other.x, this.x);
-            var y = mathMin(other.y, this.y);
-            if (isFinite(this.x) && isFinite(this.width)) {
-                this.width = mathMax(other.x + other.width, this.x + this.width) - x;
-            }
-            else {
-                this.width = other.width;
-            }
-            if (isFinite(this.y) && isFinite(this.height)) {
-                this.height = mathMax(other.y + other.height, this.y + this.height) - y;
-            }
-            else {
-                this.height = other.height;
-            }
-            this.x = x;
-            this.y = y;
-        };
-        BoundingRect.prototype.applyTransform = function (m) {
-            BoundingRect.applyTransform(this, this, m);
-        };
-        BoundingRect.prototype.calculateTransform = function (b) {
-            var a = this;
-            var sx = b.width / a.width;
-            var sy = b.height / a.height;
-            var m = create$1();
-            translate(m, m, [-a.x, -a.y]);
-            scale$1(m, m, [sx, sy]);
-            translate(m, m, [b.x, b.y]);
-            return m;
-        };
-        BoundingRect.prototype.intersect = function (b, mtv) {
-            if (!b) {
-                return false;
-            }
-            if (!(b instanceof BoundingRect)) {
-                b = BoundingRect.create(b);
-            }
-            var a = this;
-            var ax0 = a.x;
-            var ax1 = a.x + a.width;
-            var ay0 = a.y;
-            var ay1 = a.y + a.height;
-            var bx0 = b.x;
-            var bx1 = b.x + b.width;
-            var by0 = b.y;
-            var by1 = b.y + b.height;
-            var overlap = !(ax1 < bx0 || bx1 < ax0 || ay1 < by0 || by1 < ay0);
-            if (mtv) {
-                var dMin = Infinity;
-                var dMax = 0;
-                var d0 = Math.abs(ax1 - bx0);
-                var d1 = Math.abs(bx1 - ax0);
-                var d2 = Math.abs(ay1 - by0);
-                var d3 = Math.abs(by1 - ay0);
-                var dx = Math.min(d0, d1);
-                var dy = Math.min(d2, d3);
-                if (ax1 < bx0 || bx1 < ax0) {
-                    if (dx > dMax) {
-                        dMax = dx;
-                        if (d0 < d1) {
-                            Point.set(maxTv, -d0, 0);
-                        }
-                        else {
-                            Point.set(maxTv, d1, 0);
-                        }
-                    }
-                }
-                else {
-                    if (dx < dMin) {
-                        dMin = dx;
-                        if (d0 < d1) {
-                            Point.set(minTv, d0, 0);
-                        }
-                        else {
-                            Point.set(minTv, -d1, 0);
-                        }
-                    }
-                }
-                if (ay1 < by0 || by1 < ay0) {
-                    if (dy > dMax) {
-                        dMax = dy;
-                        if (d2 < d3) {
-                            Point.set(maxTv, 0, -d2);
-                        }
-                        else {
-                            Point.set(maxTv, 0, d3);
-                        }
-                    }
-                }
-                else {
-                    if (dx < dMin) {
-                        dMin = dx;
-                        if (d2 < d3) {
-                            Point.set(minTv, 0, d2);
-                        }
-                        else {
-                            Point.set(minTv, 0, -d3);
-                        }
-                    }
-                }
-            }
-            if (mtv) {
-                Point.copy(mtv, overlap ? minTv : maxTv);
-            }
-            return overlap;
-        };
-        BoundingRect.prototype.contain = function (x, y) {
-            var rect = this;
-            return x >= rect.x
-                && x <= (rect.x + rect.width)
-                && y >= rect.y
-                && y <= (rect.y + rect.height);
-        };
-        BoundingRect.prototype.clone = function () {
-            return new BoundingRect(this.x, this.y, this.width, this.height);
-        };
-        BoundingRect.prototype.copy = function (other) {
-            BoundingRect.copy(this, other);
-        };
-        BoundingRect.prototype.plain = function () {
-            return {
-                x: this.x,
-                y: this.y,
-                width: this.width,
-                height: this.height
-            };
-        };
-        BoundingRect.prototype.isFinite = function () {
-            return isFinite(this.x)
-                && isFinite(this.y)
-                && isFinite(this.width)
-                && isFinite(this.height);
-        };
-        BoundingRect.prototype.isZero = function () {
-            return this.width === 0 || this.height === 0;
-        };
-        BoundingRect.create = function (rect) {
-            return new BoundingRect(rect.x, rect.y, rect.width, rect.height);
-        };
-        BoundingRect.copy = function (target, source) {
-            target.x = source.x;
-            target.y = source.y;
-            target.width = source.width;
-            target.height = source.height;
-        };
-        BoundingRect.applyTransform = function (target, source, m) {
-            if (!m) {
-                if (target !== source) {
-                    BoundingRect.copy(target, source);
-                }
-                return;
-            }
-            if (m[1] < 1e-5 && m[1] > -1e-5 && m[2] < 1e-5 && m[2] > -1e-5) {
-                var sx = m[0];
-                var sy = m[3];
-                var tx = m[4];
-                var ty = m[5];
-                target.x = source.x * sx + tx;
-                target.y = source.y * sy + ty;
-                target.width = source.width * sx;
-                target.height = source.height * sy;
-                if (target.width < 0) {
-                    target.x += target.width;
-                    target.width = -target.width;
-                }
-                if (target.height < 0) {
-                    target.y += target.height;
-                    target.height = -target.height;
-                }
-                return;
-            }
-            lt.x = lb.x = source.x;
-            lt.y = rt.y = source.y;
-            rb.x = rt.x = source.x + source.width;
-            rb.y = lb.y = source.y + source.height;
-            lt.transform(m);
-            rt.transform(m);
-            rb.transform(m);
-            lb.transform(m);
-            target.x = mathMin(lt.x, rb.x, lb.x, rt.x);
-            target.y = mathMin(lt.y, rb.y, lb.y, rt.y);
-            var maxX = mathMax(lt.x, rb.x, lb.x, rt.x);
-            var maxY = mathMax(lt.y, rb.y, lb.y, rt.y);
-            target.width = maxX - target.x;
-            target.height = maxY - target.y;
-        };
-        return BoundingRect;
-    }());
-
-    var textWidthCache = {};
-    var DEFAULT_FONT = '12px sans-serif';
-    var _ctx;
-    var _cachedFont;
-    function defaultMeasureText(text, font) {
-        if (!_ctx) {
-            _ctx = createCanvas().getContext('2d');
-        }
-        if (_cachedFont !== font) {
-            _cachedFont = _ctx.font = font || DEFAULT_FONT;
-        }
-        return _ctx.measureText(text);
-    }
-    var methods$1 = {
-        measureText: defaultMeasureText
-    };
-    function getWidth(text, font) {
-        font = font || DEFAULT_FONT;
-        var cacheOfFont = textWidthCache[font];
-        if (!cacheOfFont) {
-            cacheOfFont = textWidthCache[font] = new LRU(500);
-        }
-        var width = cacheOfFont.get(text);
-        if (width == null) {
-            width = methods$1.measureText(text, font).width;
-            cacheOfFont.put(text, width);
-        }
-        return width;
-    }
-    function innerGetBoundingRect(text, font, textAlign, textBaseline) {
-        var width = getWidth(text, font);
-        var height = getLineHeight(font);
-        var x = adjustTextX(0, width, textAlign);
-        var y = adjustTextY(0, height, textBaseline);
-        var rect = new BoundingRect(x, y, width, height);
-        return rect;
-    }
-    function getBoundingRect(text, font, textAlign, textBaseline) {
-        var textLines = ((text || '') + '').split('\n');
-        var len = textLines.length;
-        if (len === 1) {
-            return innerGetBoundingRect(textLines[0], font, textAlign, textBaseline);
-        }
-        else {
-            var uniondRect = new BoundingRect(0, 0, 0, 0);
-            for (var i = 0; i < textLines.length; i++) {
-                var rect = innerGetBoundingRect(textLines[i], font, textAlign, textBaseline);
-                i === 0 ? uniondRect.copy(rect) : uniondRect.union(rect);
-            }
-            return uniondRect;
-        }
-    }
-    function adjustTextX(x, width, textAlign) {
-        if (textAlign === 'right') {
-            x -= width;
-        }
-        else if (textAlign === 'center') {
-            x -= width / 2;
-        }
-        return x;
-    }
-    function adjustTextY(y, height, verticalAlign) {
-        if (verticalAlign === 'middle') {
-            y -= height / 2;
-        }
-        else if (verticalAlign === 'bottom') {
-            y -= height;
-        }
-        return y;
-    }
-    function getLineHeight(font) {
-        return getWidth('国', font);
-    }
-    function parsePercent(value, maxValue) {
-        if (typeof value === 'string') {
-            if (value.lastIndexOf('%') >= 0) {
-                return parseFloat(value) / 100 * maxValue;
-            }
-            return parseFloat(value);
-        }
-        return value;
-    }
-    function calculateTextPosition(out, opts, rect) {
-        var textPosition = opts.position || 'inside';
-        var distance = opts.distance != null ? opts.distance : 5;
-        var height = rect.height;
-        var width = rect.width;
-        var halfHeight = height / 2;
-        var x = rect.x;
-        var y = rect.y;
-        var textAlign = 'left';
-        var textVerticalAlign = 'top';
-        if (textPosition instanceof Array) {
-            x += parsePercent(textPosition[0], rect.width);
-            y += parsePercent(textPosition[1], rect.height);
-            textAlign = null;
-            textVerticalAlign = null;
-        }
-        else {
-            switch (textPosition) {
-                case 'left':
-                    x -= distance;
-                    y += halfHeight;
-                    textAlign = 'right';
-                    textVerticalAlign = 'middle';
-                    break;
-                case 'right':
-                    x += distance + width;
-                    y += halfHeight;
-                    textVerticalAlign = 'middle';
-                    break;
-                case 'top':
-                    x += width / 2;
-                    y -= distance;
-                    textAlign = 'center';
-                    textVerticalAlign = 'bottom';
-                    break;
-                case 'bottom':
-                    x += width / 2;
-                    y += height + distance;
-                    textAlign = 'center';
-                    break;
-                case 'inside':
-                    x += width / 2;
-                    y += halfHeight;
-                    textAlign = 'center';
-                    textVerticalAlign = 'middle';
-                    break;
-                case 'insideLeft':
-                    x += distance;
-                    y += halfHeight;
-                    textVerticalAlign = 'middle';
-                    break;
-                case 'insideRight':
-                    x += width - distance;
-                    y += halfHeight;
-                    textAlign = 'right';
-                    textVerticalAlign = 'middle';
-                    break;
-                case 'insideTop':
-                    x += width / 2;
-                    y += distance;
-                    textAlign = 'center';
-                    break;
-                case 'insideBottom':
-                    x += width / 2;
-                    y += height - distance;
-                    textAlign = 'center';
-                    textVerticalAlign = 'bottom';
-                    break;
-                case 'insideTopLeft':
-                    x += distance;
-                    y += distance;
-                    break;
-                case 'insideTopRight':
-                    x += width - distance;
-                    y += distance;
-                    textAlign = 'right';
-                    break;
-                case 'insideBottomLeft':
-                    x += distance;
-                    y += height - distance;
-                    textVerticalAlign = 'bottom';
-                    break;
-                case 'insideBottomRight':
-                    x += width - distance;
-                    y += height - distance;
-                    textAlign = 'right';
-                    textVerticalAlign = 'bottom';
-                    break;
-            }
-        }
-        out = out || {};
-        out.x = x;
-        out.y = y;
-        out.align = textAlign;
-        out.verticalAlign = textVerticalAlign;
-        return out;
-    }
-
-    var dpr = 1;
-    if (typeof window !== 'undefined') {
-        dpr = Math.max(window.devicePixelRatio
-            || (window.screen && window.screen.deviceXDPI / window.screen.logicalXDPI)
-            || 1, 1);
-    }
-    var devicePixelRatio = dpr;
-    var DARK_MODE_THRESHOLD = 0.4;
-    var DARK_LABEL_COLOR = '#333';
-    var LIGHT_LABEL_COLOR = '#ccc';
-    var LIGHTER_LABEL_COLOR = '#eee';
-
-    var PRESERVED_NORMAL_STATE = '__zr_normal__';
-    var PRIMARY_STATES_KEYS = ['x', 'y', 'scaleX', 'scaleY', 'originX', 'originY', 'rotation', 'ignore'];
-    var DEFAULT_ANIMATABLE_MAP = {
-        x: true,
-        y: true,
-        scaleX: true,
-        scaleY: true,
-        originX: true,
-        originY: true,
-        rotation: true,
-        ignore: false
-    };
-    var tmpTextPosCalcRes = {};
-    var tmpBoundingRect = new BoundingRect(0, 0, 0, 0);
-    var Element = (function () {
-        function Element(props) {
-            this.id = guid();
-            this.animators = [];
-            this.currentStates = [];
-            this.states = {};
-            this._init(props);
-        }
-        Element.prototype._init = function (props) {
-            this.attr(props);
-        };
-        Element.prototype.drift = function (dx, dy, e) {
-            switch (this.draggable) {
-                case 'horizontal':
-                    dy = 0;
-                    break;
-                case 'vertical':
-                    dx = 0;
-                    break;
-            }
-            var m = this.transform;
-            if (!m) {
-                m = this.transform = [1, 0, 0, 1, 0, 0];
-            }
-            m[4] += dx;
-            m[5] += dy;
-            this.decomposeTransform();
-            this.markRedraw();
-        };
-        Element.prototype.beforeUpdate = function () { };
-        Element.prototype.afterUpdate = function () { };
-        Element.prototype.update = function () {
-            this.updateTransform();
-            if (this.__dirty) {
-                this.updateInnerText();
-            }
-        };
-        Element.prototype.updateInnerText = function (forceUpdate) {
-            var textEl = this._textContent;
-            if (textEl && (!textEl.ignore || forceUpdate)) {
-                if (!this.textConfig) {
-                    this.textConfig = {};
-                }
-                var textConfig = this.textConfig;
-                var isLocal = textConfig.local;
-                var attachedTransform = textEl.attachedTransform;
-                var textAlign = void 0;
-                var textVerticalAlign = void 0;
-                var textStyleChanged = false;
-                if (isLocal) {
-                    attachedTransform.parent = this;
-                }
-                else {
-                    attachedTransform.parent = null;
-                }
-                var innerOrigin = false;
-                attachedTransform.x = textEl.x;
-                attachedTransform.y = textEl.y;
-                attachedTransform.originX = textEl.originX;
-                attachedTransform.originY = textEl.originY;
-                attachedTransform.rotation = textEl.rotation;
-                attachedTransform.scaleX = textEl.scaleX;
-                attachedTransform.scaleY = textEl.scaleY;
-                if (textConfig.position != null) {
-                    var layoutRect = tmpBoundingRect;
-                    if (textConfig.layoutRect) {
-                        layoutRect.copy(textConfig.layoutRect);
-                    }
-                    else {
-                        layoutRect.copy(this.getBoundingRect());
-                    }
-                    if (!isLocal) {
-                        layoutRect.applyTransform(this.transform);
-                    }
-                    if (this.calculateTextPosition) {
-                        this.calculateTextPosition(tmpTextPosCalcRes, textConfig, layoutRect);
-                    }
-                    else {
-                        calculateTextPosition(tmpTextPosCalcRes, textConfig, layoutRect);
-                    }
-                    attachedTransform.x = tmpTextPosCalcRes.x;
-                    attachedTransform.y = tmpTextPosCalcRes.y;
-                    textAlign = tmpTextPosCalcRes.align;
-                    textVerticalAlign = tmpTextPosCalcRes.verticalAlign;
-                    var textOrigin = textConfig.origin;
-                    if (textOrigin && textConfig.rotation != null) {
-                        var relOriginX = void 0;
-                        var relOriginY = void 0;
-                        if (textOrigin === 'center') {
-                            relOriginX = layoutRect.width * 0.5;
-                            relOriginY = layoutRect.height * 0.5;
-                        }
-                        else {
-                            relOriginX = parsePercent(textOrigin[0], layoutRect.width);
-                            relOriginY = parsePercent(textOrigin[1], layoutRect.height);
-                        }
-                        innerOrigin = true;
-                        attachedTransform.originX = -attachedTransform.x + relOriginX + (isLocal ? 0 : layoutRect.x);
-                        attachedTransform.originY = -attachedTransform.y + relOriginY + (isLocal ? 0 : layoutRect.y);
-                    }
-                }
-                if (textConfig.rotation != null) {
-                    attachedTransform.rotation = textConfig.rotation;
-                }
-                var textOffset = textConfig.offset;
-                if (textOffset) {
-                    attachedTransform.x += textOffset[0];
-                    attachedTransform.y += textOffset[1];
-                    if (!innerOrigin) {
-                        attachedTransform.originX = -textOffset[0];
-                        attachedTransform.originY = -textOffset[1];
-                    }
-                }
-                var isInside = textConfig.inside == null
-                    ? (typeof textConfig.position === 'string' && textConfig.position.indexOf('inside') >= 0)
-                    : textConfig.inside;
-                var innerTextDefaultStyle = this._innerTextDefaultStyle || (this._innerTextDefaultStyle = {});
-                var textFill = void 0;
-                var textStroke = void 0;
-                var autoStroke = void 0;
-                if (isInside && this.canBeInsideText()) {
-                    textFill = textConfig.insideFill;
-                    textStroke = textConfig.insideStroke;
-                    if (textFill == null || textFill === 'auto') {
-                        textFill = this.getInsideTextFill();
-                    }
-                    if (textStroke == null || textStroke === 'auto') {
-                        textStroke = this.getInsideTextStroke(textFill);
-                        autoStroke = true;
-                    }
-                }
-                else {
-                    textFill = textConfig.outsideFill;
-                    textStroke = textConfig.outsideStroke;
-                    if (textFill == null || textFill === 'auto') {
-                        textFill = this.getOutsideFill();
-                    }
-                    if (textStroke == null || textStroke === 'auto') {
-                        textStroke = this.getOutsideStroke(textFill);
-                        autoStroke = true;
-                    }
-                }
-                textFill = textFill || '#000';
-                if (textFill !== innerTextDefaultStyle.fill
-                    || textStroke !== innerTextDefaultStyle.stroke
-                    || autoStroke !== innerTextDefaultStyle.autoStroke
-                    || textAlign !== innerTextDefaultStyle.align
-                    || textVerticalAlign !== innerTextDefaultStyle.verticalAlign) {
-                    textStyleChanged = true;
-                    innerTextDefaultStyle.fill = textFill;
-                    innerTextDefaultStyle.stroke = textStroke;
-                    innerTextDefaultStyle.autoStroke = autoStroke;
-                    innerTextDefaultStyle.align = textAlign;
-                    innerTextDefaultStyle.verticalAlign = textVerticalAlign;
-                    textEl.setDefaultTextStyle(innerTextDefaultStyle);
-                }
-                if (textStyleChanged) {
-                    textEl.dirtyStyle();
-                }
-                textEl.markRedraw();
-            }
-        };
-        Element.prototype.canBeInsideText = function () {
-            return true;
-        };
-        Element.prototype.getInsideTextFill = function () {
-            return '#fff';
-        };
-        Element.prototype.getInsideTextStroke = function (textFill) {
-            return '#000';
-        };
-        Element.prototype.getOutsideFill = function () {
-            return this.__zr && this.__zr.isDarkMode() ? LIGHT_LABEL_COLOR : DARK_LABEL_COLOR;
-        };
-        Element.prototype.getOutsideStroke = function (textFill) {
-            var backgroundColor = this.__zr && this.__zr.getBackgroundColor();
-            var colorArr = typeof backgroundColor === 'string' && parse(backgroundColor);
-            if (!colorArr) {
-                colorArr = [255, 255, 255, 1];
-            }
-            var alpha = colorArr[3];
-            var isDark = this.__zr.isDarkMode();
-            for (var i = 0; i < 3; i++) {
-                colorArr[i] = colorArr[i] * alpha + (isDark ? 0 : 255) * (1 - alpha);
-            }
-            colorArr[3] = 1;
-            return stringify(colorArr, 'rgba');
-        };
-        Element.prototype.traverse = function (cb, context) { };
-        Element.prototype.attrKV = function (key, value) {
-            if (key === 'textConfig') {
-                this.setTextConfig(value);
-            }
-            else if (key === 'textContent') {
-                this.setTextContent(value);
-            }
-            else if (key === 'clipPath') {
-                this.setClipPath(value);
-            }
-            else if (key === 'extra') {
-                this.extra = this.extra || {};
-                extend(this.extra, value);
-            }
-            else {
-                this[key] = value;
-            }
-        };
-        Element.prototype.hide = function () {
-            this.ignore = true;
-            this.markRedraw();
-        };
-        Element.prototype.show = function () {
-            this.ignore = false;
-            this.markRedraw();
-        };
-        Element.prototype.attr = function (keyOrObj, value) {
-            if (typeof keyOrObj === 'string') {
-                this.attrKV(keyOrObj, value);
-            }
-            else if (isObject(keyOrObj)) {
-                var obj = keyOrObj;
-                var keysArr = keys(obj);
-                for (var i = 0; i < keysArr.length; i++) {
-                    var key = keysArr[i];
-                    this.attrKV(key, keyOrObj[key]);
-                }
-            }
-            this.markRedraw();
-            return this;
-        };
-        Element.prototype.saveCurrentToNormalState = function (toState) {
-            this._innerSaveToNormal(toState);
-            var normalState = this._normalState;
-            for (var i = 0; i < this.animators.length; i++) {
-                var animator = this.animators[i];
-                var fromStateTransition = animator.__fromStateTransition;
-                if (fromStateTransition && fromStateTransition !== PRESERVED_NORMAL_STATE) {
-                    continue;
-                }
-                var targetName = animator.targetName;
-                var target = targetName
-                    ? normalState[targetName] : normalState;
-                animator.saveFinalToTarget(target);
-            }
-        };
-        Element.prototype._innerSaveToNormal = function (toState) {
-            var normalState = this._normalState;
-            if (!normalState) {
-                normalState = this._normalState = {};
-            }
-            if (toState.textConfig && !normalState.textConfig) {
-                normalState.textConfig = this.textConfig;
-            }
-            this._savePrimaryToNormal(toState, normalState, PRIMARY_STATES_KEYS);
-        };
-        Element.prototype._savePrimaryToNormal = function (toState, normalState, primaryKeys) {
-            for (var i = 0; i < primaryKeys.length; i++) {
-                var key = primaryKeys[i];
-                if (toState[key] != null && !(key in normalState)) {
-                    normalState[key] = this[key];
-                }
-            }
-        };
-        Element.prototype.hasState = function () {
-            return this.currentStates.length > 0;
-        };
-        Element.prototype.getState = function (name) {
-            return this.states[name];
-        };
-        Element.prototype.ensureState = function (name) {
-            var states = this.states;
-            if (!states[name]) {
-                states[name] = {};
-            }
-            return states[name];
-        };
-        Element.prototype.clearStates = function (noAnimation) {
-            this.useState(PRESERVED_NORMAL_STATE, false, noAnimation);
-        };
-        Element.prototype.useState = function (stateName, keepCurrentStates, noAnimation) {
-            var toNormalState = stateName === PRESERVED_NORMAL_STATE;
-            var hasStates = this.hasState();
-            if (!hasStates && toNormalState) {
-                return;
-            }
-            var currentStates = this.currentStates;
-            var animationCfg = this.stateTransition;
-            if (indexOf(currentStates, stateName) >= 0 && (keepCurrentStates || currentStates.length === 1)) {
-                return;
-            }
-            var state;
-            if (this.stateProxy && !toNormalState) {
-                state = this.stateProxy(stateName);
-            }
-            if (!state) {
-                state = (this.states && this.states[stateName]);
-            }
-            if (!state && !toNormalState) {
-                logError("State " + stateName + " not exists.");
-                return;
-            }
-            if (!toNormalState) {
-                this.saveCurrentToNormalState(state);
-            }
-            var useHoverLayer = !!(state && state.hoverLayer);
-            if (useHoverLayer) {
-                this._toggleHoverLayerFlag(true);
-            }
-            this._applyStateObj(stateName, state, this._normalState, keepCurrentStates, !noAnimation && !this.__inHover && animationCfg && animationCfg.duration > 0, animationCfg);
-            if (this._textContent) {
-                this._textContent.useState(stateName, keepCurrentStates);
-            }
-            if (this._textGuide) {
-                this._textGuide.useState(stateName, keepCurrentStates);
-            }
-            if (toNormalState) {
-                this.currentStates = [];
-                this._normalState = {};
-            }
-            else {
-                if (!keepCurrentStates) {
-                    this.currentStates = [stateName];
-                }
-                else {
-                    this.currentStates.push(stateName);
-                }
-            }
-            this._updateAnimationTargets();
-            this.markRedraw();
-            if (!useHoverLayer && this.__inHover) {
-                this._toggleHoverLayerFlag(false);
-                this.__dirty &= ~Element.REDARAW_BIT;
-            }
-            return state;
-        };
-        Element.prototype.useStates = function (states, noAnimation) {
-            if (!states.length) {
-                this.clearStates();
-            }
-            else {
-                var stateObjects = [];
-                var currentStates = this.currentStates;
-                var len = states.length;
-                var notChange = len === currentStates.length;
-                if (notChange) {
-                    for (var i = 0; i < len; i++) {
-                        if (states[i] !== currentStates[i]) {
-                            notChange = false;
-                            break;
-                        }
-                    }
-                }
-                if (notChange) {
-                    return;
-                }
-                for (var i = 0; i < len; i++) {
-                    var stateName = states[i];
-                    var stateObj = void 0;
-                    if (this.stateProxy) {
-                        stateObj = this.stateProxy(stateName, states);
-                    }
-                    if (!stateObj) {
-                        stateObj = this.states[stateName];
-                    }
-                    if (stateObj) {
-                        stateObjects.push(stateObj);
-                    }
-                }
-                var useHoverLayer = !!(stateObjects[len - 1] && stateObjects[len - 1].hoverLayer);
-                if (useHoverLayer) {
-                    this._toggleHoverLayerFlag(true);
-                }
-                var mergedState = this._mergeStates(stateObjects);
-                var animationCfg = this.stateTransition;
-                this.saveCurrentToNormalState(mergedState);
-                this._applyStateObj(states.join(','), mergedState, this._normalState, false, !noAnimation && !this.__inHover && animationCfg && animationCfg.duration > 0, animationCfg);
-                if (this._textContent) {
-                    this._textContent.useStates(states);
-                }
-                if (this._textGuide) {
-                    this._textGuide.useStates(states);
-                }
-                this._updateAnimationTargets();
-                this.currentStates = states.slice();
-                this.markRedraw();
-                if (!useHoverLayer && this.__inHover) {
-                    this._toggleHoverLayerFlag(false);
-                    this.__dirty &= ~Element.REDARAW_BIT;
-                }
-            }
-        };
-        Element.prototype._updateAnimationTargets = function () {
-            for (var i = 0; i < this.animators.length; i++) {
-                var animator = this.animators[i];
-                if (animator.targetName) {
-                    animator.changeTarget(this[animator.targetName]);
-                }
-            }
-        };
-        Element.prototype.removeState = function (state) {
-            var idx = indexOf(this.currentStates, state);
-            if (idx >= 0) {
-                var currentStates = this.currentStates.slice();
-                currentStates.splice(idx, 1);
-                this.useStates(currentStates);
-            }
-        };
-        Element.prototype.replaceState = function (oldState, newState, forceAdd) {
-            var currentStates = this.currentStates.slice();
-            var idx = indexOf(currentStates, oldState);
-            var newStateExists = indexOf(currentStates, newState) >= 0;
-            if (idx >= 0) {
-                if (!newStateExists) {
-                    currentStates[idx] = newState;
-                }
-                else {
-                    currentStates.splice(idx, 1);
-                }
-            }
-            else if (forceAdd && !newStateExists) {
-                currentStates.push(newState);
-            }
-            this.useStates(currentStates);
-        };
-        Element.prototype.toggleState = function (state, enable) {
-            if (enable) {
-                this.useState(state, true);
-            }
-            else {
-                this.removeState(state);
-            }
-        };
-        Element.prototype._mergeStates = function (states) {
-            var mergedState = {};
-            var mergedTextConfig;
-            for (var i = 0; i < states.length; i++) {
-                var state = states[i];
-                extend(mergedState, state);
-                if (state.textConfig) {
-                    mergedTextConfig = mergedTextConfig || {};
-                    extend(mergedTextConfig, state.textConfig);
-                }
-            }
-            if (mergedTextConfig) {
-                mergedState.textConfig = mergedTextConfig;
-            }
-            return mergedState;
-        };
-        Element.prototype._applyStateObj = function (stateName, state, normalState, keepCurrentStates, transition, animationCfg) {
-            var needsRestoreToNormal = !(state && keepCurrentStates);
-            if (state && state.textConfig) {
-                this.textConfig = extend({}, keepCurrentStates ? this.textConfig : normalState.textConfig);
-                extend(this.textConfig, state.textConfig);
-            }
-            else if (needsRestoreToNormal) {
-                if (normalState.textConfig) {
-                    this.textConfig = normalState.textConfig;
-                }
-            }
-            var transitionTarget = {};
-            var hasTransition = false;
-            for (var i = 0; i < PRIMARY_STATES_KEYS.length; i++) {
-                var key = PRIMARY_STATES_KEYS[i];
-                var propNeedsTransition = transition && DEFAULT_ANIMATABLE_MAP[key];
-                if (state && state[key] != null) {
-                    if (propNeedsTransition) {
-                        hasTransition = true;
-                        transitionTarget[key] = state[key];
-                    }
-                    else {
-                        this[key] = state[key];
-                    }
-                }
-                else if (needsRestoreToNormal) {
-                    if (normalState[key] != null) {
-                        if (propNeedsTransition) {
-                            hasTransition = true;
-                            transitionTarget[key] = normalState[key];
-                        }
-                        else {
-                            this[key] = normalState[key];
-                        }
-                    }
-                }
-            }
-            if (!transition) {
-                for (var i = 0; i < this.animators.length; i++) {
-                    var animator = this.animators[i];
-                    var targetName = animator.targetName;
-                    animator.__changeFinalValue(targetName
-                        ? (state || normalState)[targetName]
-                        : (state || normalState));
-                }
-            }
-            if (hasTransition) {
-                this._transitionState(stateName, transitionTarget, animationCfg);
-            }
-        };
-        Element.prototype._attachComponent = function (componentEl) {
-            if (componentEl.__zr && !componentEl.__hostTarget) {
-                throw new Error('Text element has been added to zrender.');
-            }
-            if (componentEl === this) {
-                throw new Error('Recursive component attachment.');
-            }
-            var zr = this.__zr;
-            if (zr) {
-                componentEl.addSelfToZr(zr);
-            }
-            componentEl.__zr = zr;
-            componentEl.__hostTarget = this;
-        };
-        Element.prototype._detachComponent = function (componentEl) {
-            if (componentEl.__zr) {
-                componentEl.removeSelfFromZr(componentEl.__zr);
-            }
-            componentEl.__zr = null;
-            componentEl.__hostTarget = null;
-        };
-        Element.prototype.getClipPath = function () {
-            return this._clipPath;
-        };
-        Element.prototype.setClipPath = function (clipPath) {
-            if (this._clipPath && this._clipPath !== clipPath) {
-                this.removeClipPath();
-            }
-            this._attachComponent(clipPath);
-            this._clipPath = clipPath;
-            this.markRedraw();
-        };
-        Element.prototype.removeClipPath = function () {
-            var clipPath = this._clipPath;
-            if (clipPath) {
-                this._detachComponent(clipPath);
-                this._clipPath = null;
-                this.markRedraw();
-            }
-        };
-        Element.prototype.getTextContent = function () {
-            return this._textContent;
-        };
-        Element.prototype.setTextContent = function (textEl) {
-            var previousTextContent = this._textContent;
-            if (previousTextContent === textEl) {
-                return;
-            }
-            if (previousTextContent && previousTextContent !== textEl) {
-                this.removeTextContent();
-            }
-            if (textEl.__zr && !textEl.__hostTarget) {
-                throw new Error('Text element has been added to zrender.');
-            }
-            textEl.attachedTransform = new Transformable();
-            this._attachComponent(textEl);
-            this._textContent = textEl;
-            this.markRedraw();
-        };
-        Element.prototype.setTextConfig = function (cfg) {
-            if (!this.textConfig) {
-                this.textConfig = {};
-            }
-            extend(this.textConfig, cfg);
-            this.markRedraw();
-        };
-        Element.prototype.removeTextContent = function () {
-            var textEl = this._textContent;
-            if (textEl) {
-                textEl.attachedTransform = null;
-                this._detachComponent(textEl);
-                this._textContent = null;
-                this._innerTextDefaultStyle = null;
-                this.markRedraw();
-            }
-        };
-        Element.prototype.getTextGuideLine = function () {
-            return this._textGuide;
-        };
-        Element.prototype.setTextGuideLine = function (guideLine) {
-            if (this._textGuide && this._textGuide !== guideLine) {
-                this.removeTextGuideLine();
-            }
-            this._attachComponent(guideLine);
-            this._textGuide = guideLine;
-            this.markRedraw();
-        };
-        Element.prototype.removeTextGuideLine = function () {
-            var textGuide = this._textGuide;
-            if (textGuide) {
-                this._detachComponent(textGuide);
-                this._textGuide = null;
-                this.markRedraw();
-            }
-        };
-        Element.prototype.markRedraw = function () {
-            this.__dirty |= Element.REDARAW_BIT;
-            var zr = this.__zr;
-            if (zr) {
-                if (this.__inHover) {
-                    zr.refreshHover();
-                }
-                else {
-                    zr.refresh();
-                }
-            }
-            if (this.__hostTarget) {
-                this.__hostTarget.markRedraw();
-            }
-        };
-        Element.prototype.dirty = function () {
-            this.markRedraw();
-        };
-        Element.prototype._toggleHoverLayerFlag = function (inHover) {
-            this.__inHover = inHover;
-            var textContent = this._textContent;
-            var textGuide = this._textGuide;
-            if (textContent) {
-                textContent.__inHover = inHover;
-            }
-            if (textGuide) {
-                textGuide.__inHover = inHover;
-            }
-        };
-        Element.prototype.addSelfToZr = function (zr) {
-            this.__zr = zr;
-            var animators = this.animators;
-            if (animators) {
-                for (var i = 0; i < animators.length; i++) {
-                    zr.animation.addAnimator(animators[i]);
-                }
-            }
-            if (this._clipPath) {
-                this._clipPath.addSelfToZr(zr);
-            }
-            if (this._textContent) {
-                this._textContent.addSelfToZr(zr);
-            }
-            if (this._textGuide) {
-                this._textGuide.addSelfToZr(zr);
-            }
-        };
-        Element.prototype.removeSelfFromZr = function (zr) {
-            this.__zr = null;
-            var animators = this.animators;
-            if (animators) {
-                for (var i = 0; i < animators.length; i++) {
-                    zr.animation.removeAnimator(animators[i]);
-                }
-            }
-            if (this._clipPath) {
-                this._clipPath.removeSelfFromZr(zr);
-            }
-            if (this._textContent) {
-                this._textContent.removeSelfFromZr(zr);
-            }
-            if (this._textGuide) {
-                this._textGuide.removeSelfFromZr(zr);
-            }
-        };
-        Element.prototype.animate = function (key, loop) {
-            var target = key ? this[key] : this;
-            if (!target) {
-                logError('Property "'
-                    + key
-                    + '" is not existed in element '
-                    + this.id);
-                return;
-            }
-            var animator = new Animator(target, loop);
-            this.addAnimator(animator, key);
-            return animator;
-        };
-        Element.prototype.addAnimator = function (animator, key) {
-            var zr = this.__zr;
-            var el = this;
-            animator.during(function () {
-                el.updateDuringAnimation(key);
-            }).done(function () {
-                var animators = el.animators;
-                var idx = indexOf(animators, animator);
-                if (idx >= 0) {
-                    animators.splice(idx, 1);
-                }
-            });
-            this.animators.push(animator);
-            if (zr) {
-                zr.animation.addAnimator(animator);
-            }
-            zr && zr.wakeUp();
-        };
-        Element.prototype.updateDuringAnimation = function (key) {
-            this.markRedraw();
-        };
-        Element.prototype.stopAnimation = function (scope, forwardToLast) {
-            var animators = this.animators;
-            var len = animators.length;
-            var leftAnimators = [];
-            for (var i = 0; i < len; i++) {
-                var animator = animators[i];
-                if (!scope || scope === animator.scope) {
-                    animator.stop(forwardToLast);
-                }
-                else {
-                    leftAnimators.push(animator);
-                }
-            }
-            this.animators = leftAnimators;
-            return this;
-        };
-        Element.prototype.animateTo = function (target, cfg, animationProps) {
-            animateTo(this, target, cfg, animationProps);
-        };
-        Element.prototype.animateFrom = function (target, cfg, animationProps) {
-            animateTo(this, target, cfg, animationProps, true);
-        };
-        Element.prototype._transitionState = function (stateName, target, cfg, animationProps) {
-            var animators = animateTo(this, target, cfg, animationProps);
-            for (var i = 0; i < animators.length; i++) {
-                animators[i].__fromStateTransition = stateName;
-            }
-        };
-        Element.prototype.getBoundingRect = function () {
-            return null;
-        };
-        Element.prototype.getPaintRect = function () {
-            return null;
-        };
-        Element.REDARAW_BIT = 1;
-        Element.initDefaultProps = (function () {
-            var elProto = Element.prototype;
-            elProto.type = 'element';
-            elProto.name = '';
-            elProto.ignore = false;
-            elProto.silent = false;
-            elProto.isGroup = false;
-            elProto.draggable = false;
-            elProto.dragging = false;
-            elProto.ignoreClip = false;
-            elProto.__inHover = false;
-            elProto.__dirty = Element.REDARAW_BIT;
-            var logs = {};
-            function logDeprecatedError(key, xKey, yKey) {
-                if (!logs[key + xKey + yKey]) {
-                    console.warn("DEPRECATED: '" + key + "' has been deprecated. use '" + xKey + "', '" + yKey + "' instead");
-                    logs[key + xKey + yKey] = true;
-                }
-            }
-            function createLegacyProperty(key, privateKey, xKey, yKey) {
-                Object.defineProperty(elProto, key, {
-                    get: function () {
-                        logDeprecatedError(key, xKey, yKey);
-                        if (!this[privateKey]) {
-                            var pos = this[privateKey] = [];
-                            enhanceArray(this, pos);
-                        }
-                        return this[privateKey];
-                    },
-                    set: function (pos) {
-                        logDeprecatedError(key, xKey, yKey);
-                        this[xKey] = pos[0];
-                        this[yKey] = pos[1];
-                        this[privateKey] = pos;
-                        enhanceArray(this, pos);
-                    }
-                });
-                function enhanceArray(self, pos) {
-                    Object.defineProperty(pos, 0, {
-                        get: function () {
-                            return self[xKey];
-                        },
-                        set: function (val) {
-                            self[xKey] = val;
-                        }
-                    });
-                    Object.defineProperty(pos, 1, {
-                        get: function () {
-                            return self[yKey];
-                        },
-                        set: function (val) {
-                            self[yKey] = val;
-                        }
-                    });
-                }
-            }
-            if (Object.defineProperty && (!env.browser.ie || env.browser.version > 8)) {
-                createLegacyProperty('position', '_legacyPos', 'x', 'y');
-                createLegacyProperty('scale', '_legacyScale', 'scaleX', 'scaleY');
-                createLegacyProperty('origin', '_legacyOrigin', 'originX', 'originY');
-            }
-        })();
-        return Element;
-    }());
-    mixin(Element, Eventful);
-    mixin(Element, Transformable);
-    function animateTo(animatable, target, cfg, animationProps, reverse) {
-        cfg = cfg || {};
-        var animators = [];
-        animateToShallow(animatable, '', animatable, target, cfg, animationProps, animators, reverse);
-        var finishCount = animators.length;
-        var doneHappened = false;
-        var cfgDone = cfg.done;
-        var cfgAborted = cfg.aborted;
-        var doneCb = function () {
-            doneHappened = true;
-            finishCount--;
-            if (finishCount <= 0) {
-                doneHappened
-                    ? (cfgDone && cfgDone())
-                    : (cfgAborted && cfgAborted());
-            }
-        };
-        var abortedCb = function () {
-            finishCount--;
-            if (finishCount <= 0) {
-                doneHappened
-                    ? (cfgDone && cfgDone())
-                    : (cfgAborted && cfgAborted());
-            }
-        };
-        if (!finishCount) {
-            cfgDone && cfgDone();
-        }
-        if (animators.length > 0 && cfg.during) {
-            animators[0].during(function (target, percent) {
-                cfg.during(percent);
-            });
-        }
-        for (var i = 0; i < animators.length; i++) {
-            var animator = animators[i];
-            if (doneCb) {
-                animator.done(doneCb);
-            }
-            if (abortedCb) {
-                animator.aborted(abortedCb);
-            }
-            animator.start(cfg.easing, cfg.force);
-        }
-        return animators;
-    }
-    function copyArrShallow(source, target, len) {
-        for (var i = 0; i < len; i++) {
-            source[i] = target[i];
-        }
-    }
-    function is2DArray(value) {
-        return isArrayLike(value[0]);
-    }
-    function copyValue(target, source, key) {
-        if (isArrayLike(source[key])) {
-            if (!isArrayLike(target[key])) {
-                target[key] = [];
-            }
-            if (isTypedArray(source[key])) {
-                var len = source[key].length;
-                if (target[key].length !== len) {
-                    target[key] = new (source[key].constructor)(len);
-                    copyArrShallow(target[key], source[key], len);
-                }
-            }
-            else {
-                var sourceArr = source[key];
-                var targetArr = target[key];
-                var len0 = sourceArr.length;
-                if (is2DArray(sourceArr)) {
-                    var len1 = sourceArr[0].length;
-                    for (var i = 0; i < len0; i++) {
-                        if (!targetArr[i]) {
-                            targetArr[i] = Array.prototype.slice.call(sourceArr[i]);
-                        }
-                        else {
-                            copyArrShallow(targetArr[i], sourceArr[i], len1);
-                        }
-                    }
-                }
-                else {
-                    copyArrShallow(targetArr, sourceArr, len0);
-                }
-                targetArr.length = sourceArr.length;
-            }
-        }
-        else {
-            target[key] = source[key];
-        }
-    }
-    function animateToShallow(animatable, topKey, source, target, cfg, animationProps, animators, reverse) {
-        var animatableKeys = [];
-        var changedKeys = [];
-        var targetKeys = keys(target);
-        var duration = cfg.duration;
-        var delay = cfg.delay;
-        var additive = cfg.additive;
-        var setToFinal = cfg.setToFinal;
-        var animateAll = !isObject(animationProps);
-        for (var k = 0; k < targetKeys.length; k++) {
-            var innerKey = targetKeys[k];
-            if (source[innerKey] != null
-                && target[innerKey] != null
-                && (animateAll || animationProps[innerKey])) {
-                if (isObject(target[innerKey]) && !isArrayLike(target[innerKey])) {
-                    if (topKey) {
-                        if (!reverse) {
-                            source[innerKey] = target[innerKey];
-                            animatable.updateDuringAnimation(topKey);
-                        }
-                        continue;
-                    }
-                    animateToShallow(animatable, innerKey, source[innerKey], target[innerKey], cfg, animationProps && animationProps[innerKey], animators, reverse);
-                }
-                else {
-                    animatableKeys.push(innerKey);
-                    changedKeys.push(innerKey);
-                }
-            }
-            else if (!reverse) {
-                source[innerKey] = target[innerKey];
-                animatable.updateDuringAnimation(topKey);
-                changedKeys.push(innerKey);
-            }
-        }
-        var keyLen = animatableKeys.length;
-        if (keyLen > 0
-            || (cfg.force && !animators.length)) {
-            var existsAnimators = animatable.animators;
-            var existsAnimatorsOnSameTarget = [];
-            for (var i = 0; i < existsAnimators.length; i++) {
-                if (existsAnimators[i].targetName === topKey) {
-                    existsAnimatorsOnSameTarget.push(existsAnimators[i]);
-                }
-            }
-            if (!additive && existsAnimatorsOnSameTarget.length) {
-                for (var i = 0; i < existsAnimatorsOnSameTarget.length; i++) {
-                    var allAborted = existsAnimatorsOnSameTarget[i].stopTracks(changedKeys);
-                    if (allAborted) {
-                        var idx = indexOf(existsAnimators, existsAnimatorsOnSameTarget[i]);
-                        existsAnimators.splice(idx, 1);
-                    }
-                }
-            }
-            var revertedSource = void 0;
-            var reversedTarget = void 0;
-            var sourceClone = void 0;
-            if (reverse) {
-                reversedTarget = {};
-                if (setToFinal) {
-                    revertedSource = {};
-                }
-                for (var i = 0; i < keyLen; i++) {
-                    var innerKey = animatableKeys[i];
-                    reversedTarget[innerKey] = source[innerKey];
-                    if (setToFinal) {
-                        revertedSource[innerKey] = target[innerKey];
-                    }
-                    else {
-                        source[innerKey] = target[innerKey];
-                    }
-                }
-            }
-            else if (setToFinal) {
-                sourceClone = {};
-                for (var i = 0; i < keyLen; i++) {
-                    var innerKey = animatableKeys[i];
-                    sourceClone[innerKey] = cloneValue(source[innerKey]);
-                    copyValue(source, target, innerKey);
-                }
-            }
-            var animator = new Animator(source, false, additive ? existsAnimatorsOnSameTarget : null);
-            animator.targetName = topKey;
-            if (cfg.scope) {
-                animator.scope = cfg.scope;
-            }
-            if (setToFinal && revertedSource) {
-                animator.whenWithKeys(0, revertedSource, animatableKeys);
-            }
-            if (sourceClone) {
-                animator.whenWithKeys(0, sourceClone, animatableKeys);
-            }
-            animator.whenWithKeys(duration == null ? 500 : duration, reverse ? reversedTarget : target, animatableKeys).delay(delay || 0);
-            animatable.addAnimator(animator, topKey);
-            animators.push(animator);
-        }
-    }
-
-    var DEFAULT_MIN_MERGE = 32;
-    var DEFAULT_MIN_GALLOPING = 7;
-    function minRunLength(n) {
-        var r = 0;
-        while (n >= DEFAULT_MIN_MERGE) {
-            r |= n & 1;
-            n >>= 1;
-        }
-        return n + r;
-    }
-    function makeAscendingRun(array, lo, hi, compare) {
-        var runHi = lo + 1;
-        if (runHi === hi) {
-            return 1;
-        }
-        if (compare(array[runHi++], array[lo]) < 0) {
-            while (runHi < hi && compare(array[runHi], array[runHi - 1]) < 0) {
-                runHi++;
-            }
-            reverseRun(array, lo, runHi);
-        }
-        else {
-            while (runHi < hi && compare(array[runHi], array[runHi - 1]) >= 0) {
-                runHi++;
-            }
-        }
-        return runHi - lo;
-    }
-    function reverseRun(array, lo, hi) {
-        hi--;
-        while (lo < hi) {
-            var t = array[lo];
-            array[lo++] = array[hi];
-            array[hi--] = t;
-        }
-    }
-    function binaryInsertionSort(array, lo, hi, start, compare) {
-        if (start === lo) {
-            start++;
-        }
-        for (; start < hi; start++) {
-            var pivot = array[start];
-            var left = lo;
-            var right = start;
-            var mid;
-            while (left < right) {
-                mid = left + right >>> 1;
-                if (compare(pivot, array[mid]) < 0) {
-                    right = mid;
-                }
-                else {
-                    left = mid + 1;
-                }
-            }
-            var n = start - left;
-            switch (n) {
-                case 3:
-                    array[left + 3] = array[left + 2];
-                case 2:
-                    array[left + 2] = array[left + 1];
-                case 1:
-                    array[left + 1] = array[left];
-                    break;
-                default:
-                    while (n > 0) {
-                        array[left + n] = array[left + n - 1];
-                        n--;
-                    }
-            }
-            array[left] = pivot;
-        }
-    }
-    function gallopLeft(value, array, start, length, hint, compare) {
-        var lastOffset = 0;
-        var maxOffset = 0;
-        var offset = 1;
-        if (compare(value, array[start + hint]) > 0) {
-            maxOffset = length - hint;
-            while (offset < maxOffset && compare(value, array[start + hint + offset]) > 0) {
-                lastOffset = offset;
-                offset = (offset << 1) + 1;
-                if (offset <= 0) {
-                    offset = maxOffset;
-                }
-            }
-            if (offset > maxOffset) {
-                offset = maxOffset;
-            }
-            lastOffset += hint;
-            offset += hint;
-        }
-        else {
-            maxOffset = hint + 1;
-            while (offset < maxOffset && compare(value, array[start + hint - offset]) <= 0) {
-                lastOffset = offset;
-                offset = (offset << 1) + 1;
-                if (offset <= 0) {
-                    offset = maxOffset;
-                }
-            }
-            if (offset > maxOffset) {
-                offset = maxOffset;
-            }
-            var tmp = lastOffset;
-            lastOffset = hint - offset;
-            offset = hint - tmp;
-        }
-        lastOffset++;
-        while (lastOffset < offset) {
-            var m = lastOffset + (offset - lastOffset >>> 1);
-            if (compare(value, array[start + m]) > 0) {
-                lastOffset = m + 1;
-            }
-            else {
-                offset = m;
-            }
-        }
-        return offset;
-    }
-    function gallopRight(value, array, start, length, hint, compare) {
-        var lastOffset = 0;
-        var maxOffset = 0;
-        var offset = 1;
-        if (compare(value, array[start + hint]) < 0) {
-            maxOffset = hint + 1;
-            while (offset < maxOffset && compare(value, array[start + hint - offset]) < 0) {
-                lastOffset = offset;
-                offset = (offset << 1) + 1;
-                if (offset <= 0) {
-                    offset = maxOffset;
-                }
-            }
-            if (offset > maxOffset) {
-                offset = maxOffset;
-            }
-            var tmp = lastOffset;
-            lastOffset = hint - offset;
-            offset = hint - tmp;
-        }
-        else {
-            maxOffset = length - hint;
-            while (offset < maxOffset && compare(value, array[start + hint + offset]) >= 0) {
-                lastOffset = offset;
-                offset = (offset << 1) + 1;
-                if (offset <= 0) {
-                    offset = maxOffset;
-                }
-            }
-            if (offset > maxOffset) {
-                offset = maxOffset;
-            }
-            lastOffset += hint;
-            offset += hint;
-        }
-        lastOffset++;
-        while (lastOffset < offset) {
-            var m = lastOffset + (offset - lastOffset >>> 1);
-            if (compare(value, array[start + m]) < 0) {
-                offset = m;
-            }
-            else {
-                lastOffset = m + 1;
-            }
-        }
-        return offset;
-    }
-    function TimSort(array, compare) {
-        var minGallop = DEFAULT_MIN_GALLOPING;
-        var length = 0;
-        var runStart;
-        var runLength;
-        var stackSize = 0;
-        length = array.length;
-        var tmp = [];
-        runStart = [];
-        runLength = [];
-        function pushRun(_runStart, _runLength) {
-            runStart[stackSize] = _runStart;
-            runLength[stackSize] = _runLength;
-            stackSize += 1;
-        }
-        function mergeRuns() {
-            while (stackSize > 1) {
-                var n = stackSize - 2;
-                if ((n >= 1 && runLength[n - 1] <= runLength[n] + runLength[n + 1])
-                    || (n >= 2 && runLength[n - 2] <= runLength[n] + runLength[n - 1])) {
-                    if (runLength[n - 1] < runLength[n + 1]) {
-                        n--;
-                    }
-                }
-                else if (runLength[n] > runLength[n + 1]) {
-                    break;
-                }
-                mergeAt(n);
-            }
-        }
-        function forceMergeRuns() {
-            while (stackSize > 1) {
-                var n = stackSize - 2;
-                if (n > 0 && runLength[n - 1] < runLength[n + 1]) {
-                    n--;
-                }
-                mergeAt(n);
-            }
-        }
-        function mergeAt(i) {
-            var start1 = runStart[i];
-            var length1 = runLength[i];
-            var start2 = runStart[i + 1];
-            var length2 = runLength[i + 1];
-            runLength[i] = length1 + length2;
-            if (i === stackSize - 3) {
-                runStart[i + 1] = runStart[i + 2];
-                runLength[i + 1] = runLength[i + 2];
-            }
-            stackSize--;
-            var k = gallopRight(array[start2], array, start1, length1, 0, compare);
-            start1 += k;
-            length1 -= k;
-            if (length1 === 0) {
-                return;
-            }
-            length2 = gallopLeft(array[start1 + length1 - 1], array, start2, length2, length2 - 1, compare);
-            if (length2 === 0) {
-                return;
-            }
-            if (length1 <= length2) {
-                mergeLow(start1, length1, start2, length2);
-            }
-            else {
-                mergeHigh(start1, length1, start2, length2);
-            }
-        }
-        function mergeLow(start1, length1, start2, length2) {
-            var i = 0;
-            for (i = 0; i < length1; i++) {
-                tmp[i] = array[start1 + i];
-            }
-            var cursor1 = 0;
-            var cursor2 = start2;
-            var dest = start1;
-            array[dest++] = array[cursor2++];
-            if (--length2 === 0) {
-                for (i = 0; i < length1; i++) {
-                    array[dest + i] = tmp[cursor1 + i];
-                }
-                return;
-            }
-            if (length1 === 1) {
-                for (i = 0; i < length2; i++) {
-                    array[dest + i] = array[cursor2 + i];
-                }
-                array[dest + length2] = tmp[cursor1];
-                return;
-            }
-            var _minGallop = minGallop;
-            var count1;
-            var count2;
-            var exit;
-            while (1) {
-                count1 = 0;
-                count2 = 0;
-                exit = false;
-                do {
-                    if (compare(array[cursor2], tmp[cursor1]) < 0) {
-                        array[dest++] = array[cursor2++];
-                        count2++;
-                        count1 = 0;
-                        if (--length2 === 0) {
-                            exit = true;
-                            break;
-                        }
-                    }
-                    else {
-                        array[dest++] = tmp[cursor1++];
-                        count1++;
-                        count2 = 0;
-                        if (--length1 === 1) {
-                            exit = true;
-                            break;
-                        }
-                    }
-                } while ((count1 | count2) < _minGallop);
-                if (exit) {
-                    break;
-                }
-                do {
-                    count1 = gallopRight(array[cursor2], tmp, cursor1, length1, 0, compare);
-                    if (count1 !== 0) {
-                        for (i = 0; i < count1; i++) {
-                            array[dest + i] = tmp[cursor1 + i];
-                        }
-                        dest += count1;
-                        cursor1 += count1;
-                        length1 -= count1;
-                        if (length1 <= 1) {
-                            exit = true;
-                            break;
-                        }
-                    }
-                    array[dest++] = array[cursor2++];
-                    if (--length2 === 0) {
-                        exit = true;
-                        break;
-                    }
-                    count2 = gallopLeft(tmp[cursor1], array, cursor2, length2, 0, compare);
-                    if (count2 !== 0) {
-                        for (i = 0; i < count2; i++) {
-                            array[dest + i] = array[cursor2 + i];
-                        }
-                        dest += count2;
-                        cursor2 += count2;
-                        length2 -= count2;
-                        if (length2 === 0) {
-                            exit = true;
-                            break;
-                        }
-                    }
-                    array[dest++] = tmp[cursor1++];
-                    if (--length1 === 1) {
-                        exit = true;
-                        break;
-                    }
-                    _minGallop--;
-                } while (count1 >= DEFAULT_MIN_GALLOPING || count2 >= DEFAULT_MIN_GALLOPING);
-                if (exit) {
-                    break;
-                }
-                if (_minGallop < 0) {
-                    _minGallop = 0;
-                }
-                _minGallop += 2;
-            }
-            minGallop = _minGallop;
-            minGallop < 1 && (minGallop = 1);
-            if (length1 === 1) {
-                for (i = 0; i < length2; i++) {
-                    array[dest + i] = array[cursor2 + i];
-                }
-                array[dest + length2] = tmp[cursor1];
-            }
-            else if (length1 === 0) {
-                throw new Error();
-            }
-            else {
-                for (i = 0; i < length1; i++) {
-                    array[dest + i] = tmp[cursor1 + i];
-                }
-            }
-        }
-        function mergeHigh(start1, length1, start2, length2) {
-            var i = 0;
-            for (i = 0; i < length2; i++) {
-                tmp[i] = array[start2 + i];
-            }
-            var cursor1 = start1 + length1 - 1;
-            var cursor2 = length2 - 1;
-            var dest = start2 + length2 - 1;
-            var customCursor = 0;
-            var customDest = 0;
-            array[dest--] = array[cursor1--];
-            if (--length1 === 0) {
-                customCursor = dest - (length2 - 1);
-                for (i = 0; i < length2; i++) {
-                    array[customCursor + i] = tmp[i];
-                }
-                return;
-            }
-            if (length2 === 1) {
-                dest -= length1;
-                cursor1 -= length1;
-                customDest = dest + 1;
-                customCursor = cursor1 + 1;
-                for (i = length1 - 1; i >= 0; i--) {
-                    array[customDest + i] = array[customCursor + i];
-                }
-                array[dest] = tmp[cursor2];
-                return;
-            }
-            var _minGallop = minGallop;
-            while (true) {
-                var count1 = 0;
-                var count2 = 0;
-                var exit = false;
-                do {
-                    if (compare(tmp[cursor2], array[cursor1]) < 0) {
-                        array[dest--] = array[cursor1--];
-                        count1++;
-                        count2 = 0;
-                        if (--length1 === 0) {
-                            exit = true;
-                            break;
-                        }
-                    }
-                    else {
-                        array[dest--] = tmp[cursor2--];
-                        count2++;
-                        count1 = 0;
-                        if (--length2 === 1) {
-                            exit = true;
-                            break;
-                        }
-                    }
-                } while ((count1 | count2) < _minGallop);
-                if (exit) {
-                    break;
-                }
-                do {
-                    count1 = length1 - gallopRight(tmp[cursor2], array, start1, length1, length1 - 1, compare);
-                    if (count1 !== 0) {
-                        dest -= count1;
-                        cursor1 -= count1;
-                        length1 -= count1;
-                        customDest = dest + 1;
-                        customCursor = cursor1 + 1;
-                        for (i = count1 - 1; i >= 0; i--) {
-                            array[customDest + i] = array[customCursor + i];
-                        }
-                        if (length1 === 0) {
-                            exit = true;
-                            break;
-                        }
-                    }
-                    array[dest--] = tmp[cursor2--];
-                    if (--length2 === 1) {
-                        exit = true;
-                        break;
-                    }
-                    count2 = length2 - gallopLeft(array[cursor1], tmp, 0, length2, length2 - 1, compare);
-                    if (count2 !== 0) {
-                        dest -= count2;
-                        cursor2 -= count2;
-                        length2 -= count2;
-                        customDest = dest + 1;
-                        customCursor = cursor2 + 1;
-                        for (i = 0; i < count2; i++) {
-                            array[customDest + i] = tmp[customCursor + i];
-                        }
-                        if (length2 <= 1) {
-                            exit = true;
-                            break;
-                        }
-                    }
-                    array[dest--] = array[cursor1--];
-                    if (--length1 === 0) {
-                        exit = true;
-                        break;
-                    }
-                    _minGallop--;
-                } while (count1 >= DEFAULT_MIN_GALLOPING || count2 >= DEFAULT_MIN_GALLOPING);
-                if (exit) {
-                    break;
-                }
-                if (_minGallop < 0) {
-                    _minGallop = 0;
-                }
-                _minGallop += 2;
-            }
-            minGallop = _minGallop;
-            if (minGallop < 1) {
-                minGallop = 1;
-            }
-            if (length2 === 1) {
-                dest -= length1;
-                cursor1 -= length1;
-                customDest = dest + 1;
-                customCursor = cursor1 + 1;
-                for (i = length1 - 1; i >= 0; i--) {
-                    array[customDest + i] = array[customCursor + i];
-                }
-                array[dest] = tmp[cursor2];
-            }
-            else if (length2 === 0) {
-                throw new Error();
-            }
-            else {
-                customCursor = dest - (length2 - 1);
-                for (i = 0; i < length2; i++) {
-                    array[customCursor + i] = tmp[i];
-                }
-            }
-        }
-        return {
-            mergeRuns: mergeRuns,
-            forceMergeRuns: forceMergeRuns,
-            pushRun: pushRun
-        };
-    }
-    function sort(array, compare, lo, hi) {
-        if (!lo) {
-            lo = 0;
-        }
-        if (!hi) {
-            hi = array.length;
-        }
-        var remaining = hi - lo;
-        if (remaining < 2) {
-            return;
-        }
-        var runLength = 0;
-        if (remaining < DEFAULT_MIN_MERGE) {
-            runLength = makeAscendingRun(array, lo, hi, compare);
-            binaryInsertionSort(array, lo, hi, lo + runLength, compare);
-            return;
-        }
-        var ts = TimSort(array, compare);
-        var minRun = minRunLength(remaining);
-        do {
-            runLength = makeAscendingRun(array, lo, hi, compare);
-            if (runLength < minRun) {
-                var force = remaining;
-                if (force > minRun) {
-                    force = minRun;
-                }
-                binaryInsertionSort(array, lo, lo + force, lo + runLength, compare);
-                runLength = force;
-            }
-            ts.pushRun(lo, runLength);
-            ts.mergeRuns();
-            remaining -= runLength;
-            lo += runLength;
-        } while (remaining !== 0);
-        ts.forceMergeRuns();
-    }
-
-    var invalidZErrorLogged = false;
-    function logInvalidZError() {
-        if (invalidZErrorLogged) {
-            return;
-        }
-        invalidZErrorLogged = true;
-        console.warn('z / z2 / zlevel of displayable is invalid, which may cause unexpected errors');
-    }
-    function shapeCompareFunc(a, b) {
-        if (a.zlevel === b.zlevel) {
-            if (a.z === b.z) {
-                return a.z2 - b.z2;
-            }
-            return a.z - b.z;
-        }
-        return a.zlevel - b.zlevel;
-    }
-    var Storage = (function () {
-        function Storage() {
-            this._roots = [];
-            this._displayList = [];
-            this._displayListLen = 0;
-            this.displayableSortFunc = shapeCompareFunc;
-        }
-        Storage.prototype.traverse = function (cb, context) {
-            for (var i = 0; i < this._roots.length; i++) {
-                this._roots[i].traverse(cb, context);
-            }
-        };
-        Storage.prototype.getDisplayList = function (update, includeIgnore) {
-            includeIgnore = includeIgnore || false;
-            var displayList = this._displayList;
-            if (update || !displayList.length) {
-                this.updateDisplayList(includeIgnore);
-            }
-            return displayList;
-        };
-        Storage.prototype.updateDisplayList = function (includeIgnore) {
-            this._displayListLen = 0;
-            var roots = this._roots;
-            var displayList = this._displayList;
-            for (var i = 0, len = roots.length; i < len; i++) {
-                this._updateAndAddDisplayable(roots[i], null, includeIgnore);
-            }
-            displayList.length = this._displayListLen;
-            env.canvasSupported && sort(displayList, shapeCompareFunc);
-        };
-        Storage.prototype._updateAndAddDisplayable = function (el, clipPaths, includeIgnore) {
-            if (el.ignore && !includeIgnore) {
-                return;
-            }
-            el.beforeUpdate();
-            el.update();
-            el.afterUpdate();
-            var userSetClipPath = el.getClipPath();
-            if (el.ignoreClip) {
-                clipPaths = null;
-            }
-            else if (userSetClipPath) {
-                if (clipPaths) {
-                    clipPaths = clipPaths.slice();
-                }
-                else {
-                    clipPaths = [];
-                }
-                var currentClipPath = userSetClipPath;
-                var parentClipPath = el;
-                while (currentClipPath) {
-                    currentClipPath.parent = parentClipPath;
-                    currentClipPath.updateTransform();
-                    clipPaths.push(currentClipPath);
-                    parentClipPath = currentClipPath;
-                    currentClipPath = currentClipPath.getClipPath();
-                }
-            }
-            if (el.childrenRef) {
-                var children = el.childrenRef();
-                for (var i = 0; i < children.length; i++) {
-                    var child = children[i];
-                    if (el.__dirty) {
-                        child.__dirty |= Element.REDARAW_BIT;
-                    }
-                    this._updateAndAddDisplayable(child, clipPaths, includeIgnore);
-                }
-                el.__dirty = 0;
-            }
-            else {
-                var disp = el;
-                if (clipPaths && clipPaths.length) {
-                    disp.__clipPaths = clipPaths;
-                }
-                else if (disp.__clipPaths && disp.__clipPaths.length > 0) {
-                    disp.__clipPaths = [];
-                }
-                if (isNaN(disp.z)) {
-                    logInvalidZError();
-                    disp.z = 0;
-                }
-                if (isNaN(disp.z2)) {
-                    logInvalidZError();
-                    disp.z2 = 0;
-                }
-                if (isNaN(disp.zlevel)) {
-                    logInvalidZError();
-                    disp.zlevel = 0;
-                }
-                this._displayList[this._displayListLen++] = disp;
-            }
-            var decalEl = el.getDecalElement && el.getDecalElement();
-            if (decalEl) {
-                this._updateAndAddDisplayable(decalEl, clipPaths, includeIgnore);
-            }
-            var textGuide = el.getTextGuideLine();
-            if (textGuide) {
-                this._updateAndAddDisplayable(textGuide, clipPaths, includeIgnore);
-            }
-            var textEl = el.getTextContent();
-            if (textEl) {
-                this._updateAndAddDisplayable(textEl, clipPaths, includeIgnore);
-            }
-        };
-        Storage.prototype.addRoot = function (el) {
-            if (el.__zr && el.__zr.storage === this) {
-                return;
-            }
-            this._roots.push(el);
-        };
-        Storage.prototype.delRoot = function (el) {
-            if (el instanceof Array) {
-                for (var i = 0, l = el.length; i < l; i++) {
-                    this.delRoot(el[i]);
-                }
-                return;
-            }
-            var idx = indexOf(this._roots, el);
-            if (idx >= 0) {
-                this._roots.splice(idx, 1);
-            }
-        };
-        Storage.prototype.delAllRoots = function () {
-            this._roots = [];
-            this._displayList = [];
-            this._displayListLen = 0;
-            return;
-        };
-        Storage.prototype.getRoots = function () {
-            return this._roots;
-        };
-        Storage.prototype.dispose = function () {
-            this._displayList = null;
-            this._roots = null;
-        };
-        return Storage;
-    }());
-
-    var requestAnimationFrame;
-    requestAnimationFrame = (typeof window !== 'undefined'
-        && ((window.requestAnimationFrame && window.requestAnimationFrame.bind(window))
-            || (window.msRequestAnimationFrame && window.msRequestAnimationFrame.bind(window))
-            || window.mozRequestAnimationFrame
-            || window.webkitRequestAnimationFrame)) || function (func) {
-        return setTimeout(func, 16);
-    };
-    var requestAnimationFrame$1 = requestAnimationFrame;
 
     var Animation = (function (_super) {
         __extends(Animation, _super);
@@ -6124,6 +4288,1877 @@
         return HandlerDomProxy;
     }(Eventful));
 
+    var dpr = 1;
+    if (typeof window !== 'undefined') {
+        dpr = Math.max(window.devicePixelRatio
+            || (window.screen && window.screen.deviceXDPI / window.screen.logicalXDPI)
+            || 1, 1);
+    }
+    var devicePixelRatio = dpr;
+    var DARK_MODE_THRESHOLD = 0.4;
+    var DARK_LABEL_COLOR = '#333';
+    var LIGHT_LABEL_COLOR = '#ccc';
+    var LIGHTER_LABEL_COLOR = '#eee';
+
+    function create$1() {
+        return [1, 0, 0, 1, 0, 0];
+    }
+    function identity(out) {
+        out[0] = 1;
+        out[1] = 0;
+        out[2] = 0;
+        out[3] = 1;
+        out[4] = 0;
+        out[5] = 0;
+        return out;
+    }
+    function copy$1(out, m) {
+        out[0] = m[0];
+        out[1] = m[1];
+        out[2] = m[2];
+        out[3] = m[3];
+        out[4] = m[4];
+        out[5] = m[5];
+        return out;
+    }
+    function mul$1(out, m1, m2) {
+        var out0 = m1[0] * m2[0] + m1[2] * m2[1];
+        var out1 = m1[1] * m2[0] + m1[3] * m2[1];
+        var out2 = m1[0] * m2[2] + m1[2] * m2[3];
+        var out3 = m1[1] * m2[2] + m1[3] * m2[3];
+        var out4 = m1[0] * m2[4] + m1[2] * m2[5] + m1[4];
+        var out5 = m1[1] * m2[4] + m1[3] * m2[5] + m1[5];
+        out[0] = out0;
+        out[1] = out1;
+        out[2] = out2;
+        out[3] = out3;
+        out[4] = out4;
+        out[5] = out5;
+        return out;
+    }
+    function translate(out, a, v) {
+        out[0] = a[0];
+        out[1] = a[1];
+        out[2] = a[2];
+        out[3] = a[3];
+        out[4] = a[4] + v[0];
+        out[5] = a[5] + v[1];
+        return out;
+    }
+    function rotate(out, a, rad) {
+        var aa = a[0];
+        var ac = a[2];
+        var atx = a[4];
+        var ab = a[1];
+        var ad = a[3];
+        var aty = a[5];
+        var st = Math.sin(rad);
+        var ct = Math.cos(rad);
+        out[0] = aa * ct + ab * st;
+        out[1] = -aa * st + ab * ct;
+        out[2] = ac * ct + ad * st;
+        out[3] = -ac * st + ct * ad;
+        out[4] = ct * atx + st * aty;
+        out[5] = ct * aty - st * atx;
+        return out;
+    }
+    function scale$1(out, a, v) {
+        var vx = v[0];
+        var vy = v[1];
+        out[0] = a[0] * vx;
+        out[1] = a[1] * vy;
+        out[2] = a[2] * vx;
+        out[3] = a[3] * vy;
+        out[4] = a[4] * vx;
+        out[5] = a[5] * vy;
+        return out;
+    }
+    function invert(out, a) {
+        var aa = a[0];
+        var ac = a[2];
+        var atx = a[4];
+        var ab = a[1];
+        var ad = a[3];
+        var aty = a[5];
+        var det = aa * ad - ab * ac;
+        if (!det) {
+            return null;
+        }
+        det = 1.0 / det;
+        out[0] = ad * det;
+        out[1] = -ab * det;
+        out[2] = -ac * det;
+        out[3] = aa * det;
+        out[4] = (ac * aty - ad * atx) * det;
+        out[5] = (ab * atx - aa * aty) * det;
+        return out;
+    }
+    function clone$2(a) {
+        var b = create$1();
+        copy$1(b, a);
+        return b;
+    }
+
+    var matrix = /*#__PURE__*/Object.freeze({
+        __proto__: null,
+        create: create$1,
+        identity: identity,
+        copy: copy$1,
+        mul: mul$1,
+        translate: translate,
+        rotate: rotate,
+        scale: scale$1,
+        invert: invert,
+        clone: clone$2
+    });
+
+    var mIdentity = identity;
+    var EPSILON = 5e-5;
+    function isNotAroundZero(val) {
+        return val > EPSILON || val < -EPSILON;
+    }
+    var scaleTmp = [];
+    var tmpTransform = [];
+    var originTransform = create$1();
+    var abs = Math.abs;
+    var Transformable = (function () {
+        function Transformable() {
+        }
+        Transformable.prototype.getLocalTransform = function (m) {
+            return Transformable.getLocalTransform(this, m);
+        };
+        Transformable.prototype.setPosition = function (arr) {
+            this.x = arr[0];
+            this.y = arr[1];
+        };
+        Transformable.prototype.setScale = function (arr) {
+            this.scaleX = arr[0];
+            this.scaleY = arr[1];
+        };
+        Transformable.prototype.setSkew = function (arr) {
+            this.skewX = arr[0];
+            this.skewY = arr[1];
+        };
+        Transformable.prototype.setOrigin = function (arr) {
+            this.originX = arr[0];
+            this.originY = arr[1];
+        };
+        Transformable.prototype.needLocalTransform = function () {
+            return isNotAroundZero(this.rotation)
+                || isNotAroundZero(this.x)
+                || isNotAroundZero(this.y)
+                || isNotAroundZero(this.scaleX - 1)
+                || isNotAroundZero(this.scaleY - 1);
+        };
+        Transformable.prototype.updateTransform = function () {
+            var parentTransform = this.parent && this.parent.transform;
+            var needLocalTransform = this.needLocalTransform();
+            var m = this.transform;
+            if (!(needLocalTransform || parentTransform)) {
+                m && mIdentity(m);
+                return;
+            }
+            m = m || create$1();
+            if (needLocalTransform) {
+                this.getLocalTransform(m);
+            }
+            else {
+                mIdentity(m);
+            }
+            if (parentTransform) {
+                if (needLocalTransform) {
+                    mul$1(m, parentTransform, m);
+                }
+                else {
+                    copy$1(m, parentTransform);
+                }
+            }
+            this.transform = m;
+            this._resolveGlobalScaleRatio(m);
+        };
+        Transformable.prototype._resolveGlobalScaleRatio = function (m) {
+            var globalScaleRatio = this.globalScaleRatio;
+            if (globalScaleRatio != null && globalScaleRatio !== 1) {
+                this.getGlobalScale(scaleTmp);
+                var relX = scaleTmp[0] < 0 ? -1 : 1;
+                var relY = scaleTmp[1] < 0 ? -1 : 1;
+                var sx = ((scaleTmp[0] - relX) * globalScaleRatio + relX) / scaleTmp[0] || 0;
+                var sy = ((scaleTmp[1] - relY) * globalScaleRatio + relY) / scaleTmp[1] || 0;
+                m[0] *= sx;
+                m[1] *= sx;
+                m[2] *= sy;
+                m[3] *= sy;
+            }
+            this.invTransform = this.invTransform || create$1();
+            invert(this.invTransform, m);
+        };
+        Transformable.prototype.getComputedTransform = function () {
+            var transformNode = this;
+            var ancestors = [];
+            while (transformNode) {
+                ancestors.push(transformNode);
+                transformNode = transformNode.parent;
+            }
+            while (transformNode = ancestors.pop()) {
+                transformNode.updateTransform();
+            }
+            return this.transform;
+        };
+        Transformable.prototype.setLocalTransform = function (m) {
+            if (!m) {
+                return;
+            }
+            var sx = m[0] * m[0] + m[1] * m[1];
+            var sy = m[2] * m[2] + m[3] * m[3];
+            var rotation = Math.atan2(m[1], m[0]);
+            var shearX = Math.PI / 2 + rotation - Math.atan2(m[3], m[2]);
+            sy = Math.sqrt(sy) * Math.cos(shearX);
+            sx = Math.sqrt(sx);
+            this.skewX = shearX;
+            this.skewY = 0;
+            this.rotation = -rotation;
+            this.x = +m[4];
+            this.y = +m[5];
+            this.scaleX = sx;
+            this.scaleY = sy;
+            this.originX = 0;
+            this.originY = 0;
+        };
+        Transformable.prototype.decomposeTransform = function () {
+            if (!this.transform) {
+                return;
+            }
+            var parent = this.parent;
+            var m = this.transform;
+            if (parent && parent.transform) {
+                mul$1(tmpTransform, parent.invTransform, m);
+                m = tmpTransform;
+            }
+            var ox = this.originX;
+            var oy = this.originY;
+            if (ox || oy) {
+                originTransform[4] = ox;
+                originTransform[5] = oy;
+                mul$1(tmpTransform, m, originTransform);
+                tmpTransform[4] -= ox;
+                tmpTransform[5] -= oy;
+                m = tmpTransform;
+            }
+            this.setLocalTransform(m);
+        };
+        Transformable.prototype.getGlobalScale = function (out) {
+            var m = this.transform;
+            out = out || [];
+            if (!m) {
+                out[0] = 1;
+                out[1] = 1;
+                return out;
+            }
+            out[0] = Math.sqrt(m[0] * m[0] + m[1] * m[1]);
+            out[1] = Math.sqrt(m[2] * m[2] + m[3] * m[3]);
+            if (m[0] < 0) {
+                out[0] = -out[0];
+            }
+            if (m[3] < 0) {
+                out[1] = -out[1];
+            }
+            return out;
+        };
+        Transformable.prototype.transformCoordToLocal = function (x, y) {
+            var v2 = [x, y];
+            var invTransform = this.invTransform;
+            if (invTransform) {
+                applyTransform(v2, v2, invTransform);
+            }
+            return v2;
+        };
+        Transformable.prototype.transformCoordToGlobal = function (x, y) {
+            var v2 = [x, y];
+            var transform = this.transform;
+            if (transform) {
+                applyTransform(v2, v2, transform);
+            }
+            return v2;
+        };
+        Transformable.prototype.getLineScale = function () {
+            var m = this.transform;
+            return m && abs(m[0] - 1) > 1e-10 && abs(m[3] - 1) > 1e-10
+                ? Math.sqrt(abs(m[0] * m[3] - m[2] * m[1]))
+                : 1;
+        };
+        Transformable.prototype.copyTransform = function (source) {
+            var target = this;
+            for (var i = 0; i < TRANSFORMABLE_PROPS.length; i++) {
+                var propName = TRANSFORMABLE_PROPS[i];
+                target[propName] = source[propName];
+            }
+        };
+        Transformable.getLocalTransform = function (target, m) {
+            m = m || [];
+            var ox = target.originX || 0;
+            var oy = target.originY || 0;
+            var sx = target.scaleX;
+            var sy = target.scaleY;
+            var rotation = target.rotation || 0;
+            var x = target.x;
+            var y = target.y;
+            var skewX = target.skewX ? Math.tan(target.skewX) : 0;
+            var skewY = target.skewY ? Math.tan(-target.skewY) : 0;
+            if (ox || oy) {
+                m[4] = -ox * sx - skewX * oy * sy;
+                m[5] = -oy * sy - skewY * ox * sx;
+            }
+            else {
+                m[4] = m[5] = 0;
+            }
+            m[0] = sx;
+            m[3] = sy;
+            m[1] = skewY * sx;
+            m[2] = skewX * sy;
+            rotation && rotate(m, m, rotation);
+            m[4] += ox + x;
+            m[5] += oy + y;
+            return m;
+        };
+        Transformable.initDefaultProps = (function () {
+            var proto = Transformable.prototype;
+            proto.x = 0;
+            proto.y = 0;
+            proto.scaleX = 1;
+            proto.scaleY = 1;
+            proto.originX = 0;
+            proto.originY = 0;
+            proto.skewX = 0;
+            proto.skewY = 0;
+            proto.rotation = 0;
+            proto.globalScaleRatio = 1;
+        })();
+        return Transformable;
+    }());
+    var TRANSFORMABLE_PROPS = [
+        'x', 'y', 'originX', 'originY', 'rotation', 'scaleX', 'scaleY', 'skewX', 'skewY'
+    ];
+
+    var Point = (function () {
+        function Point(x, y) {
+            this.x = x || 0;
+            this.y = y || 0;
+        }
+        Point.prototype.copy = function (other) {
+            this.x = other.x;
+            this.y = other.y;
+            return this;
+        };
+        Point.prototype.clone = function () {
+            return new Point(this.x, this.y);
+        };
+        Point.prototype.set = function (x, y) {
+            this.x = x;
+            this.y = y;
+            return this;
+        };
+        Point.prototype.equal = function (other) {
+            return other.x === this.x && other.y === this.y;
+        };
+        Point.prototype.add = function (other) {
+            this.x += other.x;
+            this.y += other.y;
+            return this;
+        };
+        Point.prototype.scale = function (scalar) {
+            this.x *= scalar;
+            this.y *= scalar;
+        };
+        Point.prototype.scaleAndAdd = function (other, scalar) {
+            this.x += other.x * scalar;
+            this.y += other.y * scalar;
+        };
+        Point.prototype.sub = function (other) {
+            this.x -= other.x;
+            this.y -= other.y;
+            return this;
+        };
+        Point.prototype.dot = function (other) {
+            return this.x * other.x + this.y * other.y;
+        };
+        Point.prototype.len = function () {
+            return Math.sqrt(this.x * this.x + this.y * this.y);
+        };
+        Point.prototype.lenSquare = function () {
+            return this.x * this.x + this.y * this.y;
+        };
+        Point.prototype.normalize = function () {
+            var len = this.len();
+            this.x /= len;
+            this.y /= len;
+            return this;
+        };
+        Point.prototype.distance = function (other) {
+            var dx = this.x - other.x;
+            var dy = this.y - other.y;
+            return Math.sqrt(dx * dx + dy * dy);
+        };
+        Point.prototype.distanceSquare = function (other) {
+            var dx = this.x - other.x;
+            var dy = this.y - other.y;
+            return dx * dx + dy * dy;
+        };
+        Point.prototype.negate = function () {
+            this.x = -this.x;
+            this.y = -this.y;
+            return this;
+        };
+        Point.prototype.transform = function (m) {
+            if (!m) {
+                return;
+            }
+            var x = this.x;
+            var y = this.y;
+            this.x = m[0] * x + m[2] * y + m[4];
+            this.y = m[1] * x + m[3] * y + m[5];
+            return this;
+        };
+        Point.prototype.toArray = function (out) {
+            out[0] = this.x;
+            out[1] = this.y;
+            return out;
+        };
+        Point.prototype.fromArray = function (input) {
+            this.x = input[0];
+            this.y = input[1];
+        };
+        Point.set = function (p, x, y) {
+            p.x = x;
+            p.y = y;
+        };
+        Point.copy = function (p, p2) {
+            p.x = p2.x;
+            p.y = p2.y;
+        };
+        Point.len = function (p) {
+            return Math.sqrt(p.x * p.x + p.y * p.y);
+        };
+        Point.lenSquare = function (p) {
+            return p.x * p.x + p.y * p.y;
+        };
+        Point.dot = function (p0, p1) {
+            return p0.x * p1.x + p0.y * p1.y;
+        };
+        Point.add = function (out, p0, p1) {
+            out.x = p0.x + p1.x;
+            out.y = p0.y + p1.y;
+        };
+        Point.sub = function (out, p0, p1) {
+            out.x = p0.x - p1.x;
+            out.y = p0.y - p1.y;
+        };
+        Point.scale = function (out, p0, scalar) {
+            out.x = p0.x * scalar;
+            out.y = p0.y * scalar;
+        };
+        Point.scaleAndAdd = function (out, p0, p1, scalar) {
+            out.x = p0.x + p1.x * scalar;
+            out.y = p0.y + p1.y * scalar;
+        };
+        Point.lerp = function (out, p0, p1, t) {
+            var onet = 1 - t;
+            out.x = onet * p0.x + t * p1.x;
+            out.y = onet * p0.y + t * p1.y;
+        };
+        return Point;
+    }());
+
+    var mathMin = Math.min;
+    var mathMax = Math.max;
+    var lt = new Point();
+    var rb = new Point();
+    var lb = new Point();
+    var rt = new Point();
+    var minTv = new Point();
+    var maxTv = new Point();
+    var BoundingRect = (function () {
+        function BoundingRect(x, y, width, height) {
+            if (width < 0) {
+                x = x + width;
+                width = -width;
+            }
+            if (height < 0) {
+                y = y + height;
+                height = -height;
+            }
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+        }
+        BoundingRect.prototype.union = function (other) {
+            var x = mathMin(other.x, this.x);
+            var y = mathMin(other.y, this.y);
+            if (isFinite(this.x) && isFinite(this.width)) {
+                this.width = mathMax(other.x + other.width, this.x + this.width) - x;
+            }
+            else {
+                this.width = other.width;
+            }
+            if (isFinite(this.y) && isFinite(this.height)) {
+                this.height = mathMax(other.y + other.height, this.y + this.height) - y;
+            }
+            else {
+                this.height = other.height;
+            }
+            this.x = x;
+            this.y = y;
+        };
+        BoundingRect.prototype.applyTransform = function (m) {
+            BoundingRect.applyTransform(this, this, m);
+        };
+        BoundingRect.prototype.calculateTransform = function (b) {
+            var a = this;
+            var sx = b.width / a.width;
+            var sy = b.height / a.height;
+            var m = create$1();
+            translate(m, m, [-a.x, -a.y]);
+            scale$1(m, m, [sx, sy]);
+            translate(m, m, [b.x, b.y]);
+            return m;
+        };
+        BoundingRect.prototype.intersect = function (b, mtv) {
+            if (!b) {
+                return false;
+            }
+            if (!(b instanceof BoundingRect)) {
+                b = BoundingRect.create(b);
+            }
+            var a = this;
+            var ax0 = a.x;
+            var ax1 = a.x + a.width;
+            var ay0 = a.y;
+            var ay1 = a.y + a.height;
+            var bx0 = b.x;
+            var bx1 = b.x + b.width;
+            var by0 = b.y;
+            var by1 = b.y + b.height;
+            var overlap = !(ax1 < bx0 || bx1 < ax0 || ay1 < by0 || by1 < ay0);
+            if (mtv) {
+                var dMin = Infinity;
+                var dMax = 0;
+                var d0 = Math.abs(ax1 - bx0);
+                var d1 = Math.abs(bx1 - ax0);
+                var d2 = Math.abs(ay1 - by0);
+                var d3 = Math.abs(by1 - ay0);
+                var dx = Math.min(d0, d1);
+                var dy = Math.min(d2, d3);
+                if (ax1 < bx0 || bx1 < ax0) {
+                    if (dx > dMax) {
+                        dMax = dx;
+                        if (d0 < d1) {
+                            Point.set(maxTv, -d0, 0);
+                        }
+                        else {
+                            Point.set(maxTv, d1, 0);
+                        }
+                    }
+                }
+                else {
+                    if (dx < dMin) {
+                        dMin = dx;
+                        if (d0 < d1) {
+                            Point.set(minTv, d0, 0);
+                        }
+                        else {
+                            Point.set(minTv, -d1, 0);
+                        }
+                    }
+                }
+                if (ay1 < by0 || by1 < ay0) {
+                    if (dy > dMax) {
+                        dMax = dy;
+                        if (d2 < d3) {
+                            Point.set(maxTv, 0, -d2);
+                        }
+                        else {
+                            Point.set(maxTv, 0, d3);
+                        }
+                    }
+                }
+                else {
+                    if (dx < dMin) {
+                        dMin = dx;
+                        if (d2 < d3) {
+                            Point.set(minTv, 0, d2);
+                        }
+                        else {
+                            Point.set(minTv, 0, -d3);
+                        }
+                    }
+                }
+            }
+            if (mtv) {
+                Point.copy(mtv, overlap ? minTv : maxTv);
+            }
+            return overlap;
+        };
+        BoundingRect.prototype.contain = function (x, y) {
+            var rect = this;
+            return x >= rect.x
+                && x <= (rect.x + rect.width)
+                && y >= rect.y
+                && y <= (rect.y + rect.height);
+        };
+        BoundingRect.prototype.clone = function () {
+            return new BoundingRect(this.x, this.y, this.width, this.height);
+        };
+        BoundingRect.prototype.copy = function (other) {
+            BoundingRect.copy(this, other);
+        };
+        BoundingRect.prototype.plain = function () {
+            return {
+                x: this.x,
+                y: this.y,
+                width: this.width,
+                height: this.height
+            };
+        };
+        BoundingRect.prototype.isFinite = function () {
+            return isFinite(this.x)
+                && isFinite(this.y)
+                && isFinite(this.width)
+                && isFinite(this.height);
+        };
+        BoundingRect.prototype.isZero = function () {
+            return this.width === 0 || this.height === 0;
+        };
+        BoundingRect.create = function (rect) {
+            return new BoundingRect(rect.x, rect.y, rect.width, rect.height);
+        };
+        BoundingRect.copy = function (target, source) {
+            target.x = source.x;
+            target.y = source.y;
+            target.width = source.width;
+            target.height = source.height;
+        };
+        BoundingRect.applyTransform = function (target, source, m) {
+            if (!m) {
+                if (target !== source) {
+                    BoundingRect.copy(target, source);
+                }
+                return;
+            }
+            if (m[1] < 1e-5 && m[1] > -1e-5 && m[2] < 1e-5 && m[2] > -1e-5) {
+                var sx = m[0];
+                var sy = m[3];
+                var tx = m[4];
+                var ty = m[5];
+                target.x = source.x * sx + tx;
+                target.y = source.y * sy + ty;
+                target.width = source.width * sx;
+                target.height = source.height * sy;
+                if (target.width < 0) {
+                    target.x += target.width;
+                    target.width = -target.width;
+                }
+                if (target.height < 0) {
+                    target.y += target.height;
+                    target.height = -target.height;
+                }
+                return;
+            }
+            lt.x = lb.x = source.x;
+            lt.y = rt.y = source.y;
+            rb.x = rt.x = source.x + source.width;
+            rb.y = lb.y = source.y + source.height;
+            lt.transform(m);
+            rt.transform(m);
+            rb.transform(m);
+            lb.transform(m);
+            target.x = mathMin(lt.x, rb.x, lb.x, rt.x);
+            target.y = mathMin(lt.y, rb.y, lb.y, rt.y);
+            var maxX = mathMax(lt.x, rb.x, lb.x, rt.x);
+            var maxY = mathMax(lt.y, rb.y, lb.y, rt.y);
+            target.width = maxX - target.x;
+            target.height = maxY - target.y;
+        };
+        return BoundingRect;
+    }());
+
+    var textWidthCache = {};
+    var DEFAULT_FONT = '12px sans-serif';
+    var _ctx;
+    var _cachedFont;
+    function defaultMeasureText(text, font) {
+        if (!_ctx) {
+            _ctx = createCanvas().getContext('2d');
+        }
+        if (_cachedFont !== font) {
+            _cachedFont = _ctx.font = font || DEFAULT_FONT;
+        }
+        return _ctx.measureText(text);
+    }
+    var methods$1 = {
+        measureText: defaultMeasureText
+    };
+    function getWidth(text, font) {
+        font = font || DEFAULT_FONT;
+        var cacheOfFont = textWidthCache[font];
+        if (!cacheOfFont) {
+            cacheOfFont = textWidthCache[font] = new LRU(500);
+        }
+        var width = cacheOfFont.get(text);
+        if (width == null) {
+            width = methods$1.measureText(text, font).width;
+            cacheOfFont.put(text, width);
+        }
+        return width;
+    }
+    function innerGetBoundingRect(text, font, textAlign, textBaseline) {
+        var width = getWidth(text, font);
+        var height = getLineHeight(font);
+        var x = adjustTextX(0, width, textAlign);
+        var y = adjustTextY(0, height, textBaseline);
+        var rect = new BoundingRect(x, y, width, height);
+        return rect;
+    }
+    function getBoundingRect(text, font, textAlign, textBaseline) {
+        var textLines = ((text || '') + '').split('\n');
+        var len = textLines.length;
+        if (len === 1) {
+            return innerGetBoundingRect(textLines[0], font, textAlign, textBaseline);
+        }
+        else {
+            var uniondRect = new BoundingRect(0, 0, 0, 0);
+            for (var i = 0; i < textLines.length; i++) {
+                var rect = innerGetBoundingRect(textLines[i], font, textAlign, textBaseline);
+                i === 0 ? uniondRect.copy(rect) : uniondRect.union(rect);
+            }
+            return uniondRect;
+        }
+    }
+    function adjustTextX(x, width, textAlign) {
+        if (textAlign === 'right') {
+            x -= width;
+        }
+        else if (textAlign === 'center') {
+            x -= width / 2;
+        }
+        return x;
+    }
+    function adjustTextY(y, height, verticalAlign) {
+        if (verticalAlign === 'middle') {
+            y -= height / 2;
+        }
+        else if (verticalAlign === 'bottom') {
+            y -= height;
+        }
+        return y;
+    }
+    function getLineHeight(font) {
+        return getWidth('国', font);
+    }
+    function parsePercent(value, maxValue) {
+        if (typeof value === 'string') {
+            if (value.lastIndexOf('%') >= 0) {
+                return parseFloat(value) / 100 * maxValue;
+            }
+            return parseFloat(value);
+        }
+        return value;
+    }
+    function calculateTextPosition(out, opts, rect) {
+        var textPosition = opts.position || 'inside';
+        var distance = opts.distance != null ? opts.distance : 5;
+        var height = rect.height;
+        var width = rect.width;
+        var halfHeight = height / 2;
+        var x = rect.x;
+        var y = rect.y;
+        var textAlign = 'left';
+        var textVerticalAlign = 'top';
+        if (textPosition instanceof Array) {
+            x += parsePercent(textPosition[0], rect.width);
+            y += parsePercent(textPosition[1], rect.height);
+            textAlign = null;
+            textVerticalAlign = null;
+        }
+        else {
+            switch (textPosition) {
+                case 'left':
+                    x -= distance;
+                    y += halfHeight;
+                    textAlign = 'right';
+                    textVerticalAlign = 'middle';
+                    break;
+                case 'right':
+                    x += distance + width;
+                    y += halfHeight;
+                    textVerticalAlign = 'middle';
+                    break;
+                case 'top':
+                    x += width / 2;
+                    y -= distance;
+                    textAlign = 'center';
+                    textVerticalAlign = 'bottom';
+                    break;
+                case 'bottom':
+                    x += width / 2;
+                    y += height + distance;
+                    textAlign = 'center';
+                    break;
+                case 'inside':
+                    x += width / 2;
+                    y += halfHeight;
+                    textAlign = 'center';
+                    textVerticalAlign = 'middle';
+                    break;
+                case 'insideLeft':
+                    x += distance;
+                    y += halfHeight;
+                    textVerticalAlign = 'middle';
+                    break;
+                case 'insideRight':
+                    x += width - distance;
+                    y += halfHeight;
+                    textAlign = 'right';
+                    textVerticalAlign = 'middle';
+                    break;
+                case 'insideTop':
+                    x += width / 2;
+                    y += distance;
+                    textAlign = 'center';
+                    break;
+                case 'insideBottom':
+                    x += width / 2;
+                    y += height - distance;
+                    textAlign = 'center';
+                    textVerticalAlign = 'bottom';
+                    break;
+                case 'insideTopLeft':
+                    x += distance;
+                    y += distance;
+                    break;
+                case 'insideTopRight':
+                    x += width - distance;
+                    y += distance;
+                    textAlign = 'right';
+                    break;
+                case 'insideBottomLeft':
+                    x += distance;
+                    y += height - distance;
+                    textVerticalAlign = 'bottom';
+                    break;
+                case 'insideBottomRight':
+                    x += width - distance;
+                    y += height - distance;
+                    textAlign = 'right';
+                    textVerticalAlign = 'bottom';
+                    break;
+            }
+        }
+        out = out || {};
+        out.x = x;
+        out.y = y;
+        out.align = textAlign;
+        out.verticalAlign = textVerticalAlign;
+        return out;
+    }
+
+    var PRESERVED_NORMAL_STATE = '__zr_normal__';
+    var PRIMARY_STATES_KEYS = ['x', 'y', 'scaleX', 'scaleY', 'originX', 'originY', 'rotation', 'ignore'];
+    var DEFAULT_ANIMATABLE_MAP = {
+        x: true,
+        y: true,
+        scaleX: true,
+        scaleY: true,
+        originX: true,
+        originY: true,
+        rotation: true,
+        ignore: false
+    };
+    var tmpTextPosCalcRes = {};
+    var tmpBoundingRect = new BoundingRect(0, 0, 0, 0);
+    var Element = (function () {
+        function Element(props) {
+            this.id = guid();
+            this.animators = [];
+            this.currentStates = [];
+            this.states = {};
+            this._init(props);
+        }
+        Element.prototype._init = function (props) {
+            this.attr(props);
+        };
+        Element.prototype.drift = function (dx, dy, e) {
+            switch (this.draggable) {
+                case 'horizontal':
+                    dy = 0;
+                    break;
+                case 'vertical':
+                    dx = 0;
+                    break;
+            }
+            var m = this.transform;
+            if (!m) {
+                m = this.transform = [1, 0, 0, 1, 0, 0];
+            }
+            m[4] += dx;
+            m[5] += dy;
+            this.decomposeTransform();
+            this.markRedraw();
+        };
+        Element.prototype.beforeUpdate = function () { };
+        Element.prototype.afterUpdate = function () { };
+        Element.prototype.update = function () {
+            this.updateTransform();
+            if (this.__dirty) {
+                this.updateInnerText();
+            }
+        };
+        Element.prototype.updateInnerText = function (forceUpdate) {
+            var textEl = this._textContent;
+            if (textEl && (!textEl.ignore || forceUpdate)) {
+                if (!this.textConfig) {
+                    this.textConfig = {};
+                }
+                var textConfig = this.textConfig;
+                var isLocal = textConfig.local;
+                var innerTransformable = textEl.innerTransformable;
+                var textAlign = void 0;
+                var textVerticalAlign = void 0;
+                var textStyleChanged = false;
+                innerTransformable.parent = isLocal ? this : null;
+                var innerOrigin = false;
+                innerTransformable.copyTransform(textEl);
+                if (textConfig.position != null) {
+                    var layoutRect = tmpBoundingRect;
+                    if (textConfig.layoutRect) {
+                        layoutRect.copy(textConfig.layoutRect);
+                    }
+                    else {
+                        layoutRect.copy(this.getBoundingRect());
+                    }
+                    if (!isLocal) {
+                        layoutRect.applyTransform(this.transform);
+                    }
+                    if (this.calculateTextPosition) {
+                        this.calculateTextPosition(tmpTextPosCalcRes, textConfig, layoutRect);
+                    }
+                    else {
+                        calculateTextPosition(tmpTextPosCalcRes, textConfig, layoutRect);
+                    }
+                    innerTransformable.x = tmpTextPosCalcRes.x;
+                    innerTransformable.y = tmpTextPosCalcRes.y;
+                    textAlign = tmpTextPosCalcRes.align;
+                    textVerticalAlign = tmpTextPosCalcRes.verticalAlign;
+                    var textOrigin = textConfig.origin;
+                    if (textOrigin && textConfig.rotation != null) {
+                        var relOriginX = void 0;
+                        var relOriginY = void 0;
+                        if (textOrigin === 'center') {
+                            relOriginX = layoutRect.width * 0.5;
+                            relOriginY = layoutRect.height * 0.5;
+                        }
+                        else {
+                            relOriginX = parsePercent(textOrigin[0], layoutRect.width);
+                            relOriginY = parsePercent(textOrigin[1], layoutRect.height);
+                        }
+                        innerOrigin = true;
+                        innerTransformable.originX = -innerTransformable.x + relOriginX + (isLocal ? 0 : layoutRect.x);
+                        innerTransformable.originY = -innerTransformable.y + relOriginY + (isLocal ? 0 : layoutRect.y);
+                    }
+                }
+                if (textConfig.rotation != null) {
+                    innerTransformable.rotation = textConfig.rotation;
+                }
+                var textOffset = textConfig.offset;
+                if (textOffset) {
+                    innerTransformable.x += textOffset[0];
+                    innerTransformable.y += textOffset[1];
+                    if (!innerOrigin) {
+                        innerTransformable.originX = -textOffset[0];
+                        innerTransformable.originY = -textOffset[1];
+                    }
+                }
+                var isInside = textConfig.inside == null
+                    ? (typeof textConfig.position === 'string' && textConfig.position.indexOf('inside') >= 0)
+                    : textConfig.inside;
+                var innerTextDefaultStyle = this._innerTextDefaultStyle || (this._innerTextDefaultStyle = {});
+                var textFill = void 0;
+                var textStroke = void 0;
+                var autoStroke = void 0;
+                if (isInside && this.canBeInsideText()) {
+                    textFill = textConfig.insideFill;
+                    textStroke = textConfig.insideStroke;
+                    if (textFill == null || textFill === 'auto') {
+                        textFill = this.getInsideTextFill();
+                    }
+                    if (textStroke == null || textStroke === 'auto') {
+                        textStroke = this.getInsideTextStroke(textFill);
+                        autoStroke = true;
+                    }
+                }
+                else {
+                    textFill = textConfig.outsideFill;
+                    textStroke = textConfig.outsideStroke;
+                    if (textFill == null || textFill === 'auto') {
+                        textFill = this.getOutsideFill();
+                    }
+                    if (textStroke == null || textStroke === 'auto') {
+                        textStroke = this.getOutsideStroke(textFill);
+                        autoStroke = true;
+                    }
+                }
+                textFill = textFill || '#000';
+                if (textFill !== innerTextDefaultStyle.fill
+                    || textStroke !== innerTextDefaultStyle.stroke
+                    || autoStroke !== innerTextDefaultStyle.autoStroke
+                    || textAlign !== innerTextDefaultStyle.align
+                    || textVerticalAlign !== innerTextDefaultStyle.verticalAlign) {
+                    textStyleChanged = true;
+                    innerTextDefaultStyle.fill = textFill;
+                    innerTextDefaultStyle.stroke = textStroke;
+                    innerTextDefaultStyle.autoStroke = autoStroke;
+                    innerTextDefaultStyle.align = textAlign;
+                    innerTextDefaultStyle.verticalAlign = textVerticalAlign;
+                    textEl.setDefaultTextStyle(innerTextDefaultStyle);
+                }
+                textEl.__dirty |= REDRAW_BIT;
+                if (textStyleChanged) {
+                    textEl.dirtyStyle(true);
+                }
+            }
+        };
+        Element.prototype.canBeInsideText = function () {
+            return true;
+        };
+        Element.prototype.getInsideTextFill = function () {
+            return '#fff';
+        };
+        Element.prototype.getInsideTextStroke = function (textFill) {
+            return '#000';
+        };
+        Element.prototype.getOutsideFill = function () {
+            return this.__zr && this.__zr.isDarkMode() ? LIGHT_LABEL_COLOR : DARK_LABEL_COLOR;
+        };
+        Element.prototype.getOutsideStroke = function (textFill) {
+            var backgroundColor = this.__zr && this.__zr.getBackgroundColor();
+            var colorArr = typeof backgroundColor === 'string' && parse(backgroundColor);
+            if (!colorArr) {
+                colorArr = [255, 255, 255, 1];
+            }
+            var alpha = colorArr[3];
+            var isDark = this.__zr.isDarkMode();
+            for (var i = 0; i < 3; i++) {
+                colorArr[i] = colorArr[i] * alpha + (isDark ? 0 : 255) * (1 - alpha);
+            }
+            colorArr[3] = 1;
+            return stringify(colorArr, 'rgba');
+        };
+        Element.prototype.traverse = function (cb, context) { };
+        Element.prototype.attrKV = function (key, value) {
+            if (key === 'textConfig') {
+                this.setTextConfig(value);
+            }
+            else if (key === 'textContent') {
+                this.setTextContent(value);
+            }
+            else if (key === 'clipPath') {
+                this.setClipPath(value);
+            }
+            else if (key === 'extra') {
+                this.extra = this.extra || {};
+                extend(this.extra, value);
+            }
+            else {
+                this[key] = value;
+            }
+        };
+        Element.prototype.hide = function () {
+            this.ignore = true;
+            this.markRedraw();
+        };
+        Element.prototype.show = function () {
+            this.ignore = false;
+            this.markRedraw();
+        };
+        Element.prototype.attr = function (keyOrObj, value) {
+            if (typeof keyOrObj === 'string') {
+                this.attrKV(keyOrObj, value);
+            }
+            else if (isObject(keyOrObj)) {
+                var obj = keyOrObj;
+                var keysArr = keys(obj);
+                for (var i = 0; i < keysArr.length; i++) {
+                    var key = keysArr[i];
+                    this.attrKV(key, keyOrObj[key]);
+                }
+            }
+            this.markRedraw();
+            return this;
+        };
+        Element.prototype.saveCurrentToNormalState = function (toState) {
+            this._innerSaveToNormal(toState);
+            var normalState = this._normalState;
+            for (var i = 0; i < this.animators.length; i++) {
+                var animator = this.animators[i];
+                var fromStateTransition = animator.__fromStateTransition;
+                if (fromStateTransition && fromStateTransition !== PRESERVED_NORMAL_STATE) {
+                    continue;
+                }
+                var targetName = animator.targetName;
+                var target = targetName
+                    ? normalState[targetName] : normalState;
+                animator.saveFinalToTarget(target);
+            }
+        };
+        Element.prototype._innerSaveToNormal = function (toState) {
+            var normalState = this._normalState;
+            if (!normalState) {
+                normalState = this._normalState = {};
+            }
+            if (toState.textConfig && !normalState.textConfig) {
+                normalState.textConfig = this.textConfig;
+            }
+            this._savePrimaryToNormal(toState, normalState, PRIMARY_STATES_KEYS);
+        };
+        Element.prototype._savePrimaryToNormal = function (toState, normalState, primaryKeys) {
+            for (var i = 0; i < primaryKeys.length; i++) {
+                var key = primaryKeys[i];
+                if (toState[key] != null && !(key in normalState)) {
+                    normalState[key] = this[key];
+                }
+            }
+        };
+        Element.prototype.hasState = function () {
+            return this.currentStates.length > 0;
+        };
+        Element.prototype.getState = function (name) {
+            return this.states[name];
+        };
+        Element.prototype.ensureState = function (name) {
+            var states = this.states;
+            if (!states[name]) {
+                states[name] = {};
+            }
+            return states[name];
+        };
+        Element.prototype.clearStates = function (noAnimation) {
+            this.useState(PRESERVED_NORMAL_STATE, false, noAnimation);
+        };
+        Element.prototype.useState = function (stateName, keepCurrentStates, noAnimation, forceUseHoverLayer) {
+            var toNormalState = stateName === PRESERVED_NORMAL_STATE;
+            var hasStates = this.hasState();
+            if (!hasStates && toNormalState) {
+                return;
+            }
+            var currentStates = this.currentStates;
+            var animationCfg = this.stateTransition;
+            if (indexOf(currentStates, stateName) >= 0 && (keepCurrentStates || currentStates.length === 1)) {
+                return;
+            }
+            var state;
+            if (this.stateProxy && !toNormalState) {
+                state = this.stateProxy(stateName);
+            }
+            if (!state) {
+                state = (this.states && this.states[stateName]);
+            }
+            if (!state && !toNormalState) {
+                logError("State " + stateName + " not exists.");
+                return;
+            }
+            if (!toNormalState) {
+                this.saveCurrentToNormalState(state);
+            }
+            var useHoverLayer = !!((state && state.hoverLayer) || forceUseHoverLayer);
+            if (useHoverLayer) {
+                this._toggleHoverLayerFlag(true);
+            }
+            this._applyStateObj(stateName, state, this._normalState, keepCurrentStates, !noAnimation && !this.__inHover && animationCfg && animationCfg.duration > 0, animationCfg);
+            var textContent = this._textContent;
+            var textGuide = this._textGuide;
+            if (textContent) {
+                textContent.useState(stateName, keepCurrentStates, noAnimation, useHoverLayer);
+            }
+            if (textGuide) {
+                textGuide.useState(stateName, keepCurrentStates, noAnimation, useHoverLayer);
+            }
+            if (toNormalState) {
+                this.currentStates = [];
+                this._normalState = {};
+            }
+            else {
+                if (!keepCurrentStates) {
+                    this.currentStates = [stateName];
+                }
+                else {
+                    this.currentStates.push(stateName);
+                }
+            }
+            this._updateAnimationTargets();
+            this.markRedraw();
+            if (!useHoverLayer && this.__inHover) {
+                this._toggleHoverLayerFlag(false);
+                this.__dirty &= ~REDRAW_BIT;
+            }
+            return state;
+        };
+        Element.prototype.useStates = function (states, noAnimation, forceUseHoverLayer) {
+            if (!states.length) {
+                this.clearStates();
+            }
+            else {
+                var stateObjects = [];
+                var currentStates = this.currentStates;
+                var len = states.length;
+                var notChange = len === currentStates.length;
+                if (notChange) {
+                    for (var i = 0; i < len; i++) {
+                        if (states[i] !== currentStates[i]) {
+                            notChange = false;
+                            break;
+                        }
+                    }
+                }
+                if (notChange) {
+                    return;
+                }
+                for (var i = 0; i < len; i++) {
+                    var stateName = states[i];
+                    var stateObj = void 0;
+                    if (this.stateProxy) {
+                        stateObj = this.stateProxy(stateName, states);
+                    }
+                    if (!stateObj) {
+                        stateObj = this.states[stateName];
+                    }
+                    if (stateObj) {
+                        stateObjects.push(stateObj);
+                    }
+                }
+                var lastStateObj = stateObjects[len - 1];
+                var useHoverLayer = !!((lastStateObj && lastStateObj.hoverLayer) || forceUseHoverLayer);
+                if (useHoverLayer) {
+                    this._toggleHoverLayerFlag(true);
+                }
+                var mergedState = this._mergeStates(stateObjects);
+                var animationCfg = this.stateTransition;
+                this.saveCurrentToNormalState(mergedState);
+                this._applyStateObj(states.join(','), mergedState, this._normalState, false, !noAnimation && !this.__inHover && animationCfg && animationCfg.duration > 0, animationCfg);
+                var textContent = this._textContent;
+                var textGuide = this._textGuide;
+                if (textContent) {
+                    textContent.useStates(states, noAnimation, useHoverLayer);
+                }
+                if (textGuide) {
+                    textGuide.useStates(states, noAnimation, useHoverLayer);
+                }
+                this._updateAnimationTargets();
+                this.currentStates = states.slice();
+                this.markRedraw();
+                if (!useHoverLayer && this.__inHover) {
+                    this._toggleHoverLayerFlag(false);
+                    this.__dirty &= ~REDRAW_BIT;
+                }
+            }
+        };
+        Element.prototype._updateAnimationTargets = function () {
+            for (var i = 0; i < this.animators.length; i++) {
+                var animator = this.animators[i];
+                if (animator.targetName) {
+                    animator.changeTarget(this[animator.targetName]);
+                }
+            }
+        };
+        Element.prototype.removeState = function (state) {
+            var idx = indexOf(this.currentStates, state);
+            if (idx >= 0) {
+                var currentStates = this.currentStates.slice();
+                currentStates.splice(idx, 1);
+                this.useStates(currentStates);
+            }
+        };
+        Element.prototype.replaceState = function (oldState, newState, forceAdd) {
+            var currentStates = this.currentStates.slice();
+            var idx = indexOf(currentStates, oldState);
+            var newStateExists = indexOf(currentStates, newState) >= 0;
+            if (idx >= 0) {
+                if (!newStateExists) {
+                    currentStates[idx] = newState;
+                }
+                else {
+                    currentStates.splice(idx, 1);
+                }
+            }
+            else if (forceAdd && !newStateExists) {
+                currentStates.push(newState);
+            }
+            this.useStates(currentStates);
+        };
+        Element.prototype.toggleState = function (state, enable) {
+            if (enable) {
+                this.useState(state, true);
+            }
+            else {
+                this.removeState(state);
+            }
+        };
+        Element.prototype._mergeStates = function (states) {
+            var mergedState = {};
+            var mergedTextConfig;
+            for (var i = 0; i < states.length; i++) {
+                var state = states[i];
+                extend(mergedState, state);
+                if (state.textConfig) {
+                    mergedTextConfig = mergedTextConfig || {};
+                    extend(mergedTextConfig, state.textConfig);
+                }
+            }
+            if (mergedTextConfig) {
+                mergedState.textConfig = mergedTextConfig;
+            }
+            return mergedState;
+        };
+        Element.prototype._applyStateObj = function (stateName, state, normalState, keepCurrentStates, transition, animationCfg) {
+            var needsRestoreToNormal = !(state && keepCurrentStates);
+            if (state && state.textConfig) {
+                this.textConfig = extend({}, keepCurrentStates ? this.textConfig : normalState.textConfig);
+                extend(this.textConfig, state.textConfig);
+            }
+            else if (needsRestoreToNormal) {
+                if (normalState.textConfig) {
+                    this.textConfig = normalState.textConfig;
+                }
+            }
+            var transitionTarget = {};
+            var hasTransition = false;
+            for (var i = 0; i < PRIMARY_STATES_KEYS.length; i++) {
+                var key = PRIMARY_STATES_KEYS[i];
+                var propNeedsTransition = transition && DEFAULT_ANIMATABLE_MAP[key];
+                if (state && state[key] != null) {
+                    if (propNeedsTransition) {
+                        hasTransition = true;
+                        transitionTarget[key] = state[key];
+                    }
+                    else {
+                        this[key] = state[key];
+                    }
+                }
+                else if (needsRestoreToNormal) {
+                    if (normalState[key] != null) {
+                        if (propNeedsTransition) {
+                            hasTransition = true;
+                            transitionTarget[key] = normalState[key];
+                        }
+                        else {
+                            this[key] = normalState[key];
+                        }
+                    }
+                }
+            }
+            if (!transition) {
+                for (var i = 0; i < this.animators.length; i++) {
+                    var animator = this.animators[i];
+                    var targetName = animator.targetName;
+                    animator.__changeFinalValue(targetName
+                        ? (state || normalState)[targetName]
+                        : (state || normalState));
+                }
+            }
+            if (hasTransition) {
+                this._transitionState(stateName, transitionTarget, animationCfg);
+            }
+        };
+        Element.prototype._attachComponent = function (componentEl) {
+            if (componentEl.__zr && !componentEl.__hostTarget) {
+                throw new Error('Text element has been added to zrender.');
+            }
+            if (componentEl === this) {
+                throw new Error('Recursive component attachment.');
+            }
+            var zr = this.__zr;
+            if (zr) {
+                componentEl.addSelfToZr(zr);
+            }
+            componentEl.__zr = zr;
+            componentEl.__hostTarget = this;
+        };
+        Element.prototype._detachComponent = function (componentEl) {
+            if (componentEl.__zr) {
+                componentEl.removeSelfFromZr(componentEl.__zr);
+            }
+            componentEl.__zr = null;
+            componentEl.__hostTarget = null;
+        };
+        Element.prototype.getClipPath = function () {
+            return this._clipPath;
+        };
+        Element.prototype.setClipPath = function (clipPath) {
+            if (this._clipPath && this._clipPath !== clipPath) {
+                this.removeClipPath();
+            }
+            this._attachComponent(clipPath);
+            this._clipPath = clipPath;
+            this.markRedraw();
+        };
+        Element.prototype.removeClipPath = function () {
+            var clipPath = this._clipPath;
+            if (clipPath) {
+                this._detachComponent(clipPath);
+                this._clipPath = null;
+                this.markRedraw();
+            }
+        };
+        Element.prototype.getTextContent = function () {
+            return this._textContent;
+        };
+        Element.prototype.setTextContent = function (textEl) {
+            var previousTextContent = this._textContent;
+            if (previousTextContent === textEl) {
+                return;
+            }
+            if (previousTextContent && previousTextContent !== textEl) {
+                this.removeTextContent();
+            }
+            if (textEl.__zr && !textEl.__hostTarget) {
+                throw new Error('Text element has been added to zrender.');
+            }
+            textEl.innerTransformable = new Transformable();
+            this._attachComponent(textEl);
+            this._textContent = textEl;
+            this.markRedraw();
+        };
+        Element.prototype.setTextConfig = function (cfg) {
+            if (!this.textConfig) {
+                this.textConfig = {};
+            }
+            extend(this.textConfig, cfg);
+            this.markRedraw();
+        };
+        Element.prototype.removeTextConfig = function () {
+            this.textConfig = null;
+            this.markRedraw();
+        };
+        Element.prototype.removeTextContent = function () {
+            var textEl = this._textContent;
+            if (textEl) {
+                textEl.innerTransformable = null;
+                this._detachComponent(textEl);
+                this._textContent = null;
+                this._innerTextDefaultStyle = null;
+                this.markRedraw();
+            }
+        };
+        Element.prototype.getTextGuideLine = function () {
+            return this._textGuide;
+        };
+        Element.prototype.setTextGuideLine = function (guideLine) {
+            if (this._textGuide && this._textGuide !== guideLine) {
+                this.removeTextGuideLine();
+            }
+            this._attachComponent(guideLine);
+            this._textGuide = guideLine;
+            this.markRedraw();
+        };
+        Element.prototype.removeTextGuideLine = function () {
+            var textGuide = this._textGuide;
+            if (textGuide) {
+                this._detachComponent(textGuide);
+                this._textGuide = null;
+                this.markRedraw();
+            }
+        };
+        Element.prototype.markRedraw = function () {
+            this.__dirty |= REDRAW_BIT;
+            var zr = this.__zr;
+            if (zr) {
+                if (this.__inHover) {
+                    zr.refreshHover();
+                }
+                else {
+                    zr.refresh();
+                }
+            }
+            if (this.__hostTarget) {
+                this.__hostTarget.markRedraw();
+            }
+        };
+        Element.prototype.dirty = function () {
+            this.markRedraw();
+        };
+        Element.prototype._toggleHoverLayerFlag = function (inHover) {
+            this.__inHover = inHover;
+            var textContent = this._textContent;
+            var textGuide = this._textGuide;
+            if (textContent) {
+                textContent.__inHover = inHover;
+            }
+            if (textGuide) {
+                textGuide.__inHover = inHover;
+            }
+        };
+        Element.prototype.addSelfToZr = function (zr) {
+            if (this.__zr === zr) {
+                return;
+            }
+            this.__zr = zr;
+            var animators = this.animators;
+            if (animators) {
+                for (var i = 0; i < animators.length; i++) {
+                    zr.animation.addAnimator(animators[i]);
+                }
+            }
+            if (this._clipPath) {
+                this._clipPath.addSelfToZr(zr);
+            }
+            if (this._textContent) {
+                this._textContent.addSelfToZr(zr);
+            }
+            if (this._textGuide) {
+                this._textGuide.addSelfToZr(zr);
+            }
+        };
+        Element.prototype.removeSelfFromZr = function (zr) {
+            if (!this.__zr) {
+                return;
+            }
+            this.__zr = null;
+            var animators = this.animators;
+            if (animators) {
+                for (var i = 0; i < animators.length; i++) {
+                    zr.animation.removeAnimator(animators[i]);
+                }
+            }
+            if (this._clipPath) {
+                this._clipPath.removeSelfFromZr(zr);
+            }
+            if (this._textContent) {
+                this._textContent.removeSelfFromZr(zr);
+            }
+            if (this._textGuide) {
+                this._textGuide.removeSelfFromZr(zr);
+            }
+        };
+        Element.prototype.animate = function (key, loop) {
+            var target = key ? this[key] : this;
+            if (!target) {
+                logError('Property "'
+                    + key
+                    + '" is not existed in element '
+                    + this.id);
+                return;
+            }
+            var animator = new Animator(target, loop);
+            this.addAnimator(animator, key);
+            return animator;
+        };
+        Element.prototype.addAnimator = function (animator, key) {
+            var zr = this.__zr;
+            var el = this;
+            animator.during(function () {
+                el.updateDuringAnimation(key);
+            }).done(function () {
+                var animators = el.animators;
+                var idx = indexOf(animators, animator);
+                if (idx >= 0) {
+                    animators.splice(idx, 1);
+                }
+            });
+            this.animators.push(animator);
+            if (zr) {
+                zr.animation.addAnimator(animator);
+            }
+            zr && zr.wakeUp();
+        };
+        Element.prototype.updateDuringAnimation = function (key) {
+            this.markRedraw();
+        };
+        Element.prototype.stopAnimation = function (scope, forwardToLast) {
+            var animators = this.animators;
+            var len = animators.length;
+            var leftAnimators = [];
+            for (var i = 0; i < len; i++) {
+                var animator = animators[i];
+                if (!scope || scope === animator.scope) {
+                    animator.stop(forwardToLast);
+                }
+                else {
+                    leftAnimators.push(animator);
+                }
+            }
+            this.animators = leftAnimators;
+            return this;
+        };
+        Element.prototype.animateTo = function (target, cfg, animationProps) {
+            animateTo(this, target, cfg, animationProps);
+        };
+        Element.prototype.animateFrom = function (target, cfg, animationProps) {
+            animateTo(this, target, cfg, animationProps, true);
+        };
+        Element.prototype._transitionState = function (stateName, target, cfg, animationProps) {
+            var animators = animateTo(this, target, cfg, animationProps);
+            for (var i = 0; i < animators.length; i++) {
+                animators[i].__fromStateTransition = stateName;
+            }
+        };
+        Element.prototype.getBoundingRect = function () {
+            return null;
+        };
+        Element.prototype.getPaintRect = function () {
+            return null;
+        };
+        Element.initDefaultProps = (function () {
+            var elProto = Element.prototype;
+            elProto.type = 'element';
+            elProto.name = '';
+            elProto.ignore = false;
+            elProto.silent = false;
+            elProto.isGroup = false;
+            elProto.draggable = false;
+            elProto.dragging = false;
+            elProto.ignoreClip = false;
+            elProto.__inHover = false;
+            elProto.__dirty = REDRAW_BIT;
+            var logs = {};
+            function logDeprecatedError(key, xKey, yKey) {
+                if (!logs[key + xKey + yKey]) {
+                    console.warn("DEPRECATED: '" + key + "' has been deprecated. use '" + xKey + "', '" + yKey + "' instead");
+                    logs[key + xKey + yKey] = true;
+                }
+            }
+            function createLegacyProperty(key, privateKey, xKey, yKey) {
+                Object.defineProperty(elProto, key, {
+                    get: function () {
+                        logDeprecatedError(key, xKey, yKey);
+                        if (!this[privateKey]) {
+                            var pos = this[privateKey] = [];
+                            enhanceArray(this, pos);
+                        }
+                        return this[privateKey];
+                    },
+                    set: function (pos) {
+                        logDeprecatedError(key, xKey, yKey);
+                        this[xKey] = pos[0];
+                        this[yKey] = pos[1];
+                        this[privateKey] = pos;
+                        enhanceArray(this, pos);
+                    }
+                });
+                function enhanceArray(self, pos) {
+                    Object.defineProperty(pos, 0, {
+                        get: function () {
+                            return self[xKey];
+                        },
+                        set: function (val) {
+                            self[xKey] = val;
+                        }
+                    });
+                    Object.defineProperty(pos, 1, {
+                        get: function () {
+                            return self[yKey];
+                        },
+                        set: function (val) {
+                            self[yKey] = val;
+                        }
+                    });
+                }
+            }
+            if (Object.defineProperty && (!env.browser.ie || env.browser.version > 8)) {
+                createLegacyProperty('position', '_legacyPos', 'x', 'y');
+                createLegacyProperty('scale', '_legacyScale', 'scaleX', 'scaleY');
+                createLegacyProperty('origin', '_legacyOrigin', 'originX', 'originY');
+            }
+        })();
+        return Element;
+    }());
+    mixin(Element, Eventful);
+    mixin(Element, Transformable);
+    function animateTo(animatable, target, cfg, animationProps, reverse) {
+        cfg = cfg || {};
+        var animators = [];
+        animateToShallow(animatable, '', animatable, target, cfg, animationProps, animators, reverse);
+        var finishCount = animators.length;
+        var doneHappened = false;
+        var cfgDone = cfg.done;
+        var cfgAborted = cfg.aborted;
+        var doneCb = function () {
+            doneHappened = true;
+            finishCount--;
+            if (finishCount <= 0) {
+                doneHappened
+                    ? (cfgDone && cfgDone())
+                    : (cfgAborted && cfgAborted());
+            }
+        };
+        var abortedCb = function () {
+            finishCount--;
+            if (finishCount <= 0) {
+                doneHappened
+                    ? (cfgDone && cfgDone())
+                    : (cfgAborted && cfgAborted());
+            }
+        };
+        if (!finishCount) {
+            cfgDone && cfgDone();
+        }
+        if (animators.length > 0 && cfg.during) {
+            animators[0].during(function (target, percent) {
+                cfg.during(percent);
+            });
+        }
+        for (var i = 0; i < animators.length; i++) {
+            var animator = animators[i];
+            if (doneCb) {
+                animator.done(doneCb);
+            }
+            if (abortedCb) {
+                animator.aborted(abortedCb);
+            }
+            animator.start(cfg.easing, cfg.force);
+        }
+        return animators;
+    }
+    function copyArrShallow(source, target, len) {
+        for (var i = 0; i < len; i++) {
+            source[i] = target[i];
+        }
+    }
+    function is2DArray(value) {
+        return isArrayLike(value[0]);
+    }
+    function copyValue(target, source, key) {
+        if (isArrayLike(source[key])) {
+            if (!isArrayLike(target[key])) {
+                target[key] = [];
+            }
+            if (isTypedArray(source[key])) {
+                var len = source[key].length;
+                if (target[key].length !== len) {
+                    target[key] = new (source[key].constructor)(len);
+                    copyArrShallow(target[key], source[key], len);
+                }
+            }
+            else {
+                var sourceArr = source[key];
+                var targetArr = target[key];
+                var len0 = sourceArr.length;
+                if (is2DArray(sourceArr)) {
+                    var len1 = sourceArr[0].length;
+                    for (var i = 0; i < len0; i++) {
+                        if (!targetArr[i]) {
+                            targetArr[i] = Array.prototype.slice.call(sourceArr[i]);
+                        }
+                        else {
+                            copyArrShallow(targetArr[i], sourceArr[i], len1);
+                        }
+                    }
+                }
+                else {
+                    copyArrShallow(targetArr, sourceArr, len0);
+                }
+                targetArr.length = sourceArr.length;
+            }
+        }
+        else {
+            target[key] = source[key];
+        }
+    }
+    function animateToShallow(animatable, topKey, source, target, cfg, animationProps, animators, reverse) {
+        var animatableKeys = [];
+        var changedKeys = [];
+        var targetKeys = keys(target);
+        var duration = cfg.duration;
+        var delay = cfg.delay;
+        var additive = cfg.additive;
+        var setToFinal = cfg.setToFinal;
+        var animateAll = !isObject(animationProps);
+        for (var k = 0; k < targetKeys.length; k++) {
+            var innerKey = targetKeys[k];
+            if (source[innerKey] != null
+                && target[innerKey] != null
+                && (animateAll || animationProps[innerKey])) {
+                if (isObject(target[innerKey]) && !isArrayLike(target[innerKey])) {
+                    if (topKey) {
+                        if (!reverse) {
+                            source[innerKey] = target[innerKey];
+                            animatable.updateDuringAnimation(topKey);
+                        }
+                        continue;
+                    }
+                    animateToShallow(animatable, innerKey, source[innerKey], target[innerKey], cfg, animationProps && animationProps[innerKey], animators, reverse);
+                }
+                else {
+                    animatableKeys.push(innerKey);
+                    changedKeys.push(innerKey);
+                }
+            }
+            else if (!reverse) {
+                source[innerKey] = target[innerKey];
+                animatable.updateDuringAnimation(topKey);
+                changedKeys.push(innerKey);
+            }
+        }
+        var keyLen = animatableKeys.length;
+        if (keyLen > 0
+            || (cfg.force && !animators.length)) {
+            var existsAnimators = animatable.animators;
+            var existsAnimatorsOnSameTarget = [];
+            for (var i = 0; i < existsAnimators.length; i++) {
+                if (existsAnimators[i].targetName === topKey) {
+                    existsAnimatorsOnSameTarget.push(existsAnimators[i]);
+                }
+            }
+            if (!additive && existsAnimatorsOnSameTarget.length) {
+                for (var i = 0; i < existsAnimatorsOnSameTarget.length; i++) {
+                    var allAborted = existsAnimatorsOnSameTarget[i].stopTracks(changedKeys);
+                    if (allAborted) {
+                        var idx = indexOf(existsAnimators, existsAnimatorsOnSameTarget[i]);
+                        existsAnimators.splice(idx, 1);
+                    }
+                }
+            }
+            var revertedSource = void 0;
+            var reversedTarget = void 0;
+            var sourceClone = void 0;
+            if (reverse) {
+                reversedTarget = {};
+                if (setToFinal) {
+                    revertedSource = {};
+                }
+                for (var i = 0; i < keyLen; i++) {
+                    var innerKey = animatableKeys[i];
+                    reversedTarget[innerKey] = source[innerKey];
+                    if (setToFinal) {
+                        revertedSource[innerKey] = target[innerKey];
+                    }
+                    else {
+                        source[innerKey] = target[innerKey];
+                    }
+                }
+            }
+            else if (setToFinal) {
+                sourceClone = {};
+                for (var i = 0; i < keyLen; i++) {
+                    var innerKey = animatableKeys[i];
+                    sourceClone[innerKey] = cloneValue(source[innerKey]);
+                    copyValue(source, target, innerKey);
+                }
+            }
+            var animator = new Animator(source, false, additive ? existsAnimatorsOnSameTarget : null);
+            animator.targetName = topKey;
+            if (cfg.scope) {
+                animator.scope = cfg.scope;
+            }
+            if (setToFinal && revertedSource) {
+                animator.whenWithKeys(0, revertedSource, animatableKeys);
+            }
+            if (sourceClone) {
+                animator.whenWithKeys(0, sourceClone, animatableKeys);
+            }
+            animator.whenWithKeys(duration == null ? 500 : duration, reverse ? reversedTarget : target, animatableKeys).delay(delay || 0);
+            animatable.addAnimator(animator, topKey);
+            animators.push(animator);
+        }
+    }
+
     var Group = (function (_super) {
         __extends(Group, _super);
         function Group(opts) {
@@ -6174,6 +6209,13 @@
                     children.splice(idx, 0, child);
                     this._doAdd(child);
                 }
+            }
+            return this;
+        };
+        Group.prototype.replace = function (oldChild, newChild) {
+            var idx = indexOf(this._children, oldChild);
+            if (idx >= 0) {
+                this.replaceAt(newChild, idx);
             }
             return this;
         };
@@ -6545,7 +6587,7 @@
     function registerPainter(name, Ctor) {
         painterCtors[name] = Ctor;
     }
-    var version = '5.0.4';
+    var version = '5.2.1';
 
     var zrender = /*#__PURE__*/Object.freeze({
         __proto__: null,
@@ -6557,7 +6599,10 @@
         version: version
     });
 
-    var RADIAN_EPSILON = 1e-4;
+    var RADIAN_EPSILON = 1e-4; // Although chrome already enlarge this number to 100 for `toFixed`, but
+    // we sill follow the spec for compatibility.
+
+    var ROUND_SUPPORTED_PRECISION_MAX = 20;
 
     function _trim(str) {
       return str.replace(/^\s+|\s+$/g, '');
@@ -6572,11 +6617,15 @@
 
 
     function linearMap(val, domain, range, clamp) {
-      var subDomain = domain[1] - domain[0];
-      var subRange = range[1] - range[0];
+      var d0 = domain[0];
+      var d1 = domain[1];
+      var r0 = range[0];
+      var r1 = range[1];
+      var subDomain = d1 - d0;
+      var subRange = r1 - r0;
 
       if (subDomain === 0) {
-        return subRange === 0 ? range[0] : (range[0] + range[1]) / 2;
+        return subRange === 0 ? r0 : (r0 + r1) / 2;
       } // Avoid accuracy problem in edge, such as
       // 146.39 - 62.83 === 83.55999999999999.
       // See echarts/test/ut/spec/util/number.js#linearMap#accuracyError
@@ -6586,29 +6635,29 @@
 
       if (clamp) {
         if (subDomain > 0) {
-          if (val <= domain[0]) {
-            return range[0];
-          } else if (val >= domain[1]) {
-            return range[1];
+          if (val <= d0) {
+            return r0;
+          } else if (val >= d1) {
+            return r1;
           }
         } else {
-          if (val >= domain[0]) {
-            return range[0];
-          } else if (val <= domain[1]) {
-            return range[1];
+          if (val >= d0) {
+            return r0;
+          } else if (val <= d1) {
+            return r1;
           }
         }
       } else {
-        if (val === domain[0]) {
-          return range[0];
+        if (val === d0) {
+          return r0;
         }
 
-        if (val === domain[1]) {
-          return range[1];
+        if (val === d1) {
+          return r1;
         }
       }
 
-      return (val - domain[0]) / subDomain * subRange + range[0];
+      return (val - d0) / subDomain * subRange + r0;
     }
     /**
      * Convert a percent string to absolute number.
@@ -6649,7 +6698,8 @@
       } // Avoid range error
 
 
-      precision = Math.min(Math.max(0, precision), 20);
+      precision = Math.min(Math.max(0, precision), ROUND_SUPPORTED_PRECISION_MAX); // PENDING: 1.005.toFixed(2) is '1.00' rather than '1.01'
+
       x = (+x).toFixed(precision);
       return returnStr ? x : +x;
     }
@@ -6665,7 +6715,7 @@
       return arr;
     }
     /**
-     * Get precision
+     * Get precision.
      */
 
     function getPrecision(val) {
@@ -6677,34 +6727,39 @@
       //      let tmp = val.toString();
       //      return tmp.length - 1 - tmp.indexOf('.');
       // especially when precision is low
+      // Notice:
+      // (1) If the loop count is over about 20, it is slower than `getPrecisionSafe`.
+      //     (see https://jsbench.me/2vkpcekkvw/1)
+      // (2) If the val is less than for example 1e-15, the result may be incorrect.
+      //     (see test/ut/spec/util/number.test.ts `getPrecision_equal_random`)
 
 
-      var e = 1;
-      var count = 0;
+      if (val > 1e-14) {
+        var e = 1;
 
-      while (Math.round(val * e) / e !== val) {
-        e *= 10;
-        count++;
+        for (var i = 0; i < 15; i++, e *= 10) {
+          if (Math.round(val * e) / e === val) {
+            return i;
+          }
+        }
       }
 
-      return count;
+      return getPrecisionSafe(val);
     }
     /**
      * Get precision with slow but safe method
      */
 
     function getPrecisionSafe(val) {
-      var str = val.toString(); // Consider scientific notation: '3.4e-12' '3.4e+12'
+      // toLowerCase for: '3.4E-12'
+      var str = val.toString().toLowerCase(); // Consider scientific notation: '3.4e-12' '3.4e+12'
 
       var eIndex = str.indexOf('e');
-
-      if (eIndex > 0) {
-        var precision = +str.slice(eIndex + 1);
-        return precision < 0 ? -precision : 0;
-      } else {
-        var dotIndex = str.indexOf('.');
-        return dotIndex < 0 ? 0 : str.length - 1 - dotIndex;
-      }
+      var exp = eIndex > 0 ? +str.slice(eIndex + 1) : 0;
+      var significandPartLen = eIndex > 0 ? eIndex : str.length;
+      var dotIndex = str.indexOf('.');
+      var decimalPartLen = dotIndex < 0 ? 0 : significandPartLen - 1 - dotIndex;
+      return Math.max(0, decimalPartLen - exp);
     }
     /**
      * Minimal dicernible data precisioin according to a single pixel.
@@ -6779,6 +6834,19 @@
       }
 
       return seats[idx] / digits;
+    }
+    /**
+     * Solve the floating point adding problem like 0.1 + 0.2 === 0.30000000000000004
+     * See <http://0.30000000000000004.com/>
+     */
+
+    function addSafe(val0, val1) {
+      var maxPrecision = Math.max(getPrecision(val0), getPrecision(val1)); // const multiplier = Math.pow(10, maxPrecision);
+      // return (Math.round(val0 * multiplier) + Math.round(val1 * multiplier)) / multiplier;
+
+      var sum = val0 + val1; // // PENDING: support more?
+
+      return maxPrecision > ROUND_SUPPORTED_PRECISION_MAX ? sum : round(sum, maxPrecision);
     } // Number.MAX_SAFE_INTEGER, ie do not support.
 
     var MAX_SAFE_INTEGER = 9007199254740991;
@@ -6838,7 +6906,7 @@
         if (!match[8]) {
           // match[n] can only be string or undefined.
           // But take care of '12' + 1 => '121'.
-          return new Date(+match[1], +(match[2] || 1) - 1, +match[3] || 1, +match[4] || 0, +(match[5] || 0), +match[6] || 0, +match[7] || 0);
+          return new Date(+match[1], +(match[2] || 1) - 1, +match[3] || 1, +match[4] || 0, +(match[5] || 0), +match[6] || 0, match[7] ? +match[7].substring(0, 3) : 0);
         } // Timezoneoffset of Javascript Date has considered DST (Daylight Saving Time,
         // https://tc39.github.io/ecma262/#sec-daylight-saving-time-adjustment).
         // For example, system timezone is set as "Time Zone: America/Toronto",
@@ -6853,7 +6921,7 @@
               hour -= +match[8].slice(0, 3);
             }
 
-            return new Date(Date.UTC(+match[1], +(match[2] || 1) - 1, +match[3] || 1, hour, +(match[5] || 0), +match[6] || 0, +match[7] || 0));
+            return new Date(Date.UTC(+match[1], +(match[2] || 1) - 1, +match[3] || 1, hour, +(match[5] || 0), +match[6] || 0, match[7] ? +match[7].substring(0, 3) : 0));
           }
       } else if (value == null) {
         return new Date(NaN);
@@ -7664,38 +7732,12 @@
      */
 
     function parseFinder(ecModel, finderInput, opt) {
-      var finder;
+      var _a = preParseFinder(finderInput, opt),
+          mainTypeSpecified = _a.mainTypeSpecified,
+          queryOptionMap = _a.queryOptionMap,
+          others = _a.others;
 
-      if (isString(finderInput)) {
-        var obj = {};
-        obj[finderInput + 'Index'] = 0;
-        finder = obj;
-      } else {
-        finder = finderInput;
-      }
-
-      var queryOptionMap = createHashMap();
-      var result = {};
-      var mainTypeSpecified = false;
-      each(finder, function (value, key) {
-        // Exclude 'dataIndex' and other illgal keys.
-        if (key === 'dataIndex' || key === 'dataIndexInside') {
-          result[key] = value;
-          return;
-        }
-
-        var parsedKey = key.match(/^(\w+)(Index|Id|Name)$/) || [];
-        var mainType = parsedKey[1];
-        var queryType = (parsedKey[2] || '').toLowerCase();
-
-        if (!mainType || !queryType || opt && opt.includeMainTypes && indexOf(opt.includeMainTypes, mainType) < 0) {
-          return;
-        }
-
-        mainTypeSpecified = mainTypeSpecified || !!mainType;
-        var queryOption = queryOptionMap.get(mainType) || queryOptionMap.set(mainType, {});
-        queryOption[queryType] = value;
-      });
+      var result = others;
       var defaultMainType = opt ? opt.defaultMainType : null;
 
       if (!mainTypeSpecified && defaultMainType) {
@@ -7712,6 +7754,45 @@
         result[mainType + 'Model'] = queryResult.models[0];
       });
       return result;
+    }
+    function preParseFinder(finderInput, opt) {
+      var finder;
+
+      if (isString(finderInput)) {
+        var obj = {};
+        obj[finderInput + 'Index'] = 0;
+        finder = obj;
+      } else {
+        finder = finderInput;
+      }
+
+      var queryOptionMap = createHashMap();
+      var others = {};
+      var mainTypeSpecified = false;
+      each(finder, function (value, key) {
+        // Exclude 'dataIndex' and other illgal keys.
+        if (key === 'dataIndex' || key === 'dataIndexInside') {
+          others[key] = value;
+          return;
+        }
+
+        var parsedKey = key.match(/^(\w+)(Index|Id|Name)$/) || [];
+        var mainType = parsedKey[1];
+        var queryType = (parsedKey[2] || '').toLowerCase();
+
+        if (!mainType || !queryType || opt && opt.includeMainTypes && indexOf(opt.includeMainTypes, mainType) < 0) {
+          return;
+        }
+
+        mainTypeSpecified = mainTypeSpecified || !!mainType;
+        var queryOption = queryOptionMap.get(mainType) || queryOptionMap.set(mainType, {});
+        queryOption[queryType] = value;
+      });
+      return {
+        mainTypeSpecified: mainTypeSpecified,
+        queryOptionMap: queryOptionMap,
+        others: others
+      };
     }
     var SINGLE_REFERRING = {
       useDefault: true,
@@ -7786,7 +7867,7 @@
 
       if (typeof targetValue === 'number') {
         var value = interpolateNumber(sourceValue || 0, targetValue, percent);
-        return round(value, isAutoPrecision ? Math.max(getPrecisionSafe(sourceValue || 0), getPrecisionSafe(targetValue)) : precision);
+        return round(value, isAutoPrecision ? Math.max(getPrecision(sourceValue || 0), getPrecision(targetValue)) : precision);
       } else if (typeof targetValue === 'string') {
         return percent < 1 ? sourceValue : targetValue;
       } else {
@@ -7798,14 +7879,14 @@
         for (var i = 0; i < length_1; ++i) {
           var info = data.getDimensionInfo(i); // Don't interpolate ordinal dims
 
-          if (info.type === 'ordinal') {
+          if (info && info.type === 'ordinal') {
             // In init, there is no `sourceValue`, but should better not to get undefined result.
             interpolated[i] = (percent < 1 && leftArr ? leftArr : rightArr)[i];
           } else {
             var leftVal = leftArr && leftArr[i] ? leftArr[i] : 0;
             var rightVal = rightArr[i];
             var value = interpolateNumber(leftVal, rightVal, percent);
-            interpolated[i] = round(value, isAutoPrecision ? Math.max(getPrecisionSafe(leftVal), getPrecisionSafe(rightVal)) : precision);
+            interpolated[i] = round(value, isAutoPrecision ? Math.max(getPrecision(leftVal), getPrecision(rightVal)) : precision);
           }
         }
 
@@ -7890,7 +7971,7 @@
               superClass.apply(this, arguments);
             } else {
               var ins = createObject( // @ts-ignore
-              ExtendedClass.prototype, new (superClass.bind.apply(superClass, __spreadArrays([void 0], args)))());
+              ExtendedClass.prototype, new (superClass.bind.apply(superClass, __spreadArray([void 0], args)))());
               return ins;
             }
           } else {
@@ -8039,7 +8120,7 @@
         }
 
         if (throwWhenNotFound && !clz) {
-          throw new Error(!subType ? mainType + '.' + 'type should be specified.' : 'Component ' + mainType + '.' + (subType || '') + ' not exists. Load it first.');
+          throw new Error(!subType ? mainType + '.' + 'type should be specified.' : 'Component ' + mainType + '.' + (subType || '') + ' is used but not imported.');
         }
 
         return clz;
@@ -8513,7 +8594,7 @@
             var tokenPadding = tokenStyle.padding;
             var tokenPaddingH = tokenPadding ? tokenPadding[1] + tokenPadding[3] : 0;
             if (tokenStyle.width != null && tokenStyle.width !== 'auto') {
-                var outerWidth_1 = parsePercent$2(tokenStyle.width, wrapInfo.width) + tokenPaddingH;
+                var outerWidth_1 = parsePercent(tokenStyle.width, wrapInfo.width) + tokenPaddingH;
                 if (lines.length > 0) {
                     if (outerWidth_1 + wrapInfo.accumWidth > wrapInfo.width) {
                         strLines = str.split('\n');
@@ -8679,15 +8760,6 @@
             linesWidths: linesWidths
         };
     }
-    function parsePercent$2(value, maxValue) {
-        if (typeof value === 'string') {
-            if (value.lastIndexOf('%') >= 0) {
-                return parseFloat(value) / 100 * maxValue;
-            }
-            return parseFloat(value);
-        }
-        return value;
-    }
 
     var STYLE_MAGIC_KEY = '__zr_style_' + Math.round((Math.random() * 10));
     var DEFAULT_COMMON_STYLE = {
@@ -8709,6 +8781,7 @@
     };
     DEFAULT_COMMON_STYLE[STYLE_MAGIC_KEY] = true;
     var PRIMARY_STATES_KEYS$1 = ['z', 'z2', 'invisible'];
+    var PRIMARY_STATES_KEYS_IN_HOVER_LAYER = ['invisible'];
     var Displayable = (function (_super) {
         __extends(Displayable, _super);
         function Displayable(props) {
@@ -8850,9 +8923,11 @@
             this.dirtyStyle();
             return this;
         };
-        Displayable.prototype.dirtyStyle = function () {
-            this.markRedraw();
-            this.__dirty |= Displayable.STYLE_CHANGED_BIT;
+        Displayable.prototype.dirtyStyle = function (notRedraw) {
+            if (!notRedraw) {
+                this.markRedraw();
+            }
+            this.__dirty |= STYLE_CHANGED_BIT;
             if (this._rect) {
                 this._rect = null;
             }
@@ -8861,10 +8936,10 @@
             this.dirtyStyle();
         };
         Displayable.prototype.styleChanged = function () {
-            return !!(this.__dirty & Displayable.STYLE_CHANGED_BIT);
+            return !!(this.__dirty & STYLE_CHANGED_BIT);
         };
         Displayable.prototype.styleUpdated = function () {
-            this.__dirty &= ~Displayable.STYLE_CHANGED_BIT;
+            this.__dirty &= ~STYLE_CHANGED_BIT;
         };
         Displayable.prototype.createStyle = function (obj) {
             return createObject(DEFAULT_COMMON_STYLE, obj);
@@ -8941,8 +9016,9 @@
                     this.useStyle(targetStyle);
                 }
             }
-            for (var i = 0; i < PRIMARY_STATES_KEYS$1.length; i++) {
-                var key = PRIMARY_STATES_KEYS$1[i];
+            var statesKeys = this.__inHover ? PRIMARY_STATES_KEYS_IN_HOVER_LAYER : PRIMARY_STATES_KEYS$1;
+            for (var i = 0; i < statesKeys.length; i++) {
+                var key = statesKeys[i];
                 if (state && state[key] != null) {
                     this[key] = state[key];
                 }
@@ -8975,7 +9051,6 @@
         Displayable.prototype.getAnimationStyleProps = function () {
             return DEFAULT_COMMON_ANIMATION_PROPS;
         };
-        Displayable.STYLE_CHANGED_BIT = 2;
         Displayable.initDefaultProps = (function () {
             var dispProto = Displayable.prototype;
             dispProto.type = 'displayable';
@@ -8989,7 +9064,7 @@
             dispProto.incremental = false;
             dispProto._rect = null;
             dispProto.dirtyRectTolerance = 0;
-            dispProto.__dirty = Element.REDARAW_BIT | Displayable.STYLE_CHANGED_BIT;
+            dispProto.__dirty = REDRAW_BIT | STYLE_CHANGED_BIT;
         })();
         return Displayable;
     }(Element));
@@ -9517,12 +9592,10 @@
             newEndAngle = newStartAngle - PI2$1;
         }
         else if (!anticlockwise && newStartAngle > newEndAngle) {
-            newEndAngle = newStartAngle +
-                (PI2$1 - modPI2(newStartAngle - newEndAngle));
+            newEndAngle = newStartAngle + (PI2$1 - modPI2(newStartAngle - newEndAngle));
         }
         else if (anticlockwise && newStartAngle < newEndAngle) {
-            newEndAngle = newStartAngle -
-                (PI2$1 - modPI2(newEndAngle - newStartAngle));
+            newEndAngle = newStartAngle - (PI2$1 - modPI2(newEndAngle - newStartAngle));
         }
         angles[0] = newStartAngle;
         angles[1] = newEndAngle;
@@ -9530,7 +9603,6 @@
     var PathProxy = (function () {
         function PathProxy(notSaveData) {
             this.dpr = 1;
-            this._version = 0;
             this._xi = 0;
             this._yi = 0;
             this._x0 = 0;
@@ -9585,6 +9657,7 @@
             this._version++;
         };
         PathProxy.prototype.moveTo = function (x, y) {
+            this._drawPendingPt();
             this.addData(CMD.M, x, y);
             this._ctx && this._ctx.moveTo(x, y);
             this._x0 = x;
@@ -9594,9 +9667,9 @@
             return this;
         };
         PathProxy.prototype.lineTo = function (x, y) {
-            var exceedUnit = mathAbs(x - this._xi) > this._ux
-                || mathAbs(y - this._yi) > this._uy
-                || this._len < 5;
+            var dx = mathAbs(x - this._xi);
+            var dy = mathAbs(y - this._yi);
+            var exceedUnit = dx > this._ux || dy > this._uy;
             this.addData(CMD.L, x, y);
             if (this._ctx && exceedUnit) {
                 this._needsDash ? this._dashedLineTo(x, y)
@@ -9605,10 +9678,20 @@
             if (exceedUnit) {
                 this._xi = x;
                 this._yi = y;
+                this._pendingPtDist = 0;
+            }
+            else {
+                var d2 = dx * dx + dy * dy;
+                if (d2 > this._pendingPtDist) {
+                    this._pendingPtX = x;
+                    this._pendingPtY = y;
+                    this._pendingPtDist = d2;
+                }
             }
             return this;
         };
         PathProxy.prototype.bezierCurveTo = function (x1, y1, x2, y2, x3, y3) {
+            this._drawPendingPt();
             this.addData(CMD.C, x1, y1, x2, y2, x3, y3);
             if (this._ctx) {
                 this._needsDash ? this._dashedBezierTo(x1, y1, x2, y2, x3, y3)
@@ -9619,6 +9702,7 @@
             return this;
         };
         PathProxy.prototype.quadraticCurveTo = function (x1, y1, x2, y2) {
+            this._drawPendingPt();
             this.addData(CMD.Q, x1, y1, x2, y2);
             if (this._ctx) {
                 this._needsDash ? this._dashedQuadraticTo(x1, y1, x2, y2)
@@ -9629,6 +9713,7 @@
             return this;
         };
         PathProxy.prototype.arc = function (cx, cy, r, startAngle, endAngle, anticlockwise) {
+            this._drawPendingPt();
             tmpAngles[0] = startAngle;
             tmpAngles[1] = endAngle;
             normalizeArcAngles(tmpAngles, anticlockwise);
@@ -9642,17 +9727,20 @@
             return this;
         };
         PathProxy.prototype.arcTo = function (x1, y1, x2, y2, radius) {
+            this._drawPendingPt();
             if (this._ctx) {
                 this._ctx.arcTo(x1, y1, x2, y2, radius);
             }
             return this;
         };
         PathProxy.prototype.rect = function (x, y, w, h) {
+            this._drawPendingPt();
             this._ctx && this._ctx.rect(x, y, w, h);
             this.addData(CMD.R, x, y, w, h);
             return this;
         };
         PathProxy.prototype.closePath = function () {
+            this._drawPendingPt();
             this.addData(CMD.Z);
             var ctx = this._ctx;
             var x0 = this._x0;
@@ -9739,6 +9827,12 @@
             }
             for (var i = 0; i < arguments.length; i++) {
                 data[this._len++] = arguments[i];
+            }
+        };
+        PathProxy.prototype._drawPendingPt = function () {
+            if (this._pendingPtDist > 0) {
+                this._ctx && this._ctx.lineTo(this._pendingPtX, this._pendingPtY);
+                this._pendingPtDist = 0;
             }
         };
         PathProxy.prototype._expandData = function () {
@@ -9849,6 +9943,7 @@
             if (!this._saveData) {
                 return;
             }
+            this._drawPendingPt();
             var data = this.data;
             if (data instanceof Array) {
                 data.length = this._len;
@@ -10060,6 +10155,9 @@
             var accumLength = 0;
             var segCount = 0;
             var displayedLength;
+            var pendingPtDist = 0;
+            var pendingPtX;
+            var pendingPtY;
             if (drawPart) {
                 if (!this._pathSegLen) {
                     this._calculateLength();
@@ -10080,6 +10178,10 @@
                     x0 = xi;
                     y0 = yi;
                 }
+                if (cmd !== CMD.L && pendingPtDist > 0) {
+                    ctx.lineTo(pendingPtX, pendingPtY);
+                    pendingPtDist = 0;
+                }
                 switch (cmd) {
                     case CMD.M:
                         x0 = xi = d[i++];
@@ -10089,7 +10191,9 @@
                     case CMD.L: {
                         x = d[i++];
                         y = d[i++];
-                        if (mathAbs(x - xi) > ux || mathAbs(y - yi) > uy || i === len - 1) {
+                        var dx = mathAbs(x - xi);
+                        var dy = mathAbs(y - yi);
+                        if (dx > ux || dy > uy) {
                             if (drawPart) {
                                 var l = pathSegLen[segCount++];
                                 if (accumLength + l > displayedLength) {
@@ -10102,6 +10206,15 @@
                             ctx.lineTo(x, y);
                             xi = x;
                             yi = y;
+                            pendingPtDist = 0;
+                        }
+                        else {
+                            var d2 = dx * dx + dy * dy;
+                            if (d2 > pendingPtDist) {
+                                pendingPtX = x;
+                                pendingPtY = y;
+                                pendingPtDist = d2;
+                            }
                         }
                         break;
                     }
@@ -10233,6 +10346,14 @@
                 }
             }
         };
+        PathProxy.prototype.clone = function () {
+            var newProxy = new PathProxy();
+            var data = this.data;
+            newProxy.data = data.slice ? data.slice()
+                : Array.prototype.slice.call(data);
+            newProxy._len = this._len;
+            return newProxy;
+        };
         PathProxy.CMD = CMD;
         PathProxy.initDefaultProps = (function () {
             var proto = PathProxy.prototype;
@@ -10243,6 +10364,8 @@
             proto._dashSum = 0;
             proto._ux = 0;
             proto._uy = 0;
+            proto._pendingPtDist = 0;
+            proto._version = 0;
         })();
         return PathProxy;
     }());
@@ -10702,8 +10825,7 @@
             _super.prototype.update.call(this);
             var style = this.style;
             if (style.decal) {
-                var decalEl = this._decalEl
-                    = this._decalEl || new Path();
+                var decalEl = this._decalEl = this._decalEl || new Path();
                 if (decalEl.buildPath === Path.prototype.buildPath) {
                     decalEl.buildPath = function (ctx) {
                         _this.buildPath(ctx, _this.shape);
@@ -10723,7 +10845,7 @@
                 for (var i = 0; i < pathCopyParams.length; ++i) {
                     decalEl[pathCopyParams[i]] = this[pathCopyParams[i]];
                 }
-                decalEl.__dirty |= Element.REDARAW_BIT;
+                decalEl.__dirty |= REDRAW_BIT;
             }
             else if (this._decalEl) {
                 this._decalEl = null;
@@ -10800,9 +10922,15 @@
                 }
             }
         };
-        Path.prototype.buildPath = function (ctx, shapeCfg, inBundle) { };
+        Path.prototype.buildPath = function (ctx, shapeCfg, inBatch) { };
         Path.prototype.pathUpdated = function () {
-            this.__dirty &= ~Path.SHAPE_CHANGED_BIT;
+            this.__dirty &= ~SHAPE_CHANGED_BIT;
+        };
+        Path.prototype.getUpdatedPathProxy = function (inBatch) {
+            !this.path && this.createPathProxy();
+            this.path.beginPath();
+            this.buildPath(this.path, this.shape, inBatch);
+            return this.path;
         };
         Path.prototype.createPathProxy = function () {
             this.path = new PathProxy(false);
@@ -10828,7 +10956,7 @@
                     this.createPathProxy();
                 }
                 var path = this.path;
-                if (firstInvoke || (this.__dirty & Path.SHAPE_CHANGED_BIT)) {
+                if (firstInvoke || (this.__dirty & SHAPE_CHANGED_BIT)) {
                     path.beginPath();
                     this.buildPath(path, this.shape, false);
                     this.pathUpdated();
@@ -10884,7 +11012,7 @@
             return false;
         };
         Path.prototype.dirtyShape = function () {
-            this.__dirty |= Path.SHAPE_CHANGED_BIT;
+            this.__dirty |= SHAPE_CHANGED_BIT;
             if (this._rect) {
                 this._rect = null;
             }
@@ -10934,7 +11062,7 @@
             return this;
         };
         Path.prototype.shapeChanged = function () {
-            return !!(this.__dirty & Path.SHAPE_CHANGED_BIT);
+            return !!(this.__dirty & SHAPE_CHANGED_BIT);
         };
         Path.prototype.createStyle = function (obj) {
             return createObject(DEFAULT_PATH_STYLE, obj);
@@ -11036,7 +11164,6 @@
             }
             return Sub;
         };
-        Path.SHAPE_CHANGED_BIT = 4;
         Path.initDefaultProps = (function () {
             var pathProto = Path.prototype;
             pathProto.type = 'path';
@@ -11044,7 +11171,7 @@
             pathProto.segmentIgnoreThreshold = 0;
             pathProto.subPixelOptimize = false;
             pathProto.autoBatch = false;
-            pathProto.__dirty = Element.REDARAW_BIT | Displayable.STYLE_CHANGED_BIT | Path.SHAPE_CHANGED_BIT;
+            pathProto.__dirty = REDRAW_BIT | STYLE_CHANGED_BIT | SHAPE_CHANGED_BIT;
         })();
         return Path;
     }(Displayable));
@@ -11400,6 +11527,7 @@
             return this._children;
         };
         ZRText.prototype.update = function () {
+            _super.prototype.update.call(this);
             if (this.styleChanged()) {
                 this._updateSubTexts();
             }
@@ -11412,29 +11540,31 @@
                 child.cursor = this.cursor;
                 child.invisible = this.invisible;
             }
-            var attachedTransform = this.attachedTransform;
-            if (attachedTransform) {
-                attachedTransform.updateTransform();
-                var m = attachedTransform.transform;
-                if (m) {
-                    this.transform = this.transform || [];
-                    copy$1(this.transform, m);
-                }
-                else {
-                    this.transform = null;
+        };
+        ZRText.prototype.updateTransform = function () {
+            var innerTransformable = this.innerTransformable;
+            if (innerTransformable) {
+                innerTransformable.updateTransform();
+                if (innerTransformable.transform) {
+                    this.transform = innerTransformable.transform;
                 }
             }
             else {
-                _super.prototype.update.call(this);
+                _super.prototype.updateTransform.call(this);
             }
+        };
+        ZRText.prototype.getLocalTransform = function (m) {
+            var innerTransformable = this.innerTransformable;
+            return innerTransformable
+                ? innerTransformable.getLocalTransform(m)
+                : _super.prototype.getLocalTransform.call(this, m);
         };
         ZRText.prototype.getComputedTransform = function () {
             if (this.__hostTarget) {
                 this.__hostTarget.getComputedTransform();
                 this.__hostTarget.updateInnerText(true);
             }
-            return this.attachedTransform ? this.attachedTransform.getComputedTransform()
-                : _super.prototype.getComputedTransform.call(this);
+            return _super.prototype.getComputedTransform.call(this);
         };
         ZRText.prototype._updateSubTexts = function () {
             this._childCursor = 0;
@@ -11703,7 +11833,7 @@
             var defaultStyle = this._defaultStyle;
             var useDefaultFill = false;
             var defaultLineWidth = 0;
-            var textFill = getStroke('fill' in tokenStyle ? tokenStyle.fill
+            var textFill = getFill('fill' in tokenStyle ? tokenStyle.fill
                 : 'fill' in style ? style.fill
                     : (useDefaultFill = true, defaultStyle.fill));
             var textStroke = getStroke('stroke' in tokenStyle ? tokenStyle.stroke
@@ -11744,12 +11874,13 @@
             var textBackgroundColor = style.backgroundColor;
             var textBorderWidth = style.borderWidth;
             var textBorderColor = style.borderColor;
-            var isPlainBg = isString(textBackgroundColor);
+            var isImageBg = textBackgroundColor && textBackgroundColor.image;
+            var isPlainOrGradientBg = textBackgroundColor && !isImageBg;
             var textBorderRadius = style.borderRadius;
             var self = this;
             var rectEl;
             var imgEl;
-            if (isPlainBg || (textBorderWidth && textBorderColor)) {
+            if (isPlainOrGradientBg || style.lineHeight || (textBorderWidth && textBorderColor)) {
                 rectEl = this._getOrCreateChild(Rect);
                 rectEl.useStyle(rectEl.createStyle());
                 rectEl.style.fill = null;
@@ -11761,12 +11892,12 @@
                 rectShape.r = textBorderRadius;
                 rectEl.dirtyShape();
             }
-            if (isPlainBg) {
+            if (isPlainOrGradientBg) {
                 var rectStyle = rectEl.style;
                 rectStyle.fill = textBackgroundColor || null;
                 rectStyle.fillOpacity = retrieve2(style.fillOpacity, 1);
             }
-            else if (textBackgroundColor && textBackgroundColor.image) {
+            else if (isImageBg) {
                 imgEl = this._getOrCreateChild(ZRImage);
                 imgEl.onload = function () {
                     self.dirtyStyle();
@@ -11875,10 +12006,30 @@
     }
     function needDrawBackground(style) {
         return !!(style.backgroundColor
+            || style.lineHeight
             || (style.borderWidth && style.borderColor));
     }
 
     var getECData = makeInner();
+    var setCommonECData = function (seriesIndex, dataType, dataIdx, el) {
+      if (el) {
+        var ecData = getECData(el); // Add data index and series index for indexing the data by element
+        // Useful in tooltip
+
+        ecData.dataIndex = dataIdx;
+        ecData.dataType = dataType;
+        ecData.seriesIndex = seriesIndex; // TODO: not store dataIndex on children.
+
+        if (el.type === 'group') {
+          el.traverse(function (child) {
+            var childECData = getECData(child);
+            childECData.seriesIndex = seriesIndex;
+            childECData.dataIndex = dataIdx;
+            childECData.dataType = dataType;
+          });
+        }
+      }
+    };
 
     var _highlightNextDigit = 1;
     var _highlightKeyMap = {};
@@ -12020,26 +12171,31 @@
         var fromStroke = hasSelect ? store.selectStroke || store.normalStroke : store.normalStroke;
 
         if (hasFillOrStroke(fromFill) || hasFillOrStroke(fromStroke)) {
-          state = state || {}; // Apply default color lift
+          state = state || {};
+          var emphasisStyle = state.style || {}; // inherit case
 
-          var emphasisStyle = state.style || {};
-
-          if (!hasFillOrStroke(emphasisStyle.fill) && hasFillOrStroke(fromFill)) {
-            cloned = true; // Not modify the original value.
-
+          if (emphasisStyle.fill === 'inherit') {
+            cloned = true;
             state = extend({}, state);
-            emphasisStyle = extend({}, emphasisStyle); // Already being applied 'emphasis'. DON'T lift color multiple times.
+            emphasisStyle = extend({}, emphasisStyle);
+            emphasisStyle.fill = fromFill;
+          } // Apply default color lift
+          else if (!hasFillOrStroke(emphasisStyle.fill) && hasFillOrStroke(fromFill)) {
+              cloned = true; // Not modify the original value.
 
-            emphasisStyle.fill = liftColor(fromFill);
-          } // Not highlight stroke if fill has been highlighted.
-          else if (!hasFillOrStroke(emphasisStyle.stroke) && hasFillOrStroke(fromStroke)) {
-              if (!cloned) {
-                state = extend({}, state);
-                emphasisStyle = extend({}, emphasisStyle);
+              state = extend({}, state);
+              emphasisStyle = extend({}, emphasisStyle); // Already being applied 'emphasis'. DON'T lift color multiple times.
+
+              emphasisStyle.fill = liftColor(fromFill);
+            } // Not highlight stroke if fill has been highlighted.
+            else if (!hasFillOrStroke(emphasisStyle.stroke) && hasFillOrStroke(fromStroke)) {
+                if (!cloned) {
+                  state = extend({}, state);
+                  emphasisStyle = extend({}, emphasisStyle);
+                }
+
+                emphasisStyle.stroke = liftColor(fromStroke);
               }
-
-              emphasisStyle.stroke = liftColor(fromStroke);
-            }
 
           state.style = emphasisStyle;
         }
@@ -12173,8 +12329,7 @@
         });
       });
     }
-
-    function toggleSeriesBlurState(targetSeriesIndex, focus, blurScope, api, isBlur) {
+    function blurSeries(targetSeriesIndex, focus, blurScope, api) {
       var ecModel = api.getModel();
       blurScope = blurScope || 'coordinateSystem';
 
@@ -12183,11 +12338,6 @@
           var itemEl = data.getItemGraphicEl(dataIndices[i]);
           itemEl && leaveBlur(itemEl);
         }
-      }
-
-      if (!isBlur) {
-        allLeaveBlur(api);
-        return;
       }
 
       if (targetSeriesIndex == null) {
@@ -12251,12 +12401,28 @@
         }
       });
     }
-    function toggleSeriesBlurStateFromPayload(seriesModel, payload, api) {
-      if (!isHighDownPayload(payload)) {
+    function blurComponent(componentMainType, componentIndex, api) {
+      if (componentMainType == null || componentIndex == null) {
         return;
       }
 
-      var isHighlight = payload.type === HIGHLIGHT_ACTION_TYPE;
+      var componentModel = api.getModel().getComponent(componentMainType, componentIndex);
+
+      if (!componentModel) {
+        return;
+      }
+
+      var view = api.getViewOfComponentModel(componentModel);
+
+      if (!view || !view.focusBlurEnabled) {
+        return;
+      }
+
+      view.group.traverse(function (child) {
+        singleEnterBlur(child);
+      });
+    }
+    function blurSeriesFromHighlightPayload(seriesModel, payload, api) {
       var seriesIndex = seriesModel.seriesIndex;
       var data = seriesModel.getData(payload.dataType);
       var dataIndex = queryDataIndex(data, payload); // Pick the first one if there is multiple/none exists.
@@ -12275,7 +12441,7 @@
 
       if (el) {
         var ecData = getECData(el);
-        toggleSeriesBlurState(seriesIndex, ecData.focus, ecData.blurScope, api, isHighlight);
+        blurSeries(seriesIndex, ecData.focus, ecData.blurScope, api);
       } else {
         // If there is no element put on the data. Try getting it from raw option
         // TODO Should put it on seriesModel?
@@ -12283,8 +12449,104 @@
         var blurScope = seriesModel.get(['emphasis', 'blurScope']);
 
         if (focus_1 != null) {
-          toggleSeriesBlurState(seriesIndex, focus_1, blurScope, api, isHighlight);
+          blurSeries(seriesIndex, focus_1, blurScope, api);
         }
+      }
+    }
+    function findComponentHighDownDispatchers(componentMainType, componentIndex, name, api) {
+      var ret = {
+        focusSelf: false,
+        dispatchers: null
+      };
+
+      if (componentMainType == null || componentMainType === 'series' || componentIndex == null || name == null) {
+        return ret;
+      }
+
+      var componentModel = api.getModel().getComponent(componentMainType, componentIndex);
+
+      if (!componentModel) {
+        return ret;
+      }
+
+      var view = api.getViewOfComponentModel(componentModel);
+
+      if (!view || !view.findHighDownDispatchers) {
+        return ret;
+      }
+
+      var dispatchers = view.findHighDownDispatchers(name); // At presnet, the component (like Geo) only blur inside itself.
+      // So we do not use `blurScope` in component.
+
+      var focusSelf;
+
+      for (var i = 0; i < dispatchers.length; i++) {
+        if ("development" !== 'production' && !isHighDownDispatcher(dispatchers[i])) {
+          error('param should be highDownDispatcher');
+        }
+
+        if (getECData(dispatchers[i]).focus === 'self') {
+          focusSelf = true;
+          break;
+        }
+      }
+
+      return {
+        focusSelf: focusSelf,
+        dispatchers: dispatchers
+      };
+    }
+    function handleGlobalMouseOverForHighDown(dispatcher, e, api) {
+      if ("development" !== 'production' && !isHighDownDispatcher(dispatcher)) {
+        error('param should be highDownDispatcher');
+      }
+
+      var ecData = getECData(dispatcher);
+
+      var _a = findComponentHighDownDispatchers(ecData.componentMainType, ecData.componentIndex, ecData.componentHighDownName, api),
+          dispatchers = _a.dispatchers,
+          focusSelf = _a.focusSelf; // If `findHighDownDispatchers` is supported on the component,
+      // highlight/downplay elements with the same name.
+
+
+      if (dispatchers) {
+        if (focusSelf) {
+          blurComponent(ecData.componentMainType, ecData.componentIndex, api);
+        }
+
+        each(dispatchers, function (dispatcher) {
+          return enterEmphasisWhenMouseOver(dispatcher, e);
+        });
+      } else {
+        // Try blur all in the related series. Then emphasis the hoverred.
+        // TODO. progressive mode.
+        blurSeries(ecData.seriesIndex, ecData.focus, ecData.blurScope, api);
+
+        if (ecData.focus === 'self') {
+          blurComponent(ecData.componentMainType, ecData.componentIndex, api);
+        } // Other than series, component that not support `findHighDownDispatcher` will
+        // also use it. But in this case, highlight/downplay are only supported in
+        // mouse hover but not in dispatchAction.
+
+
+        enterEmphasisWhenMouseOver(dispatcher, e);
+      }
+    }
+    function handleGlboalMouseOutForHighDown(dispatcher, e, api) {
+      if ("development" !== 'production' && !isHighDownDispatcher(dispatcher)) {
+        error('param should be highDownDispatcher');
+      }
+
+      allLeaveBlur(api);
+      var ecData = getECData(dispatcher);
+      var dispatchers = findComponentHighDownDispatchers(ecData.componentMainType, ecData.componentIndex, ecData.componentHighDownName, api).dispatchers;
+
+      if (dispatchers) {
+        each(dispatchers, function (dispatcher) {
+          return leaveEmphasisWhenMouseOut(dispatcher, e);
+        });
+      } else {
+        leaveEmphasisWhenMouseOut(dispatcher, e);
       }
     }
     function toggleSelectionFromPayload(seriesModel, payload, api) {
@@ -12466,6 +12728,9 @@
     var mathSqrt$2 = Math.sqrt;
     var mathAtan2 = Math.atan2;
     function transformPath(path, m) {
+        if (!m) {
+            return;
+        }
         var data = path.data;
         var len = path.len();
         var cmd;
@@ -12862,13 +13127,7 @@
         var len = pathEls.length;
         for (var i = 0; i < len; i++) {
             var pathEl = pathEls[i];
-            if (!pathEl.path) {
-                pathEl.createPathProxy();
-            }
-            if (pathEl.shapeChanged()) {
-                pathEl.buildPath(pathEl.path, pathEl.shape, true);
-            }
-            pathList.push(pathEl.path);
+            pathList.push(pathEl.getUpdatedPathProxy(true));
         }
         var pathBundle = new Path(opts);
         pathBundle.createPathProxy();
@@ -13896,6 +14155,224 @@
         return IncrementalDisplayable;
     }(Displayable));
 
+    var transitionStore = makeInner();
+    /**
+     * Return null if animation is disabled.
+     */
+
+    function getAnimationConfig(animationType, animatableModel, dataIndex, // Extra opts can override the option in animatable model.
+    extraOpts, // TODO It's only for pictorial bar now.
+    extraDelayParams) {
+      var animationPayload; // Check if there is global animation configuration from dataZoom/resize can override the config in option.
+      // If animation is enabled. Will use this animation config in payload.
+      // If animation is disabled. Just ignore it.
+
+      if (animatableModel && animatableModel.ecModel) {
+        var updatePayload = animatableModel.ecModel.getUpdatePayload();
+        animationPayload = updatePayload && updatePayload.animation;
+      }
+
+      var animationEnabled = animatableModel && animatableModel.isAnimationEnabled();
+      var isUpdate = animationType === 'update';
+
+      if (animationEnabled) {
+        var duration = void 0;
+        var easing = void 0;
+        var delay = void 0;
+
+        if (extraOpts) {
+          duration = retrieve2(extraOpts.duration, 200);
+          easing = retrieve2(extraOpts.easing, 'cubicOut');
+          delay = 0;
+        } else {
+          duration = animatableModel.getShallow(isUpdate ? 'animationDurationUpdate' : 'animationDuration');
+          easing = animatableModel.getShallow(isUpdate ? 'animationEasingUpdate' : 'animationEasing');
+          delay = animatableModel.getShallow(isUpdate ? 'animationDelayUpdate' : 'animationDelay');
+        } // animation from payload has highest priority.
+
+
+        if (animationPayload) {
+          animationPayload.duration != null && (duration = animationPayload.duration);
+          animationPayload.easing != null && (easing = animationPayload.easing);
+          animationPayload.delay != null && (delay = animationPayload.delay);
+        }
+
+        if (typeof delay === 'function') {
+          delay = delay(dataIndex, extraDelayParams);
+        }
+
+        if (typeof duration === 'function') {
+          duration = duration(dataIndex);
+        }
+
+        var config = {
+          duration: duration || 0,
+          delay: delay,
+          easing: easing
+        };
+        return config;
+      } else {
+        return null;
+      }
+    }
+
+    function animateOrSetProps(animationType, el, props, animatableModel, dataIndex, cb, during) {
+      var isFrom = false;
+      var removeOpt;
+
+      if (typeof dataIndex === 'function') {
+        during = cb;
+        cb = dataIndex;
+        dataIndex = null;
+      } else if (isObject(dataIndex)) {
+        cb = dataIndex.cb;
+        during = dataIndex.during;
+        isFrom = dataIndex.isFrom;
+        removeOpt = dataIndex.removeOpt;
+        dataIndex = dataIndex.dataIndex;
+      }
+
+      var isRemove = animationType === 'remove';
+
+      if (!isRemove) {
+        // Must stop the remove animation.
+        el.stopAnimation('remove');
+      }
+
+      var animationConfig = getAnimationConfig(animationType, animatableModel, dataIndex, isRemove ? removeOpt || {} : null, animatableModel && animatableModel.getAnimationDelayParams ? animatableModel.getAnimationDelayParams(el, dataIndex) : null);
+
+      if (animationConfig && animationConfig.duration > 0) {
+        var duration = animationConfig.duration;
+        var animationDelay = animationConfig.delay;
+        var animationEasing = animationConfig.easing;
+        var animateConfig = {
+          duration: duration,
+          delay: animationDelay || 0,
+          easing: animationEasing,
+          done: cb,
+          force: !!cb || !!during,
+          // Set to final state in update/init animation.
+          // So the post processing based on the path shape can be done correctly.
+          setToFinal: !isRemove,
+          scope: animationType,
+          during: during
+        };
+        isFrom ? el.animateFrom(props, animateConfig) : el.animateTo(props, animateConfig);
+      } else {
+        el.stopAnimation(); // If `isFrom`, the props is the "from" props.
+
+        !isFrom && el.attr(props); // Call during at least once.
+
+        during && during(1);
+        cb && cb();
+      }
+    }
+    /**
+     * Update graphic element properties with or without animation according to the
+     * configuration in series.
+     *
+     * Caution: this method will stop previous animation.
+     * So do not use this method to one element twice before
+     * animation starts, unless you know what you are doing.
+     * @example
+     *     graphic.updateProps(el, {
+     *         position: [100, 100]
+     *     }, seriesModel, dataIndex, function () { console.log('Animation done!'); });
+     *     // Or
+     *     graphic.updateProps(el, {
+     *         position: [100, 100]
+     *     }, seriesModel, function () { console.log('Animation done!'); });
+     */
+
+
+    function updateProps(el, props, // TODO: TYPE AnimatableModel
+    animatableModel, dataIndex, cb, during) {
+      animateOrSetProps('update', el, props, animatableModel, dataIndex, cb, during);
+    }
+    /**
+     * Init graphic element properties with or without animation according to the
+     * configuration in series.
+     *
+     * Caution: this method will stop previous animation.
+     * So do not use this method to one element twice before
+     * animation starts, unless you know what you are doing.
+     */
+
+    function initProps(el, props, animatableModel, dataIndex, cb, during) {
+      animateOrSetProps('init', el, props, animatableModel, dataIndex, cb, during);
+    }
+    /**
+     * If element is removed.
+     * It can determine if element is having remove animation.
+     */
+
+    function isElementRemoved(el) {
+      if (!el.__zr) {
+        return true;
+      }
+
+      for (var i = 0; i < el.animators.length; i++) {
+        var animator = el.animators[i];
+
+        if (animator.scope === 'remove') {
+          return true;
+        }
+      }
+
+      return false;
+    }
+    /**
+     * Remove graphic element
+     */
+
+    function removeElement(el, props, animatableModel, dataIndex, cb, during) {
+      // Don't do remove animation twice.
+      if (isElementRemoved(el)) {
+        return;
+      }
+
+      animateOrSetProps('remove', el, props, animatableModel, dataIndex, cb, during);
+    }
+
+    function fadeOutDisplayable(el, animatableModel, dataIndex, done) {
+      el.removeTextContent();
+      el.removeTextGuideLine();
+      removeElement(el, {
+        style: {
+          opacity: 0
+        }
+      }, animatableModel, dataIndex, done);
+    }
+
+    function removeElementWithFadeOut(el, animatableModel, dataIndex) {
+      function doRemove() {
+        el.parent && el.parent.remove(el);
+      } // Hide label and labelLine first
+      // TODO Also use fade out animation?
+
+
+      if (!el.isGroup) {
+        fadeOutDisplayable(el, animatableModel, dataIndex, doRemove);
+      } else {
+        el.traverse(function (disp) {
+          if (!disp.isGroup) {
+            // Can invoke doRemove multiple times.
+            fadeOutDisplayable(disp, animatableModel, dataIndex, doRemove);
+          }
+        });
+      }
+    }
+    /**
+     * Save old style for style transition in universalTransition module.
+     * It's used when element will be reused in each render.
+     * For chart like map, heatmap, which will always create new element.
+     * We don't need to save this because universalTransition can get old style from the old element
+     */
+
+    function saveOldStyle(el) {
+      transitionStore(el).oldStyle = el.style;
+    }
+
     var mathMax$4 = Math.max;
     var mathMin$4 = Math.min;
     var _customShapeMap = {};
@@ -14059,196 +14536,6 @@
       var m = pathRect.calculateTransform(rect);
       path.applyTransform(m);
     }
-
-    function animateOrSetProps(animationType, el, props, animatableModel, dataIndex, cb, during) {
-      var isFrom = false;
-      var removeOpt;
-
-      if (typeof dataIndex === 'function') {
-        during = cb;
-        cb = dataIndex;
-        dataIndex = null;
-      } else if (isObject(dataIndex)) {
-        cb = dataIndex.cb;
-        during = dataIndex.during;
-        isFrom = dataIndex.isFrom;
-        removeOpt = dataIndex.removeOpt;
-        dataIndex = dataIndex.dataIndex;
-      }
-
-      var isUpdate = animationType === 'update';
-      var isRemove = animationType === 'remove';
-      var animationPayload; // Check if there is global animation configuration from dataZoom/resize can override the config in option.
-      // If animation is enabled. Will use this animation config in payload.
-      // If animation is disabled. Just ignore it.
-
-      if (animatableModel && animatableModel.ecModel) {
-        var updatePayload = animatableModel.ecModel.getUpdatePayload();
-        animationPayload = updatePayload && updatePayload.animation;
-      }
-
-      var animationEnabled = animatableModel && animatableModel.isAnimationEnabled();
-
-      if (!isRemove) {
-        // Must stop the remove animation.
-        el.stopAnimation('remove');
-      }
-
-      if (animationEnabled) {
-        var duration = void 0;
-        var animationEasing = void 0;
-        var animationDelay = void 0;
-
-        if (animationPayload) {
-          duration = animationPayload.duration || 0;
-          animationEasing = animationPayload.easing || 'cubicOut';
-          animationDelay = animationPayload.delay || 0;
-        } else if (isRemove) {
-          removeOpt = removeOpt || {};
-          duration = retrieve2(removeOpt.duration, 200);
-          animationEasing = retrieve2(removeOpt.easing, 'cubicOut');
-          animationDelay = 0;
-        } else {
-          duration = animatableModel.getShallow(isUpdate ? 'animationDurationUpdate' : 'animationDuration');
-          animationEasing = animatableModel.getShallow(isUpdate ? 'animationEasingUpdate' : 'animationEasing');
-          animationDelay = animatableModel.getShallow(isUpdate ? 'animationDelayUpdate' : 'animationDelay');
-        }
-
-        if (typeof animationDelay === 'function') {
-          animationDelay = animationDelay(dataIndex, animatableModel.getAnimationDelayParams ? animatableModel.getAnimationDelayParams(el, dataIndex) : null);
-        }
-
-        if (typeof duration === 'function') {
-          duration = duration(dataIndex);
-        }
-
-        duration > 0 ? isFrom ? el.animateFrom(props, {
-          duration: duration,
-          delay: animationDelay || 0,
-          easing: animationEasing,
-          done: cb,
-          force: !!cb || !!during,
-          scope: animationType,
-          during: during
-        }) : el.animateTo(props, {
-          duration: duration,
-          delay: animationDelay || 0,
-          easing: animationEasing,
-          done: cb,
-          force: !!cb || !!during,
-          setToFinal: true,
-          scope: animationType,
-          during: during
-        }) : ( // FIXME:
-        // If `duration` is 0, only the animation on props
-        // can be stoped, other animation should be continued?
-        // But at present using duration 0 in `animateTo`, `animateFrom`
-        // might cause unexpected behavior.
-        el.stopAnimation(), // If `isFrom`, the props is the "from" props.
-        !isFrom && el.attr(props), cb && cb());
-      } else {
-        el.stopAnimation();
-        !isFrom && el.attr(props); // Call during once.
-
-        during && during(1);
-        cb && cb();
-      }
-    }
-    /**
-     * Update graphic element properties with or without animation according to the
-     * configuration in series.
-     *
-     * Caution: this method will stop previous animation.
-     * So do not use this method to one element twice before
-     * animation starts, unless you know what you are doing.
-     * @example
-     *     graphic.updateProps(el, {
-     *         position: [100, 100]
-     *     }, seriesModel, dataIndex, function () { console.log('Animation done!'); });
-     *     // Or
-     *     graphic.updateProps(el, {
-     *         position: [100, 100]
-     *     }, seriesModel, function () { console.log('Animation done!'); });
-     */
-
-
-    function updateProps(el, props, // TODO: TYPE AnimatableModel
-    animatableModel, dataIndex, cb, during) {
-      animateOrSetProps('update', el, props, animatableModel, dataIndex, cb, during);
-    }
-    /**
-     * Init graphic element properties with or without animation according to the
-     * configuration in series.
-     *
-     * Caution: this method will stop previous animation.
-     * So do not use this method to one element twice before
-     * animation starts, unless you know what you are doing.
-     */
-
-    function initProps(el, props, animatableModel, dataIndex, cb, during) {
-      animateOrSetProps('init', el, props, animatableModel, dataIndex, cb, during);
-    }
-    /**
-     * Remove graphic element
-     */
-
-    function removeElement(el, props, animatableModel, dataIndex, cb, during) {
-      // Don't do remove animation twice.
-      if (isElementRemoved(el)) {
-        return;
-      }
-
-      animateOrSetProps('remove', el, props, animatableModel, dataIndex, cb, during);
-    }
-
-    function fadeOutDisplayable(el, animatableModel, dataIndex, done) {
-      el.removeTextContent();
-      el.removeTextGuideLine();
-      removeElement(el, {
-        style: {
-          opacity: 0
-        }
-      }, animatableModel, dataIndex, done);
-    }
-
-    function removeElementWithFadeOut(el, animatableModel, dataIndex) {
-      function doRemove() {
-        el.parent && el.parent.remove(el);
-      } // Hide label and labelLine first
-      // TODO Also use fade out animation?
-
-
-      if (!el.isGroup) {
-        fadeOutDisplayable(el, animatableModel, dataIndex, doRemove);
-      } else {
-        el.traverse(function (disp) {
-          if (!disp.isGroup) {
-            // Can invoke doRemove multiple times.
-            fadeOutDisplayable(disp, animatableModel, dataIndex, doRemove);
-          }
-        });
-      }
-    }
-    /**
-     * If element is removed.
-     * It can determine if element is having remove animation.
-     */
-
-    function isElementRemoved(el) {
-      if (!el.__zr) {
-        return true;
-      }
-
-      for (var i = 0; i < el.animators.length; i++) {
-        var animator = el.animators[i];
-
-        if (animator.scope === 'remove') {
-          return true;
-        }
-      }
-
-      return false;
-    }
     /**
      * Get transform matrix of target (param target),
      * in coordinate of its ancestor (param ancestor)
@@ -14375,8 +14662,45 @@
         return iconStr.indexOf('image://') === 0 ? (style.image = iconStr.slice(8), defaults(style, rect), new ZRImage(innerOpts)) : makePath(iconStr.replace('path://', ''), innerOpts, rect, 'center');
       }
     }
-    // by users, although we do not recommend that.
 
+    function setTooltipConfig(opt) {
+      var itemTooltipOption = opt.itemTooltipOption;
+      var componentModel = opt.componentModel;
+      var itemName = opt.itemName;
+      var itemTooltipOptionObj = isString(itemTooltipOption) ? {
+        formatter: itemTooltipOption
+      } : itemTooltipOption;
+      var mainType = componentModel.mainType;
+      var componentIndex = componentModel.componentIndex;
+      var formatterParams = {
+        componentType: mainType,
+        name: itemName,
+        $vars: ['name']
+      };
+      formatterParams[mainType + 'Index'] = componentIndex;
+      var formatterParamsExtra = opt.formatterParamsExtra;
+
+      if (formatterParamsExtra) {
+        each(keys(formatterParamsExtra), function (key) {
+          if (!hasOwn(formatterParams, key)) {
+            formatterParams[key] = formatterParamsExtra[key];
+            formatterParams.$vars.push(key);
+          }
+        });
+      }
+
+      var ecData = getECData(opt.el);
+      ecData.componentMainType = mainType;
+      ecData.componentIndex = componentIndex;
+      ecData.tooltipConfig = {
+        name: itemName,
+        option: defaults({
+          content: itemName,
+          formatterParams: formatterParams
+        }, itemTooltipOptionObj)
+      };
+    } // Register built-in shapes. These shapes might be overwirtten
+    // by users, although we do not recommend that.
 
     registerShape('circle', Circle);
     registerShape('ellipse', Ellipse);
@@ -14876,32 +15200,6 @@
         obj.statesModels = labelStatesModels;
       }
     }
-    function animateLabelValue(textEl, dataIndex, data, animatableModel, labelFetcher) {
-      var labelInnerStore = labelInner(textEl);
-
-      if (!labelInnerStore.valueAnimation) {
-        return;
-      }
-
-      var defaultInterpolatedText = labelInnerStore.defaultInterpolatedText; // Consider the case that being animating, do not use the `obj.value`,
-      // Otherwise it will jump to the `obj.value` when this new animation started.
-
-      var currValue = retrieve2(labelInnerStore.interpolatedValue, labelInnerStore.prevValue);
-      var targetValue = labelInnerStore.value;
-
-      function during(percent) {
-        var interpolated = interpolateRawValues(data, labelInnerStore.precision, currValue, targetValue, percent);
-        labelInnerStore.interpolatedValue = percent === 1 ? null : interpolated;
-        var labelText = getLabelText({
-          labelDataIndex: dataIndex,
-          labelFetcher: labelFetcher,
-          defaultText: defaultInterpolatedText ? defaultInterpolatedText(interpolated) : interpolated + ''
-        }, labelInnerStore.statesModels, interpolated);
-        setLabelText(textEl, labelText);
-      }
-
-      (currValue == null ? initProps : updateProps)(textEl, {}, animatableModel, dataIndex, null, during);
-    }
 
     var PATH_COLOR = ['textStyle', 'color']; // TODO Performance improvement?
 
@@ -15227,7 +15525,7 @@
      * Topological travel on Activity Network (Activity On Vertices).
      * Dependencies is defined in Model.prototype.dependencies, like ['xAxis', 'yAxis'].
      * If 'xAxis' or 'yAxis' is absent in componentTypeList, just ignore it in topology.
-     * If there is circle dependencey, Error will be thrown.
+     * If there is circular dependencey, Error will be thrown.
      */
 
     function enableTopologicalTravel(entity, dependencyGetter) {
@@ -15268,7 +15566,7 @@
           var errMsg = '';
 
           if ("development" !== 'production') {
-            errMsg = makePrintable('Circle dependency may exists: ', targetNameSet, targetNameList, fullNameList);
+            errMsg = makePrintable('Circular dependency may exists: ', targetNameSet, targetNameList, fullNameList);
           }
 
           throw new Error(errMsg);
@@ -15465,7 +15763,7 @@
           graph: 'Relationship graph',
           sankey: 'Sankey diagram',
           funnel: 'Funnel chart',
-          gauge: 'Guage',
+          gauge: 'Gauge',
           pictorialBar: 'Pictorial bar',
           themeRiver: 'Theme River Map',
           sunburst: 'Sunburst'
@@ -15711,8 +16009,8 @@
       hour: '{HH}:{mm}',
       minute: '{HH}:{mm}',
       second: '{HH}:{mm}:{ss}',
-      millisecond: '{hh}:{mm}:{ss} {SSS}',
-      none: '{yyyy}-{MM}-{dd} {hh}:{mm}:{ss} {SSS}'
+      millisecond: '{HH}:{mm}:{ss} {SSS}',
+      none: '{yyyy}-{MM}-{dd} {HH}:{mm}:{ss} {SSS}'
     };
     var fullDayFormatter = '{yyyy}-{MM}-{dd}';
     var fullLeveledFormatter = {
@@ -15923,7 +16221,7 @@
       return isUTC ? 'getUTCSeconds' : 'getSeconds';
     }
     function millisecondsGetterName(isUTC) {
-      return isUTC ? 'getUTCSeconds' : 'getSeconds';
+      return isUTC ? 'getUTCMilliseconds' : 'getMilliseconds';
     }
     function fullYearSetterName(isUTC) {
       return isUTC ? 'setUTCFullYear' : 'setFullYear';
@@ -15944,7 +16242,7 @@
       return isUTC ? 'setUTCSeconds' : 'setSeconds';
     }
     function millisecondsSetterName(isUTC) {
-      return isUTC ? 'setUTCSeconds' : 'setSeconds';
+      return isUTC ? 'setUTCMilliseconds' : 'setMilliseconds';
     }
 
     function getTextRect(text, font, align, verticalAlign, padding, rich, truncate, lineHeight) {
@@ -16698,18 +16996,8 @@
     var globalDefault = {
       darkMode: 'auto',
       // backgroundColor: 'rgba(0,0,0,0)',
-      // https://dribbble.com/shots/1065960-Infographic-Pie-chart-visualization
-      // color: ['#5793f3', '#d14a61', '#fd9c35', '#675bba', '#fec42c', '#dd4444', '#d4df5a', '#cd4870'],
-      // Light colors:
-      // color: ['#bcd3bb', '#e88f70', '#edc1a5', '#9dc5c8', '#e1e8c8', '#7b7c68', '#e5b5b5', '#f0b489', '#928ea8', '#bda29a'],
-      // color: ['#cc5664', '#9bd6ec', '#ea946e', '#8acaaa', '#f1ec64', '#ee8686', '#a48dc1', '#5da6bc', '#b9dcae'],
-      // Dark colors:
-      // color: [
-      //     '#c23531', '#2f4554', '#61a0a8', '#d48265', '#91c7ae', '#749f83',
-      //     '#ca8622', '#bda29a', '#6e7074', '#546570', '#c4ccd3'
-      // ],
-      color: [// '#51689b', '#ce5c5c', '#fbc357', '#8fbf8f', '#659d84', '#fb8e6a', '#c77288', '#786090', '#91c4c5', '#6890ba'
-      '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'],
+      colorBy: 'series',
+      color: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'],
       gradientColor: ['#f6efa6', '#d88273', '#bf444c'],
       aria: {
         decal: {
@@ -16787,7 +17075,7 @@
       useUTC: false
     };
 
-    var VISUAL_DIMENSIONS = createHashMap(['tooltip', 'label', 'itemName', 'itemId', 'seriesName']);
+    var VISUAL_DIMENSIONS = createHashMap(['tooltip', 'label', 'itemName', 'itemId', 'itemGroupId', 'seriesName']);
     var SOURCE_FORMAT_ORIGINAL = 'original';
     var SOURCE_FORMAT_ARRAY_ROWS = 'arrayRows';
     var SOURCE_FORMAT_OBJECT_ROWS = 'objectRows';
@@ -17257,6 +17545,72 @@
     var initBase;
     var OPTION_INNER_KEY = '\0_ec_inner';
     var OPTION_INNER_VALUE = 1;
+    var BUITIN_COMPONENTS_MAP = {
+      grid: 'GridComponent',
+      polar: 'PolarComponent',
+      geo: 'GeoComponent',
+      singleAxis: 'SingleAxisComponent',
+      parallel: 'ParallelComponent',
+      calendar: 'CalendarComponent',
+      graphic: 'GraphicComponent',
+      toolbox: 'ToolboxComponent',
+      tooltip: 'TooltipComponent',
+      axisPointer: 'AxisPointerComponent',
+      brush: 'BrushComponent',
+      title: 'TitleComponent',
+      timeline: 'TimelineComponent',
+      markPoint: 'MarkPointComponent',
+      markLine: 'MarkLineComponent',
+      markArea: 'MarkAreaComponent',
+      legend: 'LegendComponent',
+      dataZoom: 'DataZoomComponent',
+      visualMap: 'VisualMapComponent',
+      // aria: 'AriaComponent',
+      // dataset: 'DatasetComponent',
+      // Dependencies
+      xAxis: 'GridComponent',
+      yAxis: 'GridComponent',
+      angleAxis: 'PolarComponent',
+      radiusAxis: 'PolarComponent'
+    };
+    var BUILTIN_CHARTS_MAP = {
+      line: 'LineChart',
+      bar: 'BarChart',
+      pie: 'PieChart',
+      scatter: 'ScatterChart',
+      radar: 'RadarChart',
+      map: 'MapChart',
+      tree: 'TreeChart',
+      treemap: 'TreemapChart',
+      graph: 'GraphChart',
+      gauge: 'GaugeChart',
+      funnel: 'FunnelChart',
+      parallel: 'ParallelChart',
+      sankey: 'SankeyChart',
+      boxplot: 'BoxplotChart',
+      candlestick: 'CandlestickChart',
+      effectScatter: 'EffectScatterChart',
+      lines: 'LinesChart',
+      heatmap: 'HeatmapChart',
+      pictorialBar: 'PictorialBarChart',
+      themeRiver: 'ThemeRiverChart',
+      sunburst: 'SunburstChart',
+      custom: 'CustomChart'
+    };
+    var componetsMissingLogPrinted = {};
+
+    function checkMissingComponents(option) {
+      each(option, function (componentOption, mainType) {
+        if (!ComponentModel.hasClass(mainType)) {
+          var componentImportName = BUITIN_COMPONENTS_MAP[mainType];
+
+          if (componentImportName && !componetsMissingLogPrinted[componentImportName]) {
+            error("Component " + mainType + " is used but not imported.\nimport { " + componentImportName + " } from 'echarts/components';\necharts.use([" + componentImportName + "]);");
+            componetsMissingLogPrinted[componentImportName] = true;
+          }
+        }
+      });
+    }
 
     var GlobalModel =
     /** @class */
@@ -17307,6 +17661,10 @@
 
         if (!type || type === 'recreate') {
           var baseOption = optionManager.mountOption(type === 'recreate');
+
+          if ("development" !== 'production') {
+            checkMissingComponents(baseOption);
+          }
 
           if (!this.option || type === 'recreate') {
             initBase(this, baseOption);
@@ -17432,7 +17790,28 @@
               // or it has been removed in previous `replaceMerge` and left a "hole" in this component index.
 
             } else {
-              var ComponentModelClass = ComponentModel.getClass(mainType, resultItem.keyInfo.subType, true);
+              var isSeriesType = mainType === 'series';
+              var ComponentModelClass = ComponentModel.getClass(mainType, resultItem.keyInfo.subType, !isSeriesType // Give a more detailed warn later if series don't exists
+              );
+
+              if (!ComponentModelClass) {
+                if ("development" !== 'production') {
+                  var subType = resultItem.keyInfo.subType;
+                  var seriesImportName = BUILTIN_CHARTS_MAP[subType];
+
+                  if (!componetsMissingLogPrinted[subType]) {
+                    componetsMissingLogPrinted[subType] = true;
+
+                    if (seriesImportName) {
+                      error("Series " + subType + " is used but not imported.\nimport { " + seriesImportName + " } from 'echarts/charts';\necharts.use([" + seriesImportName + "]);");
+                    } else {
+                      error("Unkown series " + subType);
+                    }
+                  }
+                }
+
+                return;
+              }
 
               if (componentModel && componentModel.constructor === ComponentModelClass) {
                 componentModel.name = resultItem.keyInfo.name; // componentModel.settingTask && componentModel.settingTask.dirty();
@@ -17525,11 +17904,6 @@
 
       GlobalModel.prototype.getLocaleModel = function () {
         return this._locale;
-      };
-
-      GlobalModel.prototype.getLocale = function (localePosition) {
-        var locale = this.getLocaleModel();
-        return locale.get(localePosition);
       };
 
       GlobalModel.prototype.setUpdatePayload = function (payload) {
@@ -17707,7 +18081,7 @@
 
 
       GlobalModel.prototype.getSeries = function () {
-        return filter(this._componentsMap.get('series').slice(), function (oneSeries) {
+        return filter(this._componentsMap.get('series'), function (oneSeries) {
           return !!oneSeries;
         });
       };
@@ -18970,7 +19344,7 @@
         var isStackedByIndex = targetStackInfo.isStackedByIndex; // Should not write on raw data, because stack series model list changes
         // depending on legend selection.
 
-        var newData = targetData.map(dims, function (v0, v1, dataIndex) {
+        targetData.modify(dims, function (v0, v1, dataIndex) {
           var sum = targetData.get(targetStackInfo.stackedDimension, dataIndex); // Consider `connectNulls` of line area, if value is NaN, stackedOver
           // should also be NaN, to draw a appropriate belt area.
 
@@ -19003,7 +19377,10 @@
               if (sum >= 0 && val > 0 || // Positive stack
               sum <= 0 && val < 0 // Negative stack
               ) {
-                  sum += val;
+                  // The sum should be as less as possible to be effected
+                  // by floating arithmetic problem. A wrong result probably
+                  // filtered incorrectly by axis min/max.
+                  sum = addSafe(sum, val);
                   stackedOver = val;
                   break;
                 }
@@ -19014,26 +19391,33 @@
           resultVal[1] = stackedOver;
           return resultVal;
         });
-        targetData.hostModel.setData(newData); // Update for consequent calculation
-
-        targetStackInfo.data = newData;
       });
     }
 
     var SourceImpl =
     /** @class */
     function () {
-      // readonly frozen: boolean;
       function SourceImpl(fields) {
         this.data = fields.data || (fields.sourceFormat === SOURCE_FORMAT_KEYED_COLUMNS ? {} : []);
         this.sourceFormat = fields.sourceFormat || SOURCE_FORMAT_UNKNOWN; // Visit config
 
         this.seriesLayoutBy = fields.seriesLayoutBy || SERIES_LAYOUT_BY_COLUMN;
         this.startIndex = fields.startIndex || 0;
-        this.dimensionsDefine = fields.dimensionsDefine;
         this.dimensionsDetectedCount = fields.dimensionsDetectedCount;
-        this.encodeDefine = fields.encodeDefine;
         this.metaRawOption = fields.metaRawOption;
+        var dimensionsDefine = this.dimensionsDefine = fields.dimensionsDefine;
+
+        if (dimensionsDefine) {
+          for (var i = 0; i < dimensionsDefine.length; i++) {
+            var dim = dimensionsDefine[i];
+
+            if (dim.type == null) {
+              if (guessOrdinal(this, i) === BE_ORDINAL.Must) {
+                dim.type = 'ordinal';
+              }
+            }
+          }
+        }
       }
 
       return SourceImpl;
@@ -19042,9 +19426,13 @@
     function isSourceInstance(val) {
       return val instanceof SourceImpl;
     }
+    /**
+     * Create a source from option.
+     * NOTE: Created source is immutable. Don't change any properties in it.
+     */
+
     function createSource(sourceData, thisMetaRawOption, // can be null. If not provided, auto detect it from `sourceData`.
-    sourceFormat, encodeDefine // can be null
-    ) {
+    sourceFormat) {
       sourceFormat = sourceFormat || detectSourceFormat(sourceData);
       var seriesLayoutBy = thisMetaRawOption.seriesLayoutBy;
       var determined = determineSourceDimensions(sourceData, sourceFormat, seriesLayoutBy, thisMetaRawOption.sourceHeader, thisMetaRawOption.dimensions);
@@ -19055,7 +19443,6 @@
         dimensionsDefine: determined.dimensionsDefine,
         startIndex: determined.startIndex,
         dimensionsDetectedCount: determined.dimensionsDetectedCount,
-        encodeDefine: makeEncodeDefine(encodeDefine),
         metaRawOption: clone(thisMetaRawOption)
       });
       return source;
@@ -19081,19 +19468,12 @@
         seriesLayoutBy: source.seriesLayoutBy,
         dimensionsDefine: clone(source.dimensionsDefine),
         startIndex: source.startIndex,
-        dimensionsDetectedCount: source.dimensionsDetectedCount,
-        encodeDefine: makeEncodeDefine(source.encodeDefine)
+        dimensionsDetectedCount: source.dimensionsDetectedCount
       });
-    }
-
-    function makeEncodeDefine(encodeDefine) {
-      // null means user not specify `series.encode`.
-      return encodeDefine ? createHashMap(encodeDefine) : null;
     }
     /**
      * Note: An empty array will be detected as `SOURCE_FORMAT_ARRAY_ROWS`.
      */
-
 
     function detectSourceFormat(data) {
       var sourceFormat = SOURCE_FORMAT_UNKNOWN;
@@ -19292,6 +19672,11 @@
           cb(value0[i], i);
         }
       }
+    }
+
+    function shouldRetrieveDataByName(source) {
+      var sourceFormat = source.sourceFormat;
+      return sourceFormat === SOURCE_FORMAT_OBJECT_ROWS || sourceFormat === SOURCE_FORMAT_KEYED_COLUMNS;
     }
 
     /*
@@ -19522,19 +19907,19 @@
 
     var rawSourceItemGetterMap = (_a = {}, _a[SOURCE_FORMAT_ARRAY_ROWS + '_' + SERIES_LAYOUT_BY_COLUMN] = function (rawData, startIndex, dimsDef, idx) {
       return rawData[idx + startIndex];
-    }, _a[SOURCE_FORMAT_ARRAY_ROWS + '_' + SERIES_LAYOUT_BY_ROW] = function (rawData, startIndex, dimsDef, idx) {
+    }, _a[SOURCE_FORMAT_ARRAY_ROWS + '_' + SERIES_LAYOUT_BY_ROW] = function (rawData, startIndex, dimsDef, idx, out) {
       idx += startIndex;
-      var item = [];
+      var item = out || [];
       var data = rawData;
 
       for (var i = 0; i < data.length; i++) {
         var row = data[i];
-        item.push(row ? row[idx] : null);
+        item[i] = row ? row[idx] : null;
       }
 
       return item;
-    }, _a[SOURCE_FORMAT_OBJECT_ROWS] = getItemSimply, _a[SOURCE_FORMAT_KEYED_COLUMNS] = function (rawData, startIndex, dimsDef, idx) {
-      var item = [];
+    }, _a[SOURCE_FORMAT_OBJECT_ROWS] = getItemSimply, _a[SOURCE_FORMAT_KEYED_COLUMNS] = function (rawData, startIndex, dimsDef, idx, out) {
+      var item = out || [];
 
       for (var i = 0; i < dimsDef.length; i++) {
         var dimName = dimsDef[i].name;
@@ -19546,7 +19931,7 @@
         }
 
         var col = rawData[dimName];
-        item.push(col ? col[idx] : null);
+        item[i] = col ? col[idx] : null;
       }
 
       return item;
@@ -19555,7 +19940,7 @@
       var method = rawSourceItemGetterMap[getMethodMapKey(sourceFormat, seriesLayoutBy)];
 
       if ("development" !== 'production') {
-        assert(method, 'Do not suppport get item on "' + sourceFormat + '", "' + seriesLayoutBy + '".');
+        assert(method, 'Do not support get item on "' + sourceFormat + '", "' + seriesLayoutBy + '".');
       }
 
       return method;
@@ -19592,17 +19977,17 @@
       return method;
     }
 
-    var getRawValueSimply = function (dataItem, dimIndex, dimName) {
-      return dimIndex != null ? dataItem[dimIndex] : dataItem;
+    var getRawValueSimply = function (dataItem, dimIndex, property) {
+      return dataItem[dimIndex];
     };
 
-    var rawSourceValueGetterMap = (_c = {}, _c[SOURCE_FORMAT_ARRAY_ROWS] = getRawValueSimply, _c[SOURCE_FORMAT_OBJECT_ROWS] = function (dataItem, dimIndex, dimName) {
-      return dimIndex != null ? dataItem[dimName] : dataItem;
-    }, _c[SOURCE_FORMAT_KEYED_COLUMNS] = getRawValueSimply, _c[SOURCE_FORMAT_ORIGINAL] = function (dataItem, dimIndex, dimName) {
+    var rawSourceValueGetterMap = (_c = {}, _c[SOURCE_FORMAT_ARRAY_ROWS] = getRawValueSimply, _c[SOURCE_FORMAT_OBJECT_ROWS] = function (dataItem, dimIndex, property) {
+      return dataItem[property];
+    }, _c[SOURCE_FORMAT_KEYED_COLUMNS] = getRawValueSimply, _c[SOURCE_FORMAT_ORIGINAL] = function (dataItem, dimIndex, property) {
       // FIXME: In some case (markpoint in geo (geo-map.html)),
       // dataItem is {coord: [...]}
       var value = getDataItemValue(dataItem);
-      return dimIndex == null || !(value instanceof Array) ? value : value[dimIndex];
+      return !(value instanceof Array) ? value : value[dimIndex];
     }, _c[SOURCE_FORMAT_TYPED_ARRAY] = getRawValueSimply, _c);
     function getRawSourceValueGetter(sourceFormat) {
       var method = rawSourceValueGetterMap[sourceFormat];
@@ -19625,9 +20010,9 @@
     // TODO: consider how to treat null/undefined/NaN when display?
 
 
-    function retrieveRawValue(data, dataIndex, dim // If dimIndex is null/undefined, return OptionDataItem.
+    function retrieveRawValue(data, dataIndex, // If dimIndex is null/undefined, return OptionDataItem.
     // Otherwise, return OptionDataValue.
-    ) {
+    dim) {
       if (!data) {
         return;
       } // Consider data may be not persistent.
@@ -19639,17 +20024,22 @@
         return;
       }
 
-      var sourceFormat = data.getProvider().getSource().sourceFormat;
-      var dimName;
-      var dimIndex;
-      var dimInfo = data.getDimensionInfo(dim);
+      var store = data.getStore();
+      var sourceFormat = store.getSource().sourceFormat;
 
-      if (dimInfo) {
-        dimName = dimInfo.name;
-        dimIndex = dimInfo.index;
+      if (dim != null) {
+        var dimIndex = data.getDimensionIndex(dim);
+        var property = store.getDimensionProperty(dimIndex);
+        return getRawSourceValueGetter(sourceFormat)(dataItem, dimIndex, property);
+      } else {
+        var result = dataItem;
+
+        if (sourceFormat === SOURCE_FORMAT_ORIGINAL) {
+          result = getDataItemValue(dataItem);
+        }
+
+        return result;
       }
-
-      return getRawSourceValueGetter(sourceFormat)(dataItem, dimIndex, dimName);
     }
 
     var DIMENSION_LABEL_REG = /\{@(.+?)\}/g;
@@ -19674,7 +20064,7 @@
         var borderColor = style && style.stroke;
         var mainType = this.mainType;
         var isSeries = mainType === 'series';
-        var userOutput = data.userOutput;
+        var userOutput = data.userOutput && data.userOutput.get();
         return {
           componentType: mainType,
           componentSubType: this.subType,
@@ -19690,7 +20080,7 @@
           value: rawValue,
           color: color,
           borderColor: borderColor,
-          dimensionNames: userOutput ? userOutput.dimensionNames : null,
+          dimensionNames: userOutput ? userOutput.fullDimensions : null,
           encode: userOutput ? userOutput.encode : null,
           // Param name list for mapping `a`, `b`, `c`, `d`, `e`
           $vars: ['seriesName', 'name', 'value']
@@ -19737,15 +20127,25 @@
 
           return str.replace(DIMENSION_LABEL_REG, function (origin, dimStr) {
             var len = dimStr.length;
-            var dimLoose = dimStr.charAt(0) === '[' && dimStr.charAt(len - 1) === ']' ? +dimStr.slice(1, len - 1) // Also support: '[]' => 0
-            : dimStr;
+            var dimLoose = dimStr;
+
+            if (dimLoose.charAt(0) === '[' && dimLoose.charAt(len - 1) === ']') {
+              dimLoose = +dimLoose.slice(1, len - 1); // Also support: '[]' => 0
+
+              if ("development" !== 'production') {
+                if (isNaN(dimLoose)) {
+                  error("Invalide label formatter: @" + dimStr + ", only support @[0], @[1], @[2], ...");
+                }
+              }
+            }
+
             var val = retrieveRawValue(data, dataIndex, dimLoose);
 
             if (extendParams && isArray(extendParams.interpolatedValue)) {
-              var dimInfo = data.getDimensionInfo(dimLoose);
+              var dimIndex = data.getDimensionIndex(dimLoose);
 
-              if (dimInfo) {
-                val = extendParams.interpolatedValue[dimInfo.index];
+              if (dimIndex >= 0) {
+                val = extendParams.interpolatedValue[dimIndex];
               }
             }
 
@@ -20137,8 +20537,7 @@
 
       if (dimType === 'ordinal') {
         // If given value is a category string
-        var ordinalMeta = opt && opt.ordinalMeta;
-        return ordinalMeta ? ordinalMeta.parseAndCollect(value) : value;
+        return value;
       }
 
       if (dimType === 'time' // spead up when using timestamp
@@ -20611,13 +21010,1155 @@
           };
         }
 
-        return createSource(result.data, resultMetaRawOption, null, null);
+        return createSource(result.data, resultMetaRawOption, null);
       });
     }
 
     function isSupportedSourceFormat(sourceFormat) {
       return sourceFormat === SOURCE_FORMAT_ARRAY_ROWS || sourceFormat === SOURCE_FORMAT_OBJECT_ROWS;
     }
+
+    var UNDEFINED = 'undefined';
+    /* global Float64Array, Int32Array, Uint32Array, Uint16Array */
+    // Caution: MUST not use `new CtorUint32Array(arr, 0, len)`, because the Ctor of array is
+    // different from the Ctor of typed array.
+
+    var CtorUint32Array = typeof Uint32Array === UNDEFINED ? Array : Uint32Array;
+    var CtorUint16Array = typeof Uint16Array === UNDEFINED ? Array : Uint16Array;
+    var CtorInt32Array = typeof Int32Array === UNDEFINED ? Array : Int32Array;
+    var CtorFloat64Array = typeof Float64Array === UNDEFINED ? Array : Float64Array;
+    /**
+     * Multi dimensional data store
+     */
+
+    var dataCtors = {
+      'float': CtorFloat64Array,
+      'int': CtorInt32Array,
+      // Ordinal data type can be string or int
+      'ordinal': Array,
+      'number': Array,
+      'time': CtorFloat64Array
+    };
+    var defaultDimValueGetters;
+
+    function getIndicesCtor(rawCount) {
+      // The possible max value in this._indicies is always this._rawCount despite of filtering.
+      return rawCount > 65535 ? CtorUint32Array : CtorUint16Array;
+    }
+
+    function getInitialExtent() {
+      return [Infinity, -Infinity];
+    }
+
+    function cloneChunk(originalChunk) {
+      var Ctor = originalChunk.constructor; // Only shallow clone is enough when Array.
+
+      return Ctor === Array ? originalChunk.slice() : new Ctor(originalChunk);
+    }
+
+    function prepareStore(store, dimIdx, dimType, end, append) {
+      var DataCtor = dataCtors[dimType || 'float'];
+
+      if (append) {
+        var oldStore = store[dimIdx];
+        var oldLen = oldStore && oldStore.length;
+
+        if (!(oldLen === end)) {
+          var newStore = new DataCtor(end); // The cost of the copy is probably inconsiderable
+          // within the initial chunkSize.
+
+          for (var j = 0; j < oldLen; j++) {
+            newStore[j] = oldStore[j];
+          }
+
+          store[dimIdx] = newStore;
+        }
+      } else {
+        store[dimIdx] = new DataCtor(end);
+      }
+    }
+    /**
+     * Basically, DataStore API keep immutable.
+     */
+
+    var DataStore =
+    /** @class */
+    function () {
+      function DataStore() {
+        this._chunks = []; // It will not be calculated util needed.
+
+        this._rawExtent = [];
+        this._extent = [];
+        this._count = 0;
+        this._rawCount = 0;
+        this._calcDimNameToIdx = createHashMap();
+      }
+      /**
+       * Initialize from data
+       */
+
+
+      DataStore.prototype.initData = function (provider, inputDimensions, dimValueGetter) {
+        if ("development" !== 'production') {
+          assert(isFunction(provider.getItem) && isFunction(provider.count), 'Inavlid data provider.');
+        }
+
+        this._provider = provider; // Clear
+
+        this._chunks = [];
+        this._indices = null;
+        this.getRawIndex = this._getRawIdxIdentity;
+        var source = provider.getSource();
+        var defaultGetter = this.defaultDimValueGetter = defaultDimValueGetters[source.sourceFormat]; // Default dim value getter
+
+        this._dimValueGetter = dimValueGetter || defaultGetter; // Reset raw extent.
+
+        this._rawExtent = [];
+        var willRetrieveDataByName = shouldRetrieveDataByName(source);
+        this._dimensions = map(inputDimensions, function (dim) {
+          if ("development" !== 'production') {
+            if (willRetrieveDataByName) {
+              assert(dim.property != null);
+            }
+          }
+
+          return {
+            // Only pick these two props. Not leak other properties like orderMeta.
+            type: dim.type,
+            property: dim.property
+          };
+        });
+
+        this._initDataFromProvider(0, provider.count());
+      };
+
+      DataStore.prototype.getProvider = function () {
+        return this._provider;
+      };
+      /**
+       * Caution: even when a `source` instance owned by a series, the created data store
+       * may still be shared by different sereis (the source hash does not use all `source`
+       * props, see `sourceManager`). In this case, the `source` props that are not used in
+       * hash (like `source.dimensionDefine`) probably only belongs to a certain series and
+       * thus should not be fetch here.
+       */
+
+
+      DataStore.prototype.getSource = function () {
+        return this._provider.getSource();
+      };
+      /**
+       * @caution Only used in dataStack.
+       */
+
+
+      DataStore.prototype.ensureCalculationDimension = function (dimName, type) {
+        var calcDimNameToIdx = this._calcDimNameToIdx;
+        var dimensions = this._dimensions;
+        var calcDimIdx = calcDimNameToIdx.get(dimName);
+
+        if (calcDimIdx != null) {
+          if (dimensions[calcDimIdx].type === type) {
+            return calcDimIdx;
+          }
+        } else {
+          calcDimIdx = dimensions.length;
+        }
+
+        dimensions[calcDimIdx] = {
+          type: type
+        };
+        calcDimNameToIdx.set(dimName, calcDimIdx);
+        this._chunks[calcDimIdx] = new dataCtors[type || 'float'](this._rawCount);
+        this._rawExtent[calcDimIdx] = getInitialExtent();
+        return calcDimIdx;
+      };
+
+      DataStore.prototype.collectOrdinalMeta = function (dimIdx, ordinalMeta) {
+        var chunk = this._chunks[dimIdx];
+        var dim = this._dimensions[dimIdx];
+        var rawExtents = this._rawExtent;
+        var offset = dim.ordinalOffset || 0;
+        var len = chunk.length;
+
+        if (offset === 0) {
+          // We need to reset the rawExtent if collect is from start.
+          // Because this dimension may be guessed as number and calcuating a wrong extent.
+          rawExtents[dimIdx] = getInitialExtent();
+        }
+
+        var dimRawExtent = rawExtents[dimIdx]; // Parse from previous data offset. len may be changed after appendData
+
+        for (var i = offset; i < len; i++) {
+          var val = chunk[i] = ordinalMeta.parseAndCollect(chunk[i]);
+          dimRawExtent[0] = Math.min(val, dimRawExtent[0]);
+          dimRawExtent[1] = Math.max(val, dimRawExtent[1]);
+        }
+
+        dim.ordinalMeta = ordinalMeta;
+        dim.ordinalOffset = len;
+        dim.type = 'ordinal'; // Force to be ordinal
+      };
+
+      DataStore.prototype.getOrdinalMeta = function (dimIdx) {
+        var dimInfo = this._dimensions[dimIdx];
+        var ordinalMeta = dimInfo.ordinalMeta;
+        return ordinalMeta;
+      };
+
+      DataStore.prototype.getDimensionProperty = function (dimIndex) {
+        var item = this._dimensions[dimIndex];
+        return item && item.property;
+      };
+      /**
+       * Caution: Can be only called on raw data (before `this._indices` created).
+       */
+
+
+      DataStore.prototype.appendData = function (data) {
+        if ("development" !== 'production') {
+          assert(!this._indices, 'appendData can only be called on raw data.');
+        }
+
+        var provider = this._provider;
+        var start = this.count();
+        provider.appendData(data);
+        var end = provider.count();
+
+        if (!provider.persistent) {
+          end += start;
+        }
+
+        if (start < end) {
+          this._initDataFromProvider(start, end, true);
+        }
+
+        return [start, end];
+      };
+
+      DataStore.prototype.appendValues = function (values, minFillLen) {
+        var chunks = this._chunks;
+        var dimensions = this._dimensions;
+        var dimLen = dimensions.length;
+        var rawExtent = this._rawExtent;
+        var start = this.count();
+        var end = start + Math.max(values.length, minFillLen || 0);
+
+        for (var i = 0; i < dimLen; i++) {
+          var dim = dimensions[i];
+          prepareStore(chunks, i, dim.type, end, true);
+        }
+
+        var emptyDataItem = [];
+
+        for (var idx = start; idx < end; idx++) {
+          var sourceIdx = idx - start; // Store the data by dimensions
+
+          for (var dimIdx = 0; dimIdx < dimLen; dimIdx++) {
+            var dim = dimensions[dimIdx];
+            var val = defaultDimValueGetters.arrayRows.call(this, values[sourceIdx] || emptyDataItem, dim.property, sourceIdx, dimIdx);
+            chunks[dimIdx][idx] = val;
+            var dimRawExtent = rawExtent[dimIdx];
+            val < dimRawExtent[0] && (dimRawExtent[0] = val);
+            val > dimRawExtent[1] && (dimRawExtent[1] = val);
+          }
+        }
+
+        this._rawCount = this._count = end;
+        return {
+          start: start,
+          end: end
+        };
+      };
+
+      DataStore.prototype._initDataFromProvider = function (start, end, append) {
+        var provider = this._provider;
+        var chunks = this._chunks;
+        var dimensions = this._dimensions;
+        var dimLen = dimensions.length;
+        var rawExtent = this._rawExtent;
+        var dimNames = map(dimensions, function (dim) {
+          return dim.property;
+        });
+
+        for (var i = 0; i < dimLen; i++) {
+          var dim = dimensions[i];
+
+          if (!rawExtent[i]) {
+            rawExtent[i] = getInitialExtent();
+          }
+
+          prepareStore(chunks, i, dim.type, end, append);
+        }
+
+        if (provider.fillStorage) {
+          provider.fillStorage(start, end, chunks, rawExtent);
+        } else {
+          var dataItem = [];
+
+          for (var idx = start; idx < end; idx++) {
+            // NOTICE: Try not to write things into dataItem
+            dataItem = provider.getItem(idx, dataItem); // Each data item is value
+            // [1, 2]
+            // 2
+            // Bar chart, line chart which uses category axis
+            // only gives the 'y' value. 'x' value is the indices of category
+            // Use a tempValue to normalize the value to be a (x, y) value
+            // Store the data by dimensions
+
+            for (var dimIdx = 0; dimIdx < dimLen; dimIdx++) {
+              var dimStorage = chunks[dimIdx]; // PENDING NULL is empty or zero
+
+              var val = this._dimValueGetter(dataItem, dimNames[dimIdx], idx, dimIdx);
+
+              dimStorage[idx] = val;
+              var dimRawExtent = rawExtent[dimIdx];
+              val < dimRawExtent[0] && (dimRawExtent[0] = val);
+              val > dimRawExtent[1] && (dimRawExtent[1] = val);
+            }
+          }
+        }
+
+        if (!provider.persistent && provider.clean) {
+          // Clean unused data if data source is typed array.
+          provider.clean();
+        }
+
+        this._rawCount = this._count = end; // Reset data extent
+
+        this._extent = [];
+      };
+
+      DataStore.prototype.count = function () {
+        return this._count;
+      };
+      /**
+       * Get value. Return NaN if idx is out of range.
+       */
+
+
+      DataStore.prototype.get = function (dim, idx) {
+        if (!(idx >= 0 && idx < this._count)) {
+          return NaN;
+        }
+
+        var dimStore = this._chunks[dim];
+        return dimStore ? dimStore[this.getRawIndex(idx)] : NaN;
+      };
+
+      DataStore.prototype.getValues = function (dimensions, idx) {
+        var values = [];
+        var dimArr = [];
+
+        if (idx == null) {
+          idx = dimensions; // TODO get all from store?
+
+          dimensions = []; // All dimensions
+
+          for (var i = 0; i < this._dimensions.length; i++) {
+            dimArr.push(i);
+          }
+        } else {
+          dimArr = dimensions;
+        }
+
+        for (var i = 0, len = dimArr.length; i < len; i++) {
+          values.push(this.get(dimArr[i], idx));
+        }
+
+        return values;
+      };
+      /**
+       * @param dim concrete dim
+       */
+
+
+      DataStore.prototype.getByRawIndex = function (dim, rawIdx) {
+        if (!(rawIdx >= 0 && rawIdx < this._rawCount)) {
+          return NaN;
+        }
+
+        var dimStore = this._chunks[dim];
+        return dimStore ? dimStore[rawIdx] : NaN;
+      };
+      /**
+       * Get sum of data in one dimension
+       */
+
+
+      DataStore.prototype.getSum = function (dim) {
+        var dimData = this._chunks[dim];
+        var sum = 0;
+
+        if (dimData) {
+          for (var i = 0, len = this.count(); i < len; i++) {
+            var value = this.get(dim, i);
+
+            if (!isNaN(value)) {
+              sum += value;
+            }
+          }
+        }
+
+        return sum;
+      };
+      /**
+       * Get median of data in one dimension
+       */
+
+
+      DataStore.prototype.getMedian = function (dim) {
+        var dimDataArray = []; // map all data of one dimension
+
+        this.each([dim], function (val) {
+          if (!isNaN(val)) {
+            dimDataArray.push(val);
+          }
+        }); // TODO
+        // Use quick select?
+
+        var sortedDimDataArray = dimDataArray.sort(function (a, b) {
+          return a - b;
+        });
+        var len = this.count(); // calculate median
+
+        return len === 0 ? 0 : len % 2 === 1 ? sortedDimDataArray[(len - 1) / 2] : (sortedDimDataArray[len / 2] + sortedDimDataArray[len / 2 - 1]) / 2;
+      };
+      /**
+       * Retreive the index with given raw data index
+       */
+
+
+      DataStore.prototype.indexOfRawIndex = function (rawIndex) {
+        if (rawIndex >= this._rawCount || rawIndex < 0) {
+          return -1;
+        }
+
+        if (!this._indices) {
+          return rawIndex;
+        } // Indices are ascending
+
+
+        var indices = this._indices; // If rawIndex === dataIndex
+
+        var rawDataIndex = indices[rawIndex];
+
+        if (rawDataIndex != null && rawDataIndex < this._count && rawDataIndex === rawIndex) {
+          return rawIndex;
+        }
+
+        var left = 0;
+        var right = this._count - 1;
+
+        while (left <= right) {
+          var mid = (left + right) / 2 | 0;
+
+          if (indices[mid] < rawIndex) {
+            left = mid + 1;
+          } else if (indices[mid] > rawIndex) {
+            right = mid - 1;
+          } else {
+            return mid;
+          }
+        }
+
+        return -1;
+      };
+      /**
+       * Retreive the index of nearest value
+       * @param dim
+       * @param value
+       * @param [maxDistance=Infinity]
+       * @return If and only if multiple indices has
+       *         the same value, they are put to the result.
+       */
+
+
+      DataStore.prototype.indicesOfNearest = function (dim, value, maxDistance) {
+        var chunks = this._chunks;
+        var dimData = chunks[dim];
+        var nearestIndices = [];
+
+        if (!dimData) {
+          return nearestIndices;
+        }
+
+        if (maxDistance == null) {
+          maxDistance = Infinity;
+        }
+
+        var minDist = Infinity;
+        var minDiff = -1;
+        var nearestIndicesLen = 0; // Check the test case of `test/ut/spec/data/SeriesData.js`.
+
+        for (var i = 0, len = this.count(); i < len; i++) {
+          var dataIndex = this.getRawIndex(i);
+          var diff = value - dimData[dataIndex];
+          var dist = Math.abs(diff);
+
+          if (dist <= maxDistance) {
+            // When the `value` is at the middle of `this.get(dim, i)` and `this.get(dim, i+1)`,
+            // we'd better not push both of them to `nearestIndices`, otherwise it is easy to
+            // get more than one item in `nearestIndices` (more specifically, in `tooltip`).
+            // So we chose the one that `diff >= 0` in this csae.
+            // But if `this.get(dim, i)` and `this.get(dim, j)` get the same value, both of them
+            // should be push to `nearestIndices`.
+            if (dist < minDist || dist === minDist && diff >= 0 && minDiff < 0) {
+              minDist = dist;
+              minDiff = diff;
+              nearestIndicesLen = 0;
+            }
+
+            if (diff === minDiff) {
+              nearestIndices[nearestIndicesLen++] = i;
+            }
+          }
+        }
+
+        nearestIndices.length = nearestIndicesLen;
+        return nearestIndices;
+      };
+
+      DataStore.prototype.getIndices = function () {
+        var newIndices;
+        var indices = this._indices;
+
+        if (indices) {
+          var Ctor = indices.constructor;
+          var thisCount = this._count; // `new Array(a, b, c)` is different from `new Uint32Array(a, b, c)`.
+
+          if (Ctor === Array) {
+            newIndices = new Ctor(thisCount);
+
+            for (var i = 0; i < thisCount; i++) {
+              newIndices[i] = indices[i];
+            }
+          } else {
+            newIndices = new Ctor(indices.buffer, 0, thisCount);
+          }
+        } else {
+          var Ctor = getIndicesCtor(this._rawCount);
+          newIndices = new Ctor(this.count());
+
+          for (var i = 0; i < newIndices.length; i++) {
+            newIndices[i] = i;
+          }
+        }
+
+        return newIndices;
+      };
+      /**
+       * Data filter.
+       */
+
+
+      DataStore.prototype.filter = function (dims, cb) {
+        if (!this._count) {
+          return this;
+        }
+
+        var newStore = this.clone();
+        var count = newStore.count();
+        var Ctor = getIndicesCtor(newStore._rawCount);
+        var newIndices = new Ctor(count);
+        var value = [];
+        var dimSize = dims.length;
+        var offset = 0;
+        var dim0 = dims[0];
+        var chunks = newStore._chunks;
+
+        for (var i = 0; i < count; i++) {
+          var keep = void 0;
+          var rawIdx = newStore.getRawIndex(i); // Simple optimization
+
+          if (dimSize === 0) {
+            keep = cb(i);
+          } else if (dimSize === 1) {
+            var val = chunks[dim0][rawIdx];
+            keep = cb(val, i);
+          } else {
+            var k = 0;
+
+            for (; k < dimSize; k++) {
+              value[k] = chunks[dims[k]][rawIdx];
+            }
+
+            value[k] = i;
+            keep = cb.apply(null, value);
+          }
+
+          if (keep) {
+            newIndices[offset++] = rawIdx;
+          }
+        } // Set indices after filtered.
+
+
+        if (offset < count) {
+          newStore._indices = newIndices;
+        }
+
+        newStore._count = offset; // Reset data extent
+
+        newStore._extent = [];
+
+        newStore._updateGetRawIdx();
+
+        return newStore;
+      };
+      /**
+       * Select data in range. (For optimization of filter)
+       * (Manually inline code, support 5 million data filtering in data zoom.)
+       */
+
+
+      DataStore.prototype.selectRange = function (range) {
+        var newStore = this.clone();
+        var len = newStore._count;
+
+        if (!len) {
+          return this;
+        }
+
+        var dims = keys(range);
+        var dimSize = dims.length;
+
+        if (!dimSize) {
+          return this;
+        }
+
+        var originalCount = newStore.count();
+        var Ctor = getIndicesCtor(newStore._rawCount);
+        var newIndices = new Ctor(originalCount);
+        var offset = 0;
+        var dim0 = dims[0];
+        var min = range[dim0][0];
+        var max = range[dim0][1];
+        var storeArr = newStore._chunks;
+        var quickFinished = false;
+
+        if (!newStore._indices) {
+          // Extreme optimization for common case. About 2x faster in chrome.
+          var idx = 0;
+
+          if (dimSize === 1) {
+            var dimStorage = storeArr[dims[0]];
+
+            for (var i = 0; i < len; i++) {
+              var val = dimStorage[i]; // NaN will not be filtered. Consider the case, in line chart, empty
+              // value indicates the line should be broken. But for the case like
+              // scatter plot, a data item with empty value will not be rendered,
+              // but the axis extent may be effected if some other dim of the data
+              // item has value. Fortunately it is not a significant negative effect.
+
+              if (val >= min && val <= max || isNaN(val)) {
+                newIndices[offset++] = idx;
+              }
+
+              idx++;
+            }
+
+            quickFinished = true;
+          } else if (dimSize === 2) {
+            var dimStorage = storeArr[dims[0]];
+            var dimStorage2 = storeArr[dims[1]];
+            var min2 = range[dims[1]][0];
+            var max2 = range[dims[1]][1];
+
+            for (var i = 0; i < len; i++) {
+              var val = dimStorage[i];
+              var val2 = dimStorage2[i]; // Do not filter NaN, see comment above.
+
+              if ((val >= min && val <= max || isNaN(val)) && (val2 >= min2 && val2 <= max2 || isNaN(val2))) {
+                newIndices[offset++] = idx;
+              }
+
+              idx++;
+            }
+
+            quickFinished = true;
+          }
+        }
+
+        if (!quickFinished) {
+          if (dimSize === 1) {
+            for (var i = 0; i < originalCount; i++) {
+              var rawIndex = newStore.getRawIndex(i);
+              var val = storeArr[dims[0]][rawIndex]; // Do not filter NaN, see comment above.
+
+              if (val >= min && val <= max || isNaN(val)) {
+                newIndices[offset++] = rawIndex;
+              }
+            }
+          } else {
+            for (var i = 0; i < originalCount; i++) {
+              var keep = true;
+              var rawIndex = newStore.getRawIndex(i);
+
+              for (var k = 0; k < dimSize; k++) {
+                var dimk = dims[k];
+                var val = storeArr[dimk][rawIndex]; // Do not filter NaN, see comment above.
+
+                if (val < range[dimk][0] || val > range[dimk][1]) {
+                  keep = false;
+                }
+              }
+
+              if (keep) {
+                newIndices[offset++] = newStore.getRawIndex(i);
+              }
+            }
+          }
+        } // Set indices after filtered.
+
+
+        if (offset < originalCount) {
+          newStore._indices = newIndices;
+        }
+
+        newStore._count = offset; // Reset data extent
+
+        newStore._extent = [];
+
+        newStore._updateGetRawIdx();
+
+        return newStore;
+      }; // /**
+      //  * Data mapping to a plain array
+      //  */
+      // mapArray(dims: DimensionIndex[], cb: MapArrayCb): any[] {
+      //     const result: any[] = [];
+      //     this.each(dims, function () {
+      //         result.push(cb && (cb as MapArrayCb).apply(null, arguments));
+      //     });
+      //     return result;
+      // }
+
+      /**
+       * Data mapping to a new List with given dimensions
+       */
+
+
+      DataStore.prototype.map = function (dims, cb) {
+        // TODO only clone picked chunks.
+        var target = this.clone(dims);
+
+        this._updateDims(target, dims, cb);
+
+        return target;
+      };
+      /**
+       * @caution Danger!! Only used in dataStack.
+       */
+
+
+      DataStore.prototype.modify = function (dims, cb) {
+        this._updateDims(this, dims, cb);
+      };
+
+      DataStore.prototype._updateDims = function (target, dims, cb) {
+        var targetChunks = target._chunks;
+        var tmpRetValue = [];
+        var dimSize = dims.length;
+        var dataCount = target.count();
+        var values = [];
+        var rawExtent = target._rawExtent;
+
+        for (var i = 0; i < dims.length; i++) {
+          rawExtent[dims[i]] = getInitialExtent();
+        }
+
+        for (var dataIndex = 0; dataIndex < dataCount; dataIndex++) {
+          var rawIndex = target.getRawIndex(dataIndex);
+
+          for (var k = 0; k < dimSize; k++) {
+            values[k] = targetChunks[dims[k]][rawIndex];
+          }
+
+          values[dimSize] = dataIndex;
+          var retValue = cb && cb.apply(null, values);
+
+          if (retValue != null) {
+            // a number or string (in oridinal dimension)?
+            if (typeof retValue !== 'object') {
+              tmpRetValue[0] = retValue;
+              retValue = tmpRetValue;
+            }
+
+            for (var i = 0; i < retValue.length; i++) {
+              var dim = dims[i];
+              var val = retValue[i];
+              var rawExtentOnDim = rawExtent[dim];
+              var dimStore = targetChunks[dim];
+
+              if (dimStore) {
+                dimStore[rawIndex] = val;
+              }
+
+              if (val < rawExtentOnDim[0]) {
+                rawExtentOnDim[0] = val;
+              }
+
+              if (val > rawExtentOnDim[1]) {
+                rawExtentOnDim[1] = val;
+              }
+            }
+          }
+        }
+      };
+      /**
+       * Large data down sampling using largest-triangle-three-buckets
+       * @param {string} valueDimension
+       * @param {number} targetCount
+       */
+
+
+      DataStore.prototype.lttbDownSample = function (valueDimension, rate) {
+        var target = this.clone([valueDimension], true);
+        var targetStorage = target._chunks;
+        var dimStore = targetStorage[valueDimension];
+        var len = this.count();
+        var sampledIndex = 0;
+        var frameSize = Math.floor(1 / rate);
+        var currentRawIndex = this.getRawIndex(0);
+        var maxArea;
+        var area;
+        var nextRawIndex;
+        var newIndices = new (getIndicesCtor(this._rawCount))(Math.ceil(len / frameSize) + 2); // First frame use the first data.
+
+        newIndices[sampledIndex++] = currentRawIndex;
+
+        for (var i = 1; i < len - 1; i += frameSize) {
+          var nextFrameStart = Math.min(i + frameSize, len - 1);
+          var nextFrameEnd = Math.min(i + frameSize * 2, len);
+          var avgX = (nextFrameEnd + nextFrameStart) / 2;
+          var avgY = 0;
+
+          for (var idx = nextFrameStart; idx < nextFrameEnd; idx++) {
+            var rawIndex = this.getRawIndex(idx);
+            var y = dimStore[rawIndex];
+
+            if (isNaN(y)) {
+              continue;
+            }
+
+            avgY += y;
+          }
+
+          avgY /= nextFrameEnd - nextFrameStart;
+          var frameStart = i;
+          var frameEnd = Math.min(i + frameSize, len);
+          var pointAX = i - 1;
+          var pointAY = dimStore[currentRawIndex];
+          maxArea = -1;
+          nextRawIndex = frameStart; // Find a point from current frame that construct a triangel with largest area with previous selected point
+          // And the average of next frame.
+
+          for (var idx = frameStart; idx < frameEnd; idx++) {
+            var rawIndex = this.getRawIndex(idx);
+            var y = dimStore[rawIndex];
+
+            if (isNaN(y)) {
+              continue;
+            } // Calculate triangle area over three buckets
+
+
+            area = Math.abs((pointAX - avgX) * (y - pointAY) - (pointAX - idx) * (avgY - pointAY));
+
+            if (area > maxArea) {
+              maxArea = area;
+              nextRawIndex = rawIndex; // Next a is this b
+            }
+          }
+
+          newIndices[sampledIndex++] = nextRawIndex;
+          currentRawIndex = nextRawIndex; // This a is the next a (chosen b)
+        } // First frame use the last data.
+
+
+        newIndices[sampledIndex++] = this.getRawIndex(len - 1);
+        target._count = sampledIndex;
+        target._indices = newIndices;
+        target.getRawIndex = this._getRawIdx;
+        return target;
+      };
+      /**
+       * Large data down sampling on given dimension
+       * @param sampleIndex Sample index for name and id
+       */
+
+
+      DataStore.prototype.downSample = function (dimension, rate, sampleValue, sampleIndex) {
+        var target = this.clone([dimension], true);
+        var targetStorage = target._chunks;
+        var frameValues = [];
+        var frameSize = Math.floor(1 / rate);
+        var dimStore = targetStorage[dimension];
+        var len = this.count();
+        var rawExtentOnDim = target._rawExtent[dimension] = getInitialExtent();
+        var newIndices = new (getIndicesCtor(this._rawCount))(Math.ceil(len / frameSize));
+        var offset = 0;
+
+        for (var i = 0; i < len; i += frameSize) {
+          // Last frame
+          if (frameSize > len - i) {
+            frameSize = len - i;
+            frameValues.length = frameSize;
+          }
+
+          for (var k = 0; k < frameSize; k++) {
+            var dataIdx = this.getRawIndex(i + k);
+            frameValues[k] = dimStore[dataIdx];
+          }
+
+          var value = sampleValue(frameValues);
+          var sampleFrameIdx = this.getRawIndex(Math.min(i + sampleIndex(frameValues, value) || 0, len - 1)); // Only write value on the filtered data
+
+          dimStore[sampleFrameIdx] = value;
+
+          if (value < rawExtentOnDim[0]) {
+            rawExtentOnDim[0] = value;
+          }
+
+          if (value > rawExtentOnDim[1]) {
+            rawExtentOnDim[1] = value;
+          }
+
+          newIndices[offset++] = sampleFrameIdx;
+        }
+
+        target._count = offset;
+        target._indices = newIndices;
+
+        target._updateGetRawIdx();
+
+        return target;
+      };
+      /**
+       * Data iteration
+       * @param ctx default this
+       * @example
+       *  list.each('x', function (x, idx) {});
+       *  list.each(['x', 'y'], function (x, y, idx) {});
+       *  list.each(function (idx) {})
+       */
+
+
+      DataStore.prototype.each = function (dims, cb) {
+        if (!this._count) {
+          return;
+        }
+
+        var dimSize = dims.length;
+        var chunks = this._chunks;
+
+        for (var i = 0, len = this.count(); i < len; i++) {
+          var rawIdx = this.getRawIndex(i); // Simple optimization
+
+          switch (dimSize) {
+            case 0:
+              cb(i);
+              break;
+
+            case 1:
+              cb(chunks[dims[0]][rawIdx], i);
+              break;
+
+            case 2:
+              cb(chunks[dims[0]][rawIdx], chunks[dims[1]][rawIdx], i);
+              break;
+
+            default:
+              var k = 0;
+              var value = [];
+
+              for (; k < dimSize; k++) {
+                value[k] = chunks[dims[k]][rawIdx];
+              } // Index
+
+
+              value[k] = i;
+              cb.apply(null, value);
+          }
+        }
+      };
+      /**
+       * Get extent of data in one dimension
+       */
+
+
+      DataStore.prototype.getDataExtent = function (dim) {
+        // Make sure use concrete dim as cache name.
+        var dimData = this._chunks[dim];
+        var initialExtent = getInitialExtent();
+
+        if (!dimData) {
+          return initialExtent;
+        } // Make more strict checkings to ensure hitting cache.
+
+
+        var currEnd = this.count(); // Consider the most cases when using data zoom, `getDataExtent`
+        // happened before filtering. We cache raw extent, which is not
+        // necessary to be cleared and recalculated when restore data.
+
+        var useRaw = !this._indices;
+        var dimExtent;
+
+        if (useRaw) {
+          return this._rawExtent[dim].slice();
+        }
+
+        dimExtent = this._extent[dim];
+
+        if (dimExtent) {
+          return dimExtent.slice();
+        }
+
+        dimExtent = initialExtent;
+        var min = dimExtent[0];
+        var max = dimExtent[1];
+
+        for (var i = 0; i < currEnd; i++) {
+          var rawIdx = this.getRawIndex(i);
+          var value = dimData[rawIdx];
+          value < min && (min = value);
+          value > max && (max = value);
+        }
+
+        dimExtent = [min, max];
+        this._extent[dim] = dimExtent;
+        return dimExtent;
+      };
+      /**
+       * Get raw data item
+       */
+
+
+      DataStore.prototype.getRawDataItem = function (idx) {
+        var rawIdx = this.getRawIndex(idx);
+
+        if (!this._provider.persistent) {
+          var val = [];
+          var chunks = this._chunks;
+
+          for (var i = 0; i < chunks.length; i++) {
+            val.push(chunks[i][rawIdx]);
+          }
+
+          return val;
+        } else {
+          return this._provider.getItem(rawIdx);
+        }
+      };
+      /**
+       * Clone shallow.
+       *
+       * @param clonedDims Determine which dims to clone. Will share the data if not specified.
+       */
+
+
+      DataStore.prototype.clone = function (clonedDims, ignoreIndices) {
+        var target = new DataStore();
+        var chunks = this._chunks;
+        var clonedDimsMap = clonedDims && reduce(clonedDims, function (obj, dimIdx) {
+          obj[dimIdx] = true;
+          return obj;
+        }, {});
+
+        if (clonedDimsMap) {
+          for (var i = 0; i < chunks.length; i++) {
+            // Not clone if dim is not picked.
+            target._chunks[i] = !clonedDimsMap[i] ? chunks[i] : cloneChunk(chunks[i]);
+          }
+        } else {
+          target._chunks = chunks;
+        }
+
+        this._copyCommonProps(target);
+
+        if (!ignoreIndices) {
+          target._indices = this._cloneIndices();
+        }
+
+        target._updateGetRawIdx();
+
+        return target;
+      };
+
+      DataStore.prototype._copyCommonProps = function (target) {
+        target._count = this._count;
+        target._rawCount = this._rawCount;
+        target._provider = this._provider;
+        target._dimensions = this._dimensions;
+        target._extent = clone(this._extent);
+        target._rawExtent = clone(this._rawExtent);
+      };
+
+      DataStore.prototype._cloneIndices = function () {
+        if (this._indices) {
+          var Ctor = this._indices.constructor;
+          var indices = void 0;
+
+          if (Ctor === Array) {
+            var thisCount = this._indices.length;
+            indices = new Ctor(thisCount);
+
+            for (var i = 0; i < thisCount; i++) {
+              indices[i] = this._indices[i];
+            }
+          } else {
+            indices = new Ctor(this._indices);
+          }
+
+          return indices;
+        }
+
+        return null;
+      };
+
+      DataStore.prototype._getRawIdxIdentity = function (idx) {
+        return idx;
+      };
+
+      DataStore.prototype._getRawIdx = function (idx) {
+        if (idx < this._count && idx >= 0) {
+          return this._indices[idx];
+        }
+
+        return -1;
+      };
+
+      DataStore.prototype._updateGetRawIdx = function () {
+        this.getRawIndex = this._indices ? this._getRawIdx : this._getRawIdxIdentity;
+      };
+
+      DataStore.internalField = function () {
+        function getDimValueSimply(dataItem, property, dataIndex, dimIndex) {
+          return parseDataValue(dataItem[dimIndex], this._dimensions[dimIndex]);
+        }
+
+        defaultDimValueGetters = {
+          arrayRows: getDimValueSimply,
+          objectRows: function (dataItem, property, dataIndex, dimIndex) {
+            return parseDataValue(dataItem[property], this._dimensions[dimIndex]);
+          },
+          keyedColumns: getDimValueSimply,
+          original: function (dataItem, property, dataIndex, dimIndex) {
+            // Performance sensitive, do not use modelUtil.getDataItemValue.
+            // If dataItem is an plain object with no value field, the let `value`
+            // will be assigned with the object, but it will be tread correctly
+            // in the `convertValue`.
+            var value = dataItem && (dataItem.value == null ? dataItem : dataItem.value);
+            return parseDataValue(value instanceof Array ? value[dimIndex] // If value is a single number or something else not array.
+            : value, this._dimensions[dimIndex]);
+          },
+          typedArray: function (dataItem, property, dataIndex, dimIndex) {
+            return dataItem[dimIndex];
+          }
+        };
+      }();
+
+      return DataStore;
+    }();
 
     /**
      * [REQUIREMENT_MEMO]:
@@ -20715,10 +22256,12 @@
     function () {
       function SourceManager(sourceHost) {
         // Cached source. Do not repeat calculating if not dirty.
-        this._sourceList = []; // version sign of each upstream source manager.
+        this._sourceList = [];
+        this._storeList = []; // version sign of each upstream source manager.
 
         this._upstreamSignList = [];
         this._versionSignBase = 0;
+        this._dirty = true;
         this._sourceHost = sourceHost;
       }
       /**
@@ -20728,6 +22271,9 @@
 
       SourceManager.prototype.dirty = function () {
         this._setLocalSource([], []);
+
+        this._storeList = [];
+        this._dirty = true;
       };
 
       SourceManager.prototype._setLocalSource = function (sourceList, upstreamSignList) {
@@ -20758,6 +22304,8 @@
         // cache the result source to prevent from repeating transform.
         if (this._isDirty()) {
           this._createSource();
+
+          this._dirty = false;
         }
       };
 
@@ -20793,20 +22341,22 @@
             } // See [REQUIREMENT_MEMO], merge settings on series and parent dataset if it is root.
 
 
-          var newMetaRawOption = this._getSourceMetaRawOption();
-
-          var upMetaRawOption = upSource ? upSource.metaRawOption : null;
-          var seriesLayoutBy = retrieve2(newMetaRawOption.seriesLayoutBy, upMetaRawOption ? upMetaRawOption.seriesLayoutBy : null);
-          var sourceHeader = retrieve2(newMetaRawOption.sourceHeader, upMetaRawOption ? upMetaRawOption.sourceHeader : null); // Note here we should not use `upSource.dimensionsDefine`. Consider the case:
+          var newMetaRawOption = this._getSourceMetaRawOption() || {};
+          var upMetaRawOption = upSource && upSource.metaRawOption || {};
+          var seriesLayoutBy = retrieve2(newMetaRawOption.seriesLayoutBy, upMetaRawOption.seriesLayoutBy) || null;
+          var sourceHeader = retrieve2(newMetaRawOption.sourceHeader, upMetaRawOption.sourceHeader) || null; // Note here we should not use `upSource.dimensionsDefine`. Consider the case:
           // `upSource.dimensionsDefine` is detected by `seriesLayoutBy: 'column'`,
           // but series need `seriesLayoutBy: 'row'`.
 
-          var dimensions = retrieve2(newMetaRawOption.dimensions, upMetaRawOption ? upMetaRawOption.dimensions : null);
-          resultSourceList = [createSource(data, {
+          var dimensions = retrieve2(newMetaRawOption.dimensions, upMetaRawOption.dimensions); // We share source with dataset as much as possible
+          // to avoid extra memroy cost of high dimensional data.
+
+          var needsCreateSource = seriesLayoutBy !== upMetaRawOption.seriesLayoutBy || !!sourceHeader !== !!upMetaRawOption.sourceHeader || dimensions;
+          resultSourceList = needsCreateSource ? [createSource(data, {
             seriesLayoutBy: seriesLayoutBy,
             sourceHeader: sourceHeader,
             dimensions: dimensions
-          }, sourceFormat, seriesModel.get('encode', true))];
+          }, sourceFormat)] : [];
         } else {
           var datasetModel = sourceHost; // Has upstream dataset.
 
@@ -20818,8 +22368,7 @@
           } // Is root dataset.
           else {
               var sourceData = datasetModel.get('source', true);
-              resultSourceList = [createSource(sourceData, this._getSourceMetaRawOption(), null, // Note: dataset option does not have `encode`.
-              null)];
+              resultSourceList = [createSource(sourceData, this._getSourceMetaRawOption(), null)];
               upstreamSignList = [];
             }
         }
@@ -20887,9 +22436,7 @@
       };
 
       SourceManager.prototype._isDirty = function () {
-        var sourceList = this._sourceList;
-
-        if (!sourceList.length) {
+        if (this._dirty) {
           return true;
         } // All sourceList is from the some upsteam.
 
@@ -20913,7 +22460,64 @@
 
 
       SourceManager.prototype.getSource = function (sourceIndex) {
-        return this._sourceList[sourceIndex || 0];
+        sourceIndex = sourceIndex || 0;
+        var source = this._sourceList[sourceIndex];
+
+        if (!source) {
+          // Series may share source instance with dataset.
+          var upSourceMgrList = this._getUpstreamSourceManagers();
+
+          return upSourceMgrList[0] && upSourceMgrList[0].getSource(sourceIndex);
+        }
+
+        return source;
+      };
+      /**
+       *
+       * Get a data store which can be shared across series.
+       * Only available for series.
+       *
+       * @param seriesDimRequest Dimensions that are generated in series.
+       *        Should have been sorted by `storeDimIndex` asc.
+       */
+
+
+      SourceManager.prototype.getSharedDataStore = function (seriesDimRequest) {
+        if ("development" !== 'production') {
+          assert(isSeries(this._sourceHost), 'Can only call getDataStore on series source manager.');
+        }
+
+        var schema = seriesDimRequest.makeStoreSchema();
+        return this._innerGetDataStore(schema.dimensions, seriesDimRequest.source, schema.hash);
+      };
+
+      SourceManager.prototype._innerGetDataStore = function (storeDims, seriesSource, sourceReadKey) {
+        // TODO Can use other sourceIndex?
+        var sourceIndex = 0;
+        var storeList = this._storeList;
+        var cachedStoreMap = storeList[sourceIndex];
+
+        if (!cachedStoreMap) {
+          cachedStoreMap = storeList[sourceIndex] = {};
+        }
+
+        var cachedStore = cachedStoreMap[sourceReadKey];
+
+        if (!cachedStore) {
+          var upSourceMgr = this._getUpstreamSourceManagers()[0];
+
+          if (isSeries(this._sourceHost) && upSourceMgr) {
+            cachedStore = upSourceMgr._innerGetDataStore(storeDims, seriesSource, sourceReadKey);
+          } else {
+            cachedStore = new DataStore(); // Always create store from source of series.
+
+            cachedStore.initData(new DefaultDataProvider(seriesSource, storeDims.length), storeDims);
+          }
+
+          cachedStoreMap[sourceReadKey] = cachedStore;
+        }
+
+        return cachedStore;
       };
       /**
        * PEDING: Is it fast enough?
@@ -21097,6 +22701,8 @@
       return data.getName(dataIndex) || data.getId(dataIndex);
     }
 
+    var SERIES_UNIVERSAL_TRANSITION_PROP = '__universalTransitionEnabled';
+
     var SeriesModel =
     /** @class */
     function (_super) {
@@ -21145,7 +22751,7 @@
         // dataBeforeProcessed by cloneShallow), cloneShallow will
         // cause data.graph.data !== data when using
         // module:echarts/data/Graph or module:echarts/data/Tree.
-        // See module:echarts/data/helper/linkList
+        // See module:echarts/data/helper/linkSeriesData
         // Theoretically, it is unreasonable to call `seriesModel.getData()` in the model
         // init or merge stage, because the data can be restored. So we do not `restoreData`
         // and `setData` here, which forbids calling `seriesModel.getData()` in this stage.
@@ -21300,8 +22906,20 @@
         inner$1(this).data = data;
       };
 
+      SeriesModel.prototype.getEncode = function () {
+        var encode = this.get('encode', true);
+
+        if (encode) {
+          return createHashMap(encode);
+        }
+      };
+
+      SeriesModel.prototype.getSourceManager = function () {
+        return inner$1(this).sourceManager;
+      };
+
       SeriesModel.prototype.getSource = function () {
-        return inner$1(this).sourceManager.getSource();
+        return this.getSourceManager().getSource();
       };
       /**
        * Get data before processed
@@ -21310,6 +22928,15 @@
 
       SeriesModel.prototype.getRawData = function () {
         return inner$1(this).dataBeforeProcessed;
+      };
+
+      SeriesModel.prototype.getColorBy = function () {
+        var colorBy = this.get('colorBy');
+        return colorBy || 'series';
+      };
+
+      SeriesModel.prototype.isColorBySeries = function () {
+        return this.getColorBy() === 'series';
       };
       /**
        * Get base axis if has coordinate system and has axis.
@@ -21464,6 +23091,25 @@
         return selectedMap[nameOrId] || false;
       };
 
+      SeriesModel.prototype.isUniversalTransitionEnabled = function () {
+        if (this[SERIES_UNIVERSAL_TRANSITION_PROP]) {
+          return true;
+        }
+
+        var universalTransitionOpt = this.option.universalTransition; // Quick reject
+
+        if (!universalTransitionOpt) {
+          return false;
+        }
+
+        if (universalTransitionOpt === true) {
+          return true;
+        } // Can be simply 'universalTransition: true'
+
+
+        return universalTransitionOpt && universalTransitionOpt.enabled;
+      };
+
       SeriesModel.prototype._innerSelect = function (data, innerDataIndices) {
         var _a, _b;
 
@@ -21505,7 +23151,7 @@
           data.each(function (idx) {
             var rawItem = data.getRawDataItem(idx);
 
-            if (typeof rawItem === 'object' && rawItem.selected) {
+            if (rawItem && rawItem.selected) {
               dataIndices.push(idx);
             }
           });
@@ -21528,7 +23174,6 @@
         var proto = SeriesModel.prototype;
         proto.type = 'series.__base__';
         proto.seriesIndex = 0;
-        proto.useColorPaletteOnData = false;
         proto.ignoreStyleOnData = false;
         proto.hasSymbolVisual = false;
         proto.defaultSymbol = 'circle'; // Make sure the values can be accessed!
@@ -21589,7 +23234,7 @@
 
 
     function wrapData(data, seriesModel) {
-      each(__spreadArrays(data.CHANGABLE_METHODS, data.DOWNSAMPLE_METHODS), function (methodName) {
+      each(concatArray(data.CHANGABLE_METHODS, data.DOWNSAMPLE_METHODS), function (methodName) {
         data.wrapMethod(methodName, curry(onDataChange, seriesModel));
       });
     }
@@ -21969,15 +23614,23 @@
         var colorKey = getDefaultColorKey(seriesModel, stylePath);
         var color = globalStyle[colorKey]; // TODO style callback
 
-        var colorCallback = isFunction(color) ? color : null; // Get from color palette by default.
+        var colorCallback = isFunction(color) ? color : null;
+        var hasAutoColor = globalStyle.fill === 'auto' || globalStyle.stroke === 'auto'; // Get from color palette by default.
 
-        if (!globalStyle[colorKey] || colorCallback) {
+        if (!globalStyle[colorKey] || colorCallback || hasAutoColor) {
           // Note: if some series has color specified (e.g., by itemStyle.color), we DO NOT
           // make it effect palette. Bacause some scenarios users need to make some series
           // transparent or as background, which should better not effect the palette.
-          globalStyle[colorKey] = seriesModel.getColorFromPalette( // TODO series count changed.
+          var colorPalette = seriesModel.getColorFromPalette( // TODO series count changed.
           seriesModel.name, null, ecModel.getSeriesCount());
-          data.setVisual('colorFromPalette', true);
+
+          if (!globalStyle[colorKey]) {
+            globalStyle[colorKey] = colorPalette;
+            data.setVisual('colorFromPalette', true);
+          }
+
+          globalStyle.fill = globalStyle.fill === 'auto' || typeof globalStyle.fill === 'function' ? colorPalette : globalStyle.fill;
+          globalStyle.stroke = globalStyle.stroke === 'auto' || typeof globalStyle.stroke === 'function' ? colorPalette : globalStyle.stroke;
         }
 
         data.setVisual('style', globalStyle);
@@ -22043,21 +23696,24 @@
         // Pie and funnel are using diferrent scopes
         var paletteScopeGroupByType = createHashMap();
         ecModel.eachSeries(function (seriesModel) {
-          if (!seriesModel.useColorPaletteOnData) {
+          var colorBy = seriesModel.getColorBy();
+
+          if (seriesModel.isColorBySeries()) {
             return;
           }
 
-          var colorScope = paletteScopeGroupByType.get(seriesModel.type);
+          var key = seriesModel.type + '-' + colorBy;
+          var colorScope = paletteScopeGroupByType.get(key);
 
           if (!colorScope) {
             colorScope = {};
-            paletteScopeGroupByType.set(seriesModel.type, colorScope);
+            paletteScopeGroupByType.set(key, colorScope);
           }
 
           inner$3(seriesModel).scope = colorScope;
         });
         ecModel.eachSeries(function (seriesModel) {
-          if (!seriesModel.useColorPaletteOnData || ecModel.isSeriesFiltered(seriesModel)) {
+          if (seriesModel.isColorBySeries() || ecModel.isSeriesFiltered(seriesModel)) {
             return;
           }
 
@@ -22134,7 +23790,9 @@
           fontWeight: opts.fontWeight,
           fontStyle: opts.fontStyle,
           fontFamily: opts.fontFamily
-        }
+        },
+        zlevel: opts.zlevel,
+        z: 10001
       });
       var labelRect = new Rect({
         style: {
@@ -22981,108 +24639,6 @@
     };
     theme.categoryAxis.splitLine.show = false;
 
-    function parseXML(svg) {
-        if (isString(svg)) {
-            var parser = new DOMParser();
-            svg = parser.parseFromString(svg, 'text/xml');
-        }
-        var svgNode = svg;
-        if (svgNode.nodeType === 9) {
-            svgNode = svgNode.firstChild;
-        }
-        while (svgNode.nodeName.toLowerCase() !== 'svg' || svgNode.nodeType !== 1) {
-            svgNode = svgNode.nextSibling;
-        }
-        return svgNode;
-    }
-
-    var storage = createHashMap();
-    var mapDataStorage = {
-      /**
-       * Compatible with previous `echarts.registerMap`.
-       * @usage
-       * ```js
-       * $.get('USA.json', function (geoJson) {
-       *     echarts.registerMap('USA', geoJson);
-       *     // Or
-       *     echarts.registerMap('USA', {
-       *         geoJson: geoJson,
-       *         specialAreas: {}
-       *     })
-       * });
-       *
-       * $.get('airport.svg', function (svg) {
-       *     echarts.registerMap('airport', {
-       *         svg: svg
-       *     }
-       * });
-       *
-       * echarts.registerMap('eu', [
-       *     {svg: eu-topographic.svg},
-       *     {geoJSON: eu.json}
-       * ])
-       * ```
-       */
-      registerMap: function (mapName, rawDef, rawSpecialAreas) {
-        var records;
-
-        if (isArray(rawDef)) {
-          records = rawDef;
-        } else if (rawDef.svg) {
-          records = [{
-            type: 'svg',
-            source: rawDef.svg,
-            specialAreas: rawDef.specialAreas
-          }];
-        } else {
-          // Backward compatibility.
-          var geoSource = rawDef.geoJson || rawDef.geoJSON;
-
-          if (geoSource && !rawDef.features) {
-            rawSpecialAreas = rawDef.specialAreas;
-            rawDef = geoSource;
-          }
-
-          records = [{
-            type: 'geoJSON',
-            source: rawDef,
-            specialAreas: rawSpecialAreas
-          }];
-        }
-
-        each(records, function (record) {
-          var type = record.type;
-          type === 'geoJson' && (type = record.type = 'geoJSON');
-          var parse = parsers[type];
-
-          if ("development" !== 'production') {
-            assert(parse, 'Illegal map type: ' + type);
-          }
-
-          parse(record);
-        });
-        return storage.set(mapName, records);
-      },
-      retrieveMap: function (mapName) {
-        return storage.get(mapName);
-      }
-    };
-    var parsers = {
-      geoJSON: function (record) {
-        var source = record.source;
-        record.geoJSON = !isString(source) ? source : typeof JSON !== 'undefined' && JSON.parse ? JSON.parse(source) : new Function('return (' + source + ');')();
-      },
-      // Only perform parse to XML object here, which might be time
-      // consiming for large SVG.
-      // Although convert XML to zrender element is also time consiming,
-      // if we do it here, the clone of zrender elements has to be
-      // required. So we do it once for each geo instance, util real
-      // performance issues call for optimizing it.
-      svg: function (record) {
-        record.svgXML = parseXML(record.source);
-      }
-    };
-
     /**
      * Usage of query:
      * `chart.on('click', query, handler);`
@@ -23203,8 +24759,8 @@
       reset: function (seriesModel, ecModel) {
         var data = seriesModel.getData();
 
-        if (seriesModel.legendSymbol) {
-          data.setVisual('legendSymbol', seriesModel.legendSymbol);
+        if (seriesModel.legendIcon) {
+          data.setVisual('legendIcon', seriesModel.legendIcon);
         }
 
         if (!seriesModel.hasSymbolVisual) {
@@ -23215,15 +24771,18 @@
         var symbolSize = seriesModel.get('symbolSize');
         var keepAspect = seriesModel.get('symbolKeepAspect');
         var symbolRotate = seriesModel.get('symbolRotate');
+        var symbolOffset = seriesModel.get('symbolOffset');
         var hasSymbolTypeCallback = isFunction(symbolType);
         var hasSymbolSizeCallback = isFunction(symbolSize);
         var hasSymbolRotateCallback = isFunction(symbolRotate);
-        var hasCallback = hasSymbolTypeCallback || hasSymbolSizeCallback || hasSymbolRotateCallback;
+        var hasSymbolOffsetCallback = isFunction(symbolOffset);
+        var hasCallback = hasSymbolTypeCallback || hasSymbolSizeCallback || hasSymbolRotateCallback || hasSymbolOffsetCallback;
         var seriesSymbol = !hasSymbolTypeCallback && symbolType ? symbolType : seriesModel.defaultSymbol;
         var seriesSymbolSize = !hasSymbolSizeCallback ? symbolSize : null;
         var seriesSymbolRotate = !hasSymbolRotateCallback ? symbolRotate : null;
+        var seriesSymbolOffset = !hasSymbolOffsetCallback ? symbolOffset : null;
         data.setVisual({
-          legendSymbol: seriesModel.legendSymbol || seriesSymbol,
+          legendIcon: seriesModel.legendIcon || seriesSymbol,
           // If seting callback functions on `symbol` or `symbolSize`, for simplicity and avoiding
           // to bring trouble, we do not pick a reuslt from one of its calling on data item here,
           // but just use the default value. Callback on `symbol` or `symbolSize` is convenient in
@@ -23231,7 +24790,8 @@
           symbol: seriesSymbol,
           symbolSize: seriesSymbolSize,
           symbolKeepAspect: keepAspect,
-          symbolRotate: seriesSymbolRotate
+          symbolRotate: seriesSymbolRotate,
+          symbolOffset: seriesSymbolOffset
         }); // Only visible series has each data be visual encoded
 
         if (ecModel.isSeriesFiltered(seriesModel)) {
@@ -23244,6 +24804,7 @@
           hasSymbolTypeCallback && data.setItemVisual(idx, 'symbol', symbolType(rawValue, params));
           hasSymbolSizeCallback && data.setItemVisual(idx, 'symbolSize', symbolSize(rawValue, params));
           hasSymbolRotateCallback && data.setItemVisual(idx, 'symbolRotate', symbolRotate(rawValue, params));
+          hasSymbolOffsetCallback && data.setItemVisual(idx, 'symbolOffset', symbolOffset(rawValue, params));
         }
 
         return {
@@ -23272,6 +24833,7 @@
           var itemSymbolType = itemModel.getShallow('symbol', true);
           var itemSymbolSize = itemModel.getShallow('symbolSize', true);
           var itemSymbolRotate = itemModel.getShallow('symbolRotate', true);
+          var itemSymbolOffset = itemModel.getShallow('symbolOffset', true);
           var itemSymbolKeepAspect = itemModel.getShallow('symbolKeepAspect', true); // If has item symbol
 
           if (itemSymbolType != null) {
@@ -23285,6 +24847,10 @@
 
           if (itemSymbolRotate != null) {
             data.setItemVisual(idx, 'symbolRotate', itemSymbolRotate);
+          }
+
+          if (itemSymbolOffset != null) {
+            data.setItemVisual(idx, 'symbolOffset', itemSymbolOffset);
           }
 
           if (itemSymbolKeepAspect != null) {
@@ -23382,1314 +24948,6 @@
 
       }
     }
-
-    var PI2$6 = Math.PI * 2;
-    var CMD$3 = PathProxy.CMD;
-    var DEFAULT_SEARCH_SPACE = ['top', 'right', 'bottom', 'left'];
-
-    function getCandidateAnchor(pos, distance, rect, outPt, outDir) {
-      var width = rect.width;
-      var height = rect.height;
-
-      switch (pos) {
-        case 'top':
-          outPt.set(rect.x + width / 2, rect.y - distance);
-          outDir.set(0, -1);
-          break;
-
-        case 'bottom':
-          outPt.set(rect.x + width / 2, rect.y + height + distance);
-          outDir.set(0, 1);
-          break;
-
-        case 'left':
-          outPt.set(rect.x - distance, rect.y + height / 2);
-          outDir.set(-1, 0);
-          break;
-
-        case 'right':
-          outPt.set(rect.x + width + distance, rect.y + height / 2);
-          outDir.set(1, 0);
-          break;
-      }
-    }
-
-    function projectPointToArc(cx, cy, r, startAngle, endAngle, anticlockwise, x, y, out) {
-      x -= cx;
-      y -= cy;
-      var d = Math.sqrt(x * x + y * y);
-      x /= d;
-      y /= d; // Intersect point.
-
-      var ox = x * r + cx;
-      var oy = y * r + cy;
-
-      if (Math.abs(startAngle - endAngle) % PI2$6 < 1e-4) {
-        // Is a circle
-        out[0] = ox;
-        out[1] = oy;
-        return d - r;
-      }
-
-      if (anticlockwise) {
-        var tmp = startAngle;
-        startAngle = normalizeRadian(endAngle);
-        endAngle = normalizeRadian(tmp);
-      } else {
-        startAngle = normalizeRadian(startAngle);
-        endAngle = normalizeRadian(endAngle);
-      }
-
-      if (startAngle > endAngle) {
-        endAngle += PI2$6;
-      }
-
-      var angle = Math.atan2(y, x);
-
-      if (angle < 0) {
-        angle += PI2$6;
-      }
-
-      if (angle >= startAngle && angle <= endAngle || angle + PI2$6 >= startAngle && angle + PI2$6 <= endAngle) {
-        // Project point is on the arc.
-        out[0] = ox;
-        out[1] = oy;
-        return d - r;
-      }
-
-      var x1 = r * Math.cos(startAngle) + cx;
-      var y1 = r * Math.sin(startAngle) + cy;
-      var x2 = r * Math.cos(endAngle) + cx;
-      var y2 = r * Math.sin(endAngle) + cy;
-      var d1 = (x1 - x) * (x1 - x) + (y1 - y) * (y1 - y);
-      var d2 = (x2 - x) * (x2 - x) + (y2 - y) * (y2 - y);
-
-      if (d1 < d2) {
-        out[0] = x1;
-        out[1] = y1;
-        return Math.sqrt(d1);
-      } else {
-        out[0] = x2;
-        out[1] = y2;
-        return Math.sqrt(d2);
-      }
-    }
-
-    function projectPointToLine(x1, y1, x2, y2, x, y, out, limitToEnds) {
-      var dx = x - x1;
-      var dy = y - y1;
-      var dx1 = x2 - x1;
-      var dy1 = y2 - y1;
-      var lineLen = Math.sqrt(dx1 * dx1 + dy1 * dy1);
-      dx1 /= lineLen;
-      dy1 /= lineLen; // dot product
-
-      var projectedLen = dx * dx1 + dy * dy1;
-      var t = projectedLen / lineLen;
-
-      if (limitToEnds) {
-        t = Math.min(Math.max(t, 0), 1);
-      }
-
-      t *= lineLen;
-      var ox = out[0] = x1 + t * dx1;
-      var oy = out[1] = y1 + t * dy1;
-      return Math.sqrt((ox - x) * (ox - x) + (oy - y) * (oy - y));
-    }
-
-    function projectPointToRect(x1, y1, width, height, x, y, out) {
-      if (width < 0) {
-        x1 = x1 + width;
-        width = -width;
-      }
-
-      if (height < 0) {
-        y1 = y1 + height;
-        height = -height;
-      }
-
-      var x2 = x1 + width;
-      var y2 = y1 + height;
-      var ox = out[0] = Math.min(Math.max(x, x1), x2);
-      var oy = out[1] = Math.min(Math.max(y, y1), y2);
-      return Math.sqrt((ox - x) * (ox - x) + (oy - y) * (oy - y));
-    }
-
-    var tmpPt = [];
-
-    function nearestPointOnRect(pt, rect, out) {
-      var dist = projectPointToRect(rect.x, rect.y, rect.width, rect.height, pt.x, pt.y, tmpPt);
-      out.set(tmpPt[0], tmpPt[1]);
-      return dist;
-    }
-    /**
-     * Calculate min distance corresponding point.
-     * This method won't evaluate if point is in the path.
-     */
-
-
-    function nearestPointOnPath(pt, path, out) {
-      var xi = 0;
-      var yi = 0;
-      var x0 = 0;
-      var y0 = 0;
-      var x1;
-      var y1;
-      var minDist = Infinity;
-      var data = path.data;
-      var x = pt.x;
-      var y = pt.y;
-
-      for (var i = 0; i < data.length;) {
-        var cmd = data[i++];
-
-        if (i === 1) {
-          xi = data[i];
-          yi = data[i + 1];
-          x0 = xi;
-          y0 = yi;
-        }
-
-        var d = minDist;
-
-        switch (cmd) {
-          case CMD$3.M:
-            // moveTo 命令重新创建一个新的 subpath, 并且更新新的起点
-            // 在 closePath 的时候使用
-            x0 = data[i++];
-            y0 = data[i++];
-            xi = x0;
-            yi = y0;
-            break;
-
-          case CMD$3.L:
-            d = projectPointToLine(xi, yi, data[i], data[i + 1], x, y, tmpPt, true);
-            xi = data[i++];
-            yi = data[i++];
-            break;
-
-          case CMD$3.C:
-            d = cubicProjectPoint(xi, yi, data[i++], data[i++], data[i++], data[i++], data[i], data[i + 1], x, y, tmpPt);
-            xi = data[i++];
-            yi = data[i++];
-            break;
-
-          case CMD$3.Q:
-            d = quadraticProjectPoint(xi, yi, data[i++], data[i++], data[i], data[i + 1], x, y, tmpPt);
-            xi = data[i++];
-            yi = data[i++];
-            break;
-
-          case CMD$3.A:
-            // TODO Arc 判断的开销比较大
-            var cx = data[i++];
-            var cy = data[i++];
-            var rx = data[i++];
-            var ry = data[i++];
-            var theta = data[i++];
-            var dTheta = data[i++]; // TODO Arc 旋转
-
-            i += 1;
-            var anticlockwise = !!(1 - data[i++]);
-            x1 = Math.cos(theta) * rx + cx;
-            y1 = Math.sin(theta) * ry + cy; // 不是直接使用 arc 命令
-
-            if (i <= 1) {
-              // 第一个命令起点还未定义
-              x0 = x1;
-              y0 = y1;
-            } // zr 使用scale来模拟椭圆, 这里也对x做一定的缩放
-
-
-            var _x = (x - cx) * ry / rx + cx;
-
-            d = projectPointToArc(cx, cy, ry, theta, theta + dTheta, anticlockwise, _x, y, tmpPt);
-            xi = Math.cos(theta + dTheta) * rx + cx;
-            yi = Math.sin(theta + dTheta) * ry + cy;
-            break;
-
-          case CMD$3.R:
-            x0 = xi = data[i++];
-            y0 = yi = data[i++];
-            var width = data[i++];
-            var height = data[i++];
-            d = projectPointToRect(x0, y0, width, height, x, y, tmpPt);
-            break;
-
-          case CMD$3.Z:
-            d = projectPointToLine(xi, yi, x0, y0, x, y, tmpPt, true);
-            xi = x0;
-            yi = y0;
-            break;
-        }
-
-        if (d < minDist) {
-          minDist = d;
-          out.set(tmpPt[0], tmpPt[1]);
-        }
-      }
-
-      return minDist;
-    } // Temporal varible for intermediate usage.
-
-
-    var pt0 = new Point();
-    var pt1 = new Point();
-    var pt2 = new Point();
-    var dir = new Point();
-    var dir2 = new Point();
-    /**
-     * Calculate a proper guide line based on the label position and graphic element definition
-     * @param label
-     * @param labelRect
-     * @param target
-     * @param targetRect
-     */
-
-    function updateLabelLinePoints(target, labelLineModel) {
-      if (!target) {
-        return;
-      }
-
-      var labelLine = target.getTextGuideLine();
-      var label = target.getTextContent(); // Needs to create text guide in each charts.
-
-      if (!(label && labelLine)) {
-        return;
-      }
-
-      var labelGuideConfig = target.textGuideLineConfig || {};
-      var points = [[0, 0], [0, 0], [0, 0]];
-      var searchSpace = labelGuideConfig.candidates || DEFAULT_SEARCH_SPACE;
-      var labelRect = label.getBoundingRect().clone();
-      labelRect.applyTransform(label.getComputedTransform());
-      var minDist = Infinity;
-      var anchorPoint = labelGuideConfig.anchor;
-      var targetTransform = target.getComputedTransform();
-      var targetInversedTransform = targetTransform && invert([], targetTransform);
-      var len = labelLineModel.get('length2') || 0;
-
-      if (anchorPoint) {
-        pt2.copy(anchorPoint);
-      }
-
-      for (var i = 0; i < searchSpace.length; i++) {
-        var candidate = searchSpace[i];
-        getCandidateAnchor(candidate, 0, labelRect, pt0, dir);
-        Point.scaleAndAdd(pt1, pt0, dir, len); // Transform to target coord space.
-
-        pt1.transform(targetInversedTransform); // Note: getBoundingRect will ensure the `path` being created.
-
-        var boundingRect = target.getBoundingRect();
-        var dist = anchorPoint ? anchorPoint.distance(pt1) : target instanceof Path ? nearestPointOnPath(pt1, target.path, pt2) : nearestPointOnRect(pt1, boundingRect, pt2); // TODO pt2 is in the path
-
-        if (dist < minDist) {
-          minDist = dist; // Transform back to global space.
-
-          pt1.transform(targetTransform);
-          pt2.transform(targetTransform);
-          pt2.toArray(points[0]);
-          pt1.toArray(points[1]);
-          pt0.toArray(points[2]);
-        }
-      }
-
-      limitTurnAngle(points, labelLineModel.get('minTurnAngle'));
-      labelLine.setShape({
-        points: points
-      });
-    } // Temporal variable for the limitTurnAngle function
-
-    var tmpArr = [];
-    var tmpProjPoint = new Point();
-    /**
-     * Reduce the line segment attached to the label to limit the turn angle between two segments.
-     * @param linePoints
-     * @param minTurnAngle Radian of minimum turn angle. 0 - 180
-     */
-
-    function limitTurnAngle(linePoints, minTurnAngle) {
-      if (!(minTurnAngle <= 180 && minTurnAngle > 0)) {
-        return;
-      }
-
-      minTurnAngle = minTurnAngle / 180 * Math.PI; // The line points can be
-      //      /pt1----pt2 (label)
-      //     /
-      // pt0/
-
-      pt0.fromArray(linePoints[0]);
-      pt1.fromArray(linePoints[1]);
-      pt2.fromArray(linePoints[2]);
-      Point.sub(dir, pt0, pt1);
-      Point.sub(dir2, pt2, pt1);
-      var len1 = dir.len();
-      var len2 = dir2.len();
-
-      if (len1 < 1e-3 || len2 < 1e-3) {
-        return;
-      }
-
-      dir.scale(1 / len1);
-      dir2.scale(1 / len2);
-      var angleCos = dir.dot(dir2);
-      var minTurnAngleCos = Math.cos(minTurnAngle);
-
-      if (minTurnAngleCos < angleCos) {
-        // Smaller than minTurnAngle
-        // Calculate project point of pt0 on pt1-pt2
-        var d = projectPointToLine(pt1.x, pt1.y, pt2.x, pt2.y, pt0.x, pt0.y, tmpArr, false);
-        tmpProjPoint.fromArray(tmpArr); // Calculate new projected length with limited minTurnAngle and get the new connect point
-
-        tmpProjPoint.scaleAndAdd(dir2, d / Math.tan(Math.PI - minTurnAngle)); // Limit the new calculated connect point between pt1 and pt2.
-
-        var t = pt2.x !== pt1.x ? (tmpProjPoint.x - pt1.x) / (pt2.x - pt1.x) : (tmpProjPoint.y - pt1.y) / (pt2.y - pt1.y);
-
-        if (isNaN(t)) {
-          return;
-        }
-
-        if (t < 0) {
-          Point.copy(tmpProjPoint, pt1);
-        } else if (t > 1) {
-          Point.copy(tmpProjPoint, pt2);
-        }
-
-        tmpProjPoint.toArray(linePoints[1]);
-      }
-    }
-    /**
-     * Limit the angle of line and the surface
-     * @param maxSurfaceAngle Radian of minimum turn angle. 0 - 180. 0 is same direction to normal. 180 is opposite
-     */
-
-    function limitSurfaceAngle(linePoints, surfaceNormal, maxSurfaceAngle) {
-      if (!(maxSurfaceAngle <= 180 && maxSurfaceAngle > 0)) {
-        return;
-      }
-
-      maxSurfaceAngle = maxSurfaceAngle / 180 * Math.PI;
-      pt0.fromArray(linePoints[0]);
-      pt1.fromArray(linePoints[1]);
-      pt2.fromArray(linePoints[2]);
-      Point.sub(dir, pt1, pt0);
-      Point.sub(dir2, pt2, pt1);
-      var len1 = dir.len();
-      var len2 = dir2.len();
-
-      if (len1 < 1e-3 || len2 < 1e-3) {
-        return;
-      }
-
-      dir.scale(1 / len1);
-      dir2.scale(1 / len2);
-      var angleCos = dir.dot(surfaceNormal);
-      var maxSurfaceAngleCos = Math.cos(maxSurfaceAngle);
-
-      if (angleCos < maxSurfaceAngleCos) {
-        // Calculate project point of pt0 on pt1-pt2
-        var d = projectPointToLine(pt1.x, pt1.y, pt2.x, pt2.y, pt0.x, pt0.y, tmpArr, false);
-        tmpProjPoint.fromArray(tmpArr);
-        var HALF_PI = Math.PI / 2;
-        var angle2 = Math.acos(dir2.dot(surfaceNormal));
-        var newAngle = HALF_PI + angle2 - maxSurfaceAngle;
-
-        if (newAngle >= HALF_PI) {
-          // parallel
-          Point.copy(tmpProjPoint, pt2);
-        } else {
-          // Calculate new projected length with limited minTurnAngle and get the new connect point
-          tmpProjPoint.scaleAndAdd(dir2, d / Math.tan(Math.PI / 2 - newAngle)); // Limit the new calculated connect point between pt1 and pt2.
-
-          var t = pt2.x !== pt1.x ? (tmpProjPoint.x - pt1.x) / (pt2.x - pt1.x) : (tmpProjPoint.y - pt1.y) / (pt2.y - pt1.y);
-
-          if (isNaN(t)) {
-            return;
-          }
-
-          if (t < 0) {
-            Point.copy(tmpProjPoint, pt1);
-          } else if (t > 1) {
-            Point.copy(tmpProjPoint, pt2);
-          }
-        }
-
-        tmpProjPoint.toArray(linePoints[1]);
-      }
-    }
-
-    function setLabelLineState(labelLine, ignore, stateName, stateModel) {
-      var isNormal = stateName === 'normal';
-      var stateObj = isNormal ? labelLine : labelLine.ensureState(stateName); // Make sure display.
-
-      stateObj.ignore = ignore; // Set smooth
-
-      var smooth = stateModel.get('smooth');
-
-      if (smooth && smooth === true) {
-        smooth = 0.3;
-      }
-
-      stateObj.shape = stateObj.shape || {};
-
-      if (smooth > 0) {
-        stateObj.shape.smooth = smooth;
-      }
-
-      var styleObj = stateModel.getModel('lineStyle').getLineStyle();
-      isNormal ? labelLine.useStyle(styleObj) : stateObj.style = styleObj;
-    }
-
-    function buildLabelLinePath(path, shape) {
-      var smooth = shape.smooth;
-      var points = shape.points;
-
-      if (!points) {
-        return;
-      }
-
-      path.moveTo(points[0][0], points[0][1]);
-
-      if (smooth > 0 && points.length >= 3) {
-        var len1 = dist(points[0], points[1]);
-        var len2 = dist(points[1], points[2]);
-
-        if (!len1 || !len2) {
-          path.lineTo(points[1][0], points[1][1]);
-          path.lineTo(points[2][0], points[2][1]);
-          return;
-        }
-
-        var moveLen = Math.min(len1, len2) * smooth;
-        var midPoint0 = lerp([], points[1], points[0], moveLen / len1);
-        var midPoint2 = lerp([], points[1], points[2], moveLen / len2);
-        var midPoint1 = lerp([], midPoint0, midPoint2, 0.5);
-        path.bezierCurveTo(midPoint0[0], midPoint0[1], midPoint0[0], midPoint0[1], midPoint1[0], midPoint1[1]);
-        path.bezierCurveTo(midPoint2[0], midPoint2[1], midPoint2[0], midPoint2[1], points[2][0], points[2][1]);
-      } else {
-        for (var i = 1; i < points.length; i++) {
-          path.lineTo(points[i][0], points[i][1]);
-        }
-      }
-    }
-    /**
-     * Create a label line if necessary and set it's style.
-     */
-
-
-    function setLabelLineStyle(targetEl, statesModels, defaultStyle) {
-      var labelLine = targetEl.getTextGuideLine();
-      var label = targetEl.getTextContent();
-
-      if (!label) {
-        // Not show label line if there is no label.
-        if (labelLine) {
-          targetEl.removeTextGuideLine();
-        }
-
-        return;
-      }
-
-      var normalModel = statesModels.normal;
-      var showNormal = normalModel.get('show');
-      var labelIgnoreNormal = label.ignore;
-
-      for (var i = 0; i < DISPLAY_STATES.length; i++) {
-        var stateName = DISPLAY_STATES[i];
-        var stateModel = statesModels[stateName];
-        var isNormal = stateName === 'normal';
-
-        if (stateModel) {
-          var stateShow = stateModel.get('show');
-          var isLabelIgnored = isNormal ? labelIgnoreNormal : retrieve2(label.states[stateName] && label.states[stateName].ignore, labelIgnoreNormal);
-
-          if (isLabelIgnored // Not show when label is not shown in this state.
-          || !retrieve2(stateShow, showNormal) // Use normal state by default if not set.
-          ) {
-              var stateObj = isNormal ? labelLine : labelLine && labelLine.states.normal;
-
-              if (stateObj) {
-                stateObj.ignore = true;
-              }
-
-              continue;
-            } // Create labelLine if not exists
-
-
-          if (!labelLine) {
-            labelLine = new Polyline();
-            targetEl.setTextGuideLine(labelLine); // Reset state of normal because it's new created.
-            // NOTE: NORMAL should always been the first!
-
-            if (!isNormal && (labelIgnoreNormal || !showNormal)) {
-              setLabelLineState(labelLine, true, 'normal', statesModels.normal);
-            } // Use same state proxy.
-
-
-            if (targetEl.stateProxy) {
-              labelLine.stateProxy = targetEl.stateProxy;
-            }
-          }
-
-          setLabelLineState(labelLine, false, stateName, stateModel);
-        }
-      }
-
-      if (labelLine) {
-        defaults(labelLine.style, defaultStyle); // Not fill.
-
-        labelLine.style.fill = null;
-        var showAbove = normalModel.get('showAbove');
-        var labelLineConfig = targetEl.textGuideLineConfig = targetEl.textGuideLineConfig || {};
-        labelLineConfig.showAbove = showAbove || false; // Custom the buildPath.
-
-        labelLine.buildPath = buildLabelLinePath;
-      }
-    }
-    function getLabelLineStatesModels(itemModel, labelLineName) {
-      labelLineName = labelLineName || 'labelLine';
-      var statesModels = {
-        normal: itemModel.getModel(labelLineName)
-      };
-
-      for (var i = 0; i < SPECIAL_STATES.length; i++) {
-        var stateName = SPECIAL_STATES[i];
-        statesModels[stateName] = itemModel.getModel([stateName, labelLineName]);
-      }
-
-      return statesModels;
-    }
-
-    function prepareLayoutList(input) {
-      var list = [];
-
-      for (var i = 0; i < input.length; i++) {
-        var rawItem = input[i];
-
-        if (rawItem.defaultAttr.ignore) {
-          continue;
-        }
-
-        var label = rawItem.label;
-        var transform = label.getComputedTransform(); // NOTE: Get bounding rect after getComputedTransform, or label may not been updated by the host el.
-
-        var localRect = label.getBoundingRect();
-        var isAxisAligned = !transform || transform[1] < 1e-5 && transform[2] < 1e-5;
-        var minMargin = label.style.margin || 0;
-        var globalRect = localRect.clone();
-        globalRect.applyTransform(transform);
-        globalRect.x -= minMargin / 2;
-        globalRect.y -= minMargin / 2;
-        globalRect.width += minMargin;
-        globalRect.height += minMargin;
-        var obb = isAxisAligned ? new OrientedBoundingRect(localRect, transform) : null;
-        list.push({
-          label: label,
-          labelLine: rawItem.labelLine,
-          rect: globalRect,
-          localRect: localRect,
-          obb: obb,
-          priority: rawItem.priority,
-          defaultAttr: rawItem.defaultAttr,
-          layoutOption: rawItem.computedLayoutOption,
-          axisAligned: isAxisAligned,
-          transform: transform
-        });
-      }
-
-      return list;
-    }
-
-    function shiftLayout(list, xyDim, sizeDim, minBound, maxBound, balanceShift) {
-      var len = list.length;
-
-      if (len < 2) {
-        return;
-      }
-
-      list.sort(function (a, b) {
-        return a.rect[xyDim] - b.rect[xyDim];
-      });
-      var lastPos = 0;
-      var delta;
-      var adjusted = false;
-      var totalShifts = 0;
-
-      for (var i = 0; i < len; i++) {
-        var item = list[i];
-        var rect = item.rect;
-        delta = rect[xyDim] - lastPos;
-
-        if (delta < 0) {
-          // shiftForward(i, len, -delta);
-          rect[xyDim] -= delta;
-          item.label[xyDim] -= delta;
-          adjusted = true;
-        }
-
-        var shift = Math.max(-delta, 0);
-        totalShifts += shift;
-        lastPos = rect[xyDim] + rect[sizeDim];
-      }
-
-      if (totalShifts > 0 && balanceShift) {
-        // Shift back to make the distribution more equally.
-        shiftList(-totalShifts / len, 0, len);
-      } // TODO bleedMargin?
-
-
-      var first = list[0];
-      var last = list[len - 1];
-      var minGap;
-      var maxGap;
-      updateMinMaxGap(); // If ends exceed two bounds, squeeze at most 80%, then take the gap of two bounds.
-
-      minGap < 0 && squeezeGaps(-minGap, 0.8);
-      maxGap < 0 && squeezeGaps(maxGap, 0.8);
-      updateMinMaxGap();
-      takeBoundsGap(minGap, maxGap, 1);
-      takeBoundsGap(maxGap, minGap, -1); // Handle bailout when there is not enough space.
-
-      updateMinMaxGap();
-
-      if (minGap < 0) {
-        squeezeWhenBailout(-minGap);
-      }
-
-      if (maxGap < 0) {
-        squeezeWhenBailout(maxGap);
-      }
-
-      function updateMinMaxGap() {
-        minGap = first.rect[xyDim] - minBound;
-        maxGap = maxBound - last.rect[xyDim] - last.rect[sizeDim];
-      }
-
-      function takeBoundsGap(gapThisBound, gapOtherBound, moveDir) {
-        if (gapThisBound < 0) {
-          // Move from other gap if can.
-          var moveFromMaxGap = Math.min(gapOtherBound, -gapThisBound);
-
-          if (moveFromMaxGap > 0) {
-            shiftList(moveFromMaxGap * moveDir, 0, len);
-            var remained = moveFromMaxGap + gapThisBound;
-
-            if (remained < 0) {
-              squeezeGaps(-remained * moveDir, 1);
-            }
-          } else {
-            squeezeGaps(-gapThisBound * moveDir, 1);
-          }
-        }
-      }
-
-      function shiftList(delta, start, end) {
-        if (delta !== 0) {
-          adjusted = true;
-        }
-
-        for (var i = start; i < end; i++) {
-          var item = list[i];
-          var rect = item.rect;
-          rect[xyDim] += delta;
-          item.label[xyDim] += delta;
-        }
-      } // Squeeze gaps if the labels exceed margin.
-
-
-      function squeezeGaps(delta, maxSqeezePercent) {
-        var gaps = [];
-        var totalGaps = 0;
-
-        for (var i = 1; i < len; i++) {
-          var prevItemRect = list[i - 1].rect;
-          var gap = Math.max(list[i].rect[xyDim] - prevItemRect[xyDim] - prevItemRect[sizeDim], 0);
-          gaps.push(gap);
-          totalGaps += gap;
-        }
-
-        if (!totalGaps) {
-          return;
-        }
-
-        var squeezePercent = Math.min(Math.abs(delta) / totalGaps, maxSqeezePercent);
-
-        if (delta > 0) {
-          for (var i = 0; i < len - 1; i++) {
-            // Distribute the shift delta to all gaps.
-            var movement = gaps[i] * squeezePercent; // Forward
-
-            shiftList(movement, 0, i + 1);
-          }
-        } else {
-          // Backward
-          for (var i = len - 1; i > 0; i--) {
-            // Distribute the shift delta to all gaps.
-            var movement = gaps[i - 1] * squeezePercent;
-            shiftList(-movement, i, len);
-          }
-        }
-      }
-      /**
-       * Squeeze to allow overlap if there is no more space available.
-       * Let other overlapping strategy like hideOverlap do the job instead of keep exceeding the bounds.
-       */
-
-
-      function squeezeWhenBailout(delta) {
-        var dir = delta < 0 ? -1 : 1;
-        delta = Math.abs(delta);
-        var moveForEachLabel = Math.ceil(delta / (len - 1));
-
-        for (var i = 0; i < len - 1; i++) {
-          if (dir > 0) {
-            // Forward
-            shiftList(moveForEachLabel, 0, i + 1);
-          } else {
-            // Backward
-            shiftList(-moveForEachLabel, len - i - 1, len);
-          }
-
-          delta -= moveForEachLabel;
-
-          if (delta <= 0) {
-            return;
-          }
-        }
-      }
-
-      return adjusted;
-    }
-    /**
-     * Adjust labels on x direction to avoid overlap.
-     */
-
-
-    function shiftLayoutOnX(list, leftBound, rightBound, // If average the shifts on all labels and add them to 0
-    // TODO: Not sure if should enable it.
-    // Pros: The angle of lines will distribute more equally
-    // Cons: In some layout. It may not what user wanted. like in pie. the label of last sector is usually changed unexpectedly.
-    balanceShift) {
-      return shiftLayout(list, 'x', 'width', leftBound, rightBound, balanceShift);
-    }
-    /**
-     * Adjust labels on y direction to avoid overlap.
-     */
-
-    function shiftLayoutOnY(list, topBound, bottomBound, // If average the shifts on all labels and add them to 0
-    balanceShift) {
-      return shiftLayout(list, 'y', 'height', topBound, bottomBound, balanceShift);
-    }
-    function hideOverlap(labelList) {
-      var displayedLabels = []; // TODO, render overflow visible first, put in the displayedLabels.
-
-      labelList.sort(function (a, b) {
-        return b.priority - a.priority;
-      });
-      var globalRect = new BoundingRect(0, 0, 0, 0);
-
-      function hideEl(el) {
-        if (!el.ignore) {
-          // Show on emphasis.
-          var emphasisState = el.ensureState('emphasis');
-
-          if (emphasisState.ignore == null) {
-            emphasisState.ignore = false;
-          }
-        }
-
-        el.ignore = true;
-      }
-
-      for (var i = 0; i < labelList.length; i++) {
-        var labelItem = labelList[i];
-        var isAxisAligned = labelItem.axisAligned;
-        var localRect = labelItem.localRect;
-        var transform = labelItem.transform;
-        var label = labelItem.label;
-        var labelLine = labelItem.labelLine;
-        globalRect.copy(labelItem.rect); // Add a threshold because layout may be aligned precisely.
-
-        globalRect.width -= 0.1;
-        globalRect.height -= 0.1;
-        globalRect.x += 0.05;
-        globalRect.y += 0.05;
-        var obb = labelItem.obb;
-        var overlapped = false;
-
-        for (var j = 0; j < displayedLabels.length; j++) {
-          var existsTextCfg = displayedLabels[j]; // Fast rejection.
-
-          if (!globalRect.intersect(existsTextCfg.rect)) {
-            continue;
-          }
-
-          if (isAxisAligned && existsTextCfg.axisAligned) {
-            // Is overlapped
-            overlapped = true;
-            break;
-          }
-
-          if (!existsTextCfg.obb) {
-            // If self is not axis aligned. But other is.
-            existsTextCfg.obb = new OrientedBoundingRect(existsTextCfg.localRect, existsTextCfg.transform);
-          }
-
-          if (!obb) {
-            // If self is axis aligned. But other is not.
-            obb = new OrientedBoundingRect(localRect, transform);
-          }
-
-          if (obb.intersect(existsTextCfg.obb)) {
-            overlapped = true;
-            break;
-          }
-        } // TODO Callback to determine if this overlap should be handled?
-
-
-        if (overlapped) {
-          hideEl(label);
-          labelLine && hideEl(labelLine);
-        } else {
-          label.attr('ignore', labelItem.defaultAttr.ignore);
-          labelLine && labelLine.attr('ignore', labelItem.defaultAttr.labelGuideIgnore);
-          displayedLabels.push(labelItem);
-        }
-      }
-    }
-
-    function cloneArr(points) {
-      if (points) {
-        var newPoints = [];
-
-        for (var i = 0; i < points.length; i++) {
-          newPoints.push(points[i].slice());
-        }
-
-        return newPoints;
-      }
-    }
-
-    function prepareLayoutCallbackParams(labelItem, hostEl) {
-      var label = labelItem.label;
-      var labelLine = hostEl && hostEl.getTextGuideLine();
-      return {
-        dataIndex: labelItem.dataIndex,
-        dataType: labelItem.dataType,
-        seriesIndex: labelItem.seriesModel.seriesIndex,
-        text: labelItem.label.style.text,
-        rect: labelItem.hostRect,
-        labelRect: labelItem.rect,
-        // x: labelAttr.x,
-        // y: labelAttr.y,
-        align: label.style.align,
-        verticalAlign: label.style.verticalAlign,
-        labelLinePoints: cloneArr(labelLine && labelLine.shape.points)
-      };
-    }
-
-    var LABEL_OPTION_TO_STYLE_KEYS = ['align', 'verticalAlign', 'width', 'height', 'fontSize'];
-    var dummyTransformable = new Transformable();
-    var labelLayoutInnerStore = makeInner();
-    var labelLineAnimationStore = makeInner();
-
-    function extendWithKeys(target, source, keys) {
-      for (var i = 0; i < keys.length; i++) {
-        var key = keys[i];
-
-        if (source[key] != null) {
-          target[key] = source[key];
-        }
-      }
-    }
-
-    var LABEL_LAYOUT_PROPS = ['x', 'y', 'rotation'];
-
-    var LabelManager =
-    /** @class */
-    function () {
-      function LabelManager() {
-        this._labelList = [];
-        this._chartViewList = [];
-      }
-
-      LabelManager.prototype.clearLabels = function () {
-        this._labelList = [];
-        this._chartViewList = [];
-      };
-      /**
-       * Add label to manager
-       */
-
-
-      LabelManager.prototype._addLabel = function (dataIndex, dataType, seriesModel, label, layoutOption) {
-        var labelStyle = label.style;
-        var hostEl = label.__hostTarget;
-        var textConfig = hostEl.textConfig || {}; // TODO: If label is in other state.
-
-        var labelTransform = label.getComputedTransform();
-        var labelRect = label.getBoundingRect().plain();
-        BoundingRect.applyTransform(labelRect, labelRect, labelTransform);
-
-        if (labelTransform) {
-          dummyTransformable.setLocalTransform(labelTransform);
-        } else {
-          // Identity transform.
-          dummyTransformable.x = dummyTransformable.y = dummyTransformable.rotation = dummyTransformable.originX = dummyTransformable.originY = 0;
-          dummyTransformable.scaleX = dummyTransformable.scaleY = 1;
-        }
-
-        var host = label.__hostTarget;
-        var hostRect;
-
-        if (host) {
-          hostRect = host.getBoundingRect().plain();
-          var transform = host.getComputedTransform();
-          BoundingRect.applyTransform(hostRect, hostRect, transform);
-        }
-
-        var labelGuide = hostRect && host.getTextGuideLine();
-
-        this._labelList.push({
-          label: label,
-          labelLine: labelGuide,
-          seriesModel: seriesModel,
-          dataIndex: dataIndex,
-          dataType: dataType,
-          layoutOption: layoutOption,
-          computedLayoutOption: null,
-          rect: labelRect,
-          hostRect: hostRect,
-          // Label with lower priority will be hidden when overlapped
-          // Use rect size as default priority
-          priority: hostRect ? hostRect.width * hostRect.height : 0,
-          // Save default label attributes.
-          // For restore if developers want get back to default value in callback.
-          defaultAttr: {
-            ignore: label.ignore,
-            labelGuideIgnore: labelGuide && labelGuide.ignore,
-            x: dummyTransformable.x,
-            y: dummyTransformable.y,
-            rotation: dummyTransformable.rotation,
-            style: {
-              x: labelStyle.x,
-              y: labelStyle.y,
-              align: labelStyle.align,
-              verticalAlign: labelStyle.verticalAlign,
-              width: labelStyle.width,
-              height: labelStyle.height,
-              fontSize: labelStyle.fontSize
-            },
-            cursor: label.cursor,
-            attachedPos: textConfig.position,
-            attachedRot: textConfig.rotation
-          }
-        });
-      };
-
-      LabelManager.prototype.addLabelsOfSeries = function (chartView) {
-        var _this = this;
-
-        this._chartViewList.push(chartView);
-
-        var seriesModel = chartView.__model;
-        var layoutOption = seriesModel.get('labelLayout');
-        /**
-         * Ignore layouting if it's not specified anything.
-         */
-
-        if (!(isFunction(layoutOption) || keys(layoutOption).length)) {
-          return;
-        }
-
-        chartView.group.traverse(function (child) {
-          if (child.ignore) {
-            return true; // Stop traverse descendants.
-          } // Only support label being hosted on graphic elements.
-
-
-          var textEl = child.getTextContent();
-          var ecData = getECData(child); // Can only attach the text on the element with dataIndex
-
-          if (textEl && !textEl.disableLabelLayout) {
-            _this._addLabel(ecData.dataIndex, ecData.dataType, seriesModel, textEl, layoutOption);
-          }
-        });
-      };
-
-      LabelManager.prototype.updateLayoutConfig = function (api) {
-        var width = api.getWidth();
-        var height = api.getHeight();
-
-        function createDragHandler(el, labelLineModel) {
-          return function () {
-            updateLabelLinePoints(el, labelLineModel);
-          };
-        }
-
-        for (var i = 0; i < this._labelList.length; i++) {
-          var labelItem = this._labelList[i];
-          var label = labelItem.label;
-          var hostEl = label.__hostTarget;
-          var defaultLabelAttr = labelItem.defaultAttr;
-          var layoutOption = void 0; // TODO A global layout option?
-
-          if (typeof labelItem.layoutOption === 'function') {
-            layoutOption = labelItem.layoutOption(prepareLayoutCallbackParams(labelItem, hostEl));
-          } else {
-            layoutOption = labelItem.layoutOption;
-          }
-
-          layoutOption = layoutOption || {};
-          labelItem.computedLayoutOption = layoutOption;
-          var degreeToRadian = Math.PI / 180;
-
-          if (hostEl) {
-            hostEl.setTextConfig({
-              // Force to set local false.
-              local: false,
-              // Ignore position and rotation config on the host el if x or y is changed.
-              position: layoutOption.x != null || layoutOption.y != null ? null : defaultLabelAttr.attachedPos,
-              // Ignore rotation config on the host el if rotation is changed.
-              rotation: layoutOption.rotate != null ? layoutOption.rotate * degreeToRadian : defaultLabelAttr.attachedRot,
-              offset: [layoutOption.dx || 0, layoutOption.dy || 0]
-            });
-          }
-
-          var needsUpdateLabelLine = false;
-
-          if (layoutOption.x != null) {
-            // TODO width of chart view.
-            label.x = parsePercent$1(layoutOption.x, width);
-            label.setStyle('x', 0); // Ignore movement in style. TODO: origin.
-
-            needsUpdateLabelLine = true;
-          } else {
-            label.x = defaultLabelAttr.x;
-            label.setStyle('x', defaultLabelAttr.style.x);
-          }
-
-          if (layoutOption.y != null) {
-            // TODO height of chart view.
-            label.y = parsePercent$1(layoutOption.y, height);
-            label.setStyle('y', 0); // Ignore movement in style.
-
-            needsUpdateLabelLine = true;
-          } else {
-            label.y = defaultLabelAttr.y;
-            label.setStyle('y', defaultLabelAttr.style.y);
-          }
-
-          if (layoutOption.labelLinePoints) {
-            var guideLine = hostEl.getTextGuideLine();
-
-            if (guideLine) {
-              guideLine.setShape({
-                points: layoutOption.labelLinePoints
-              }); // Not update
-
-              needsUpdateLabelLine = false;
-            }
-          }
-
-          var labelLayoutStore = labelLayoutInnerStore(label);
-          labelLayoutStore.needsUpdateLabelLine = needsUpdateLabelLine;
-          label.rotation = layoutOption.rotate != null ? layoutOption.rotate * degreeToRadian : defaultLabelAttr.rotation;
-
-          for (var k = 0; k < LABEL_OPTION_TO_STYLE_KEYS.length; k++) {
-            var key = LABEL_OPTION_TO_STYLE_KEYS[k];
-            label.setStyle(key, layoutOption[key] != null ? layoutOption[key] : defaultLabelAttr.style[key]);
-          }
-
-          if (layoutOption.draggable) {
-            label.draggable = true;
-            label.cursor = 'move';
-
-            if (hostEl) {
-              var hostModel = labelItem.seriesModel;
-
-              if (labelItem.dataIndex != null) {
-                var data = labelItem.seriesModel.getData(labelItem.dataType);
-                hostModel = data.getItemModel(labelItem.dataIndex);
-              }
-
-              label.on('drag', createDragHandler(hostEl, hostModel.getModel('labelLine')));
-            }
-          } else {
-            // TODO Other drag functions?
-            label.off('drag');
-            label.cursor = defaultLabelAttr.cursor;
-          }
-        }
-      };
-
-      LabelManager.prototype.layout = function (api) {
-        var width = api.getWidth();
-        var height = api.getHeight();
-        var labelList = prepareLayoutList(this._labelList);
-        var labelsNeedsAdjustOnX = filter(labelList, function (item) {
-          return item.layoutOption.moveOverlap === 'shiftX';
-        });
-        var labelsNeedsAdjustOnY = filter(labelList, function (item) {
-          return item.layoutOption.moveOverlap === 'shiftY';
-        });
-        shiftLayoutOnX(labelsNeedsAdjustOnX, 0, width);
-        shiftLayoutOnY(labelsNeedsAdjustOnY, 0, height);
-        var labelsNeedsHideOverlap = filter(labelList, function (item) {
-          return item.layoutOption.hideOverlap;
-        });
-        hideOverlap(labelsNeedsHideOverlap);
-      };
-      /**
-       * Process all labels. Not only labels with layoutOption.
-       */
-
-
-      LabelManager.prototype.processLabelsOverall = function () {
-        var _this = this;
-
-        each(this._chartViewList, function (chartView) {
-          var seriesModel = chartView.__model;
-          var ignoreLabelLineUpdate = chartView.ignoreLabelLineUpdate;
-          var animationEnabled = seriesModel.isAnimationEnabled();
-          chartView.group.traverse(function (child) {
-            if (child.ignore) {
-              return true; // Stop traverse descendants.
-            }
-
-            var needsUpdateLabelLine = !ignoreLabelLineUpdate;
-            var label = child.getTextContent();
-
-            if (!needsUpdateLabelLine && label) {
-              needsUpdateLabelLine = labelLayoutInnerStore(label).needsUpdateLabelLine;
-            }
-
-            if (needsUpdateLabelLine) {
-              _this._updateLabelLine(child, seriesModel);
-            }
-
-            if (animationEnabled) {
-              _this._animateLabels(child, seriesModel);
-            }
-          });
-        });
-      };
-
-      LabelManager.prototype._updateLabelLine = function (el, seriesModel) {
-        // Only support label being hosted on graphic elements.
-        var textEl = el.getTextContent(); // Update label line style.
-
-        var ecData = getECData(el);
-        var dataIndex = ecData.dataIndex; // Only support labelLine on the labels represent data.
-
-        if (textEl && dataIndex != null) {
-          var data = seriesModel.getData(ecData.dataType);
-          var itemModel = data.getItemModel(dataIndex);
-          var defaultStyle = {};
-          var visualStyle = data.getItemVisual(dataIndex, 'style');
-          var visualType = data.getVisual('drawType'); // Default to be same with main color
-
-          defaultStyle.stroke = visualStyle[visualType];
-          var labelLineModel = itemModel.getModel('labelLine');
-          setLabelLineStyle(el, getLabelLineStatesModels(itemModel), defaultStyle);
-          updateLabelLinePoints(el, labelLineModel);
-        }
-      };
-
-      LabelManager.prototype._animateLabels = function (el, seriesModel) {
-        var textEl = el.getTextContent();
-        var guideLine = el.getTextGuideLine(); // Animate
-
-        if (textEl && !textEl.ignore && !textEl.invisible && !el.disableLabelAnimation && !isElementRemoved(el)) {
-          var layoutStore = labelLayoutInnerStore(textEl);
-          var oldLayout = layoutStore.oldLayout;
-          var ecData = getECData(el);
-          var dataIndex = ecData.dataIndex;
-          var newProps = {
-            x: textEl.x,
-            y: textEl.y,
-            rotation: textEl.rotation
-          };
-          var data = seriesModel.getData(ecData.dataType);
-
-          if (!oldLayout) {
-            textEl.attr(newProps); // Disable fade in animation if value animation is enabled.
-
-            if (!labelInner(textEl).valueAnimation) {
-              var oldOpacity = retrieve2(textEl.style.opacity, 1); // Fade in animation
-
-              textEl.style.opacity = 0;
-              initProps(textEl, {
-                style: {
-                  opacity: oldOpacity
-                }
-              }, seriesModel, dataIndex);
-            }
-          } else {
-            textEl.attr(oldLayout); // Make sure the animation from is in the right status.
-
-            var prevStates = el.prevStates;
-
-            if (prevStates) {
-              if (indexOf(prevStates, 'select') >= 0) {
-                textEl.attr(layoutStore.oldLayoutSelect);
-              }
-
-              if (indexOf(prevStates, 'emphasis') >= 0) {
-                textEl.attr(layoutStore.oldLayoutEmphasis);
-              }
-            }
-
-            updateProps(textEl, newProps, seriesModel, dataIndex);
-          }
-
-          layoutStore.oldLayout = newProps;
-
-          if (textEl.states.select) {
-            var layoutSelect = layoutStore.oldLayoutSelect = {};
-            extendWithKeys(layoutSelect, newProps, LABEL_LAYOUT_PROPS);
-            extendWithKeys(layoutSelect, textEl.states.select, LABEL_LAYOUT_PROPS);
-          }
-
-          if (textEl.states.emphasis) {
-            var layoutEmphasis = layoutStore.oldLayoutEmphasis = {};
-            extendWithKeys(layoutEmphasis, newProps, LABEL_LAYOUT_PROPS);
-            extendWithKeys(layoutEmphasis, textEl.states.emphasis, LABEL_LAYOUT_PROPS);
-          }
-
-          animateLabelValue(textEl, dataIndex, data, seriesModel, seriesModel);
-        }
-
-        if (guideLine && !guideLine.ignore && !guideLine.invisible) {
-          var layoutStore = labelLineAnimationStore(guideLine);
-          var oldLayout = layoutStore.oldLayout;
-          var newLayout = {
-            points: guideLine.shape.points
-          };
-
-          if (!oldLayout) {
-            guideLine.setShape(newLayout);
-            guideLine.style.strokePercent = 0;
-            initProps(guideLine, {
-              style: {
-                strokePercent: 1
-              }
-            }, seriesModel);
-          } else {
-            guideLine.attr({
-              shape: oldLayout
-            });
-            updateProps(guideLine, {
-              shape: newLayout
-            }, seriesModel);
-          }
-
-          layoutStore.oldLayout = newLayout;
-        }
-      };
-
-      return LabelManager;
-    }();
 
     // Inlucdes: pieSelect, pieUnSelect, pieToggleSelect, mapSelect, mapUnSelect, mapToggleSelect
 
@@ -24831,6 +25089,7 @@
     }
 
     var wmUniqueIndex = Math.round(Math.random() * 9);
+    var supportDefineProperty = typeof Object.defineProperty === 'function';
     var WeakMap = (function () {
         function WeakMap() {
             this._id = '__ec_inner_' + wmUniqueIndex++;
@@ -24840,7 +25099,7 @@
         };
         WeakMap.prototype.set = function (key, value) {
             var target = this._guard(key);
-            if (typeof Object.defineProperty === 'function') {
+            if (supportDefineProperty) {
                 Object.defineProperty(target, this._id, {
                     value: value,
                     enumerable: false,
@@ -24991,9 +25250,7 @@
     // TODO Use function to build symbol path.
 
     var symbolCtors = {
-      // Use small height rect to simulate line.
-      // Avoid using stroke.
-      line: Rect,
+      line: Line,
       rect: Rect,
       roundRect: Rect,
       square: Rect,
@@ -25002,16 +25259,13 @@
       pin: Pin,
       arrow: Arrow,
       triangle: Triangle
-    }; // NOTICE Only use fill. No line!
-
+    };
     var symbolShapeMakers = {
       line: function (x, y, w, h, shape) {
-        var thickness = 2; // A thin line
-
-        shape.x = x;
-        shape.y = y + h / 2 - thickness / 2;
-        shape.width = w;
-        shape.height = thickness;
+        shape.x1 = x;
+        shape.y1 = y + h / 2;
+        shape.x2 = x + w;
+        shape.y2 = y + h / 2;
       },
       rect: function (x, y, w, h, shape) {
         shape.x = x;
@@ -25111,9 +25365,11 @@
 
         if (this.__isEmptyBrush) {
           symbolStyle.stroke = color;
-          symbolStyle.fill = innerColor || '#fff'; // TODO Same width with lineStyle in LineView.
+          symbolStyle.fill = innerColor || '#fff'; // TODO Same width with lineStyle in LineView
 
           symbolStyle.lineWidth = 2;
+        } else if (this.shape.symbolType === 'line') {
+          symbolStyle.stroke = color;
         } else {
           symbolStyle.fill = color;
         }
@@ -25162,6 +25418,24 @@
       }
 
       return symbolPath;
+    }
+    function normalizeSymbolSize(symbolSize) {
+      if (!isArray(symbolSize)) {
+        symbolSize = [+symbolSize, +symbolSize];
+      }
+
+      return [symbolSize[0] || 0, symbolSize[1] || 0];
+    }
+    function normalizeSymbolOffset(symbolOffset, symbolSize) {
+      if (symbolOffset == null) {
+        return;
+      }
+
+      if (!isArray(symbolOffset)) {
+        symbolOffset = [symbolOffset, symbolOffset];
+      }
+
+      return [parsePercent$1(symbolOffset[0], symbolSize[0]) || 0, parsePercent$1(retrieve2(symbolOffset[1], symbolOffset[0]), symbolSize[1]) || 0];
     }
 
     function createLinearGradient(ctx, obj, rect) {
@@ -25240,6 +25514,9 @@
         var stroke = style.stroke;
         return !(stroke == null || stroke === 'none' || !(style.lineWidth > 0));
     }
+    function isValidStrokeFillStyle(strokeOrFill) {
+        return typeof strokeOrFill === 'string' && strokeOrFill !== 'none';
+    }
     function styleHasFill(style) {
         var fill = style.fill;
         return fill != null && fill !== 'none';
@@ -25270,7 +25547,8 @@
         var image = createOrUpdateImage(pattern.image, pattern.__image, el);
         if (isImageReady(image)) {
             var canvasPattern = ctx.createPattern(image, pattern.repeat || 'repeat');
-            if (typeof DOMMatrix === 'function') {
+            if (typeof DOMMatrix === 'function'
+                && canvasPattern.setTransform) {
                 var matrix = new DOMMatrix();
                 matrix.rotateSelf(0, 0, (pattern.rotation || 0) / Math.PI * 180);
                 matrix.scaleSelf((pattern.scaleX || 1), (pattern.scaleY || 1));
@@ -25367,7 +25645,7 @@
             }
         }
         var needsRebuild = true;
-        if (firstDraw || (el.__dirty & Path.SHAPE_CHANGED_BIT)
+        if (firstDraw || (el.__dirty & SHAPE_CHANGED_BIT)
             || (lineDash && !ctxLineDash && hasStroke)) {
             path.setDPR(ctx.dpr);
             if (strokePart) {
@@ -25513,7 +25791,8 @@
                 flushPathDrawn(ctx, scope);
                 styleChanged = true;
             }
-            ctx.globalAlpha = style.opacity == null ? DEFAULT_COMMON_STYLE.opacity : style.opacity;
+            var opacity = Math.max(Math.min(style.opacity, 1), 0);
+            ctx.globalAlpha = isNaN(opacity) ? DEFAULT_COMMON_STYLE.opacity : opacity;
         }
         if (forceSetAll || style.blend !== prevStyle.blend) {
             if (!styleChanged) {
@@ -25555,14 +25834,14 @@
                 flushPathDrawn(ctx, scope);
                 styleChanged = true;
             }
-            ctx.fillStyle = style.fill;
+            isValidStrokeFillStyle(style.fill) && (ctx.fillStyle = style.fill);
         }
         if (forceSetAll || style.stroke !== prevStyle.stroke) {
             if (!styleChanged) {
                 flushPathDrawn(ctx, scope);
                 styleChanged = true;
             }
-            ctx.strokeStyle = style.stroke;
+            isValidStrokeFillStyle(style.stroke) && (ctx.strokeStyle = style.stroke);
         }
         if (forceSetAll || style.opacity !== prevStyle.opacity) {
             if (!styleChanged) {
@@ -25664,7 +25943,7 @@
     function brush(ctx, el, scope, isLast) {
         var m = el.transform;
         if (!el.shouldBePainted(scope.viewWidth, scope.viewHeight, false, false)) {
-            el.__dirty &= ~Element.REDARAW_BIT;
+            el.__dirty &= ~REDRAW_BIT;
             el.__isRendered = false;
             return;
         }
@@ -26237,15 +26516,1708 @@
       });
     }
 
-    var assert$1 = assert;
-    var each$3 = each;
-    var isFunction$1 = isFunction;
-    var isObject$2 = isObject;
-    var indexOf$1 = indexOf;
+    function parseXML(svg) {
+        if (isString(svg)) {
+            var parser = new DOMParser();
+            svg = parser.parseFromString(svg, 'text/xml');
+        }
+        var svgNode = svg;
+        if (svgNode.nodeType === 9) {
+            svgNode = svgNode.firstChild;
+        }
+        while (svgNode.nodeName.toLowerCase() !== 'svg' || svgNode.nodeType !== 1) {
+            svgNode = svgNode.nextSibling;
+        }
+        return svgNode;
+    }
+
+    var nodeParsers;
+    var INHERITABLE_STYLE_ATTRIBUTES_MAP = {
+        'fill': 'fill',
+        'stroke': 'stroke',
+        'stroke-width': 'lineWidth',
+        'opacity': 'opacity',
+        'fill-opacity': 'fillOpacity',
+        'stroke-opacity': 'strokeOpacity',
+        'stroke-dasharray': 'lineDash',
+        'stroke-dashoffset': 'lineDashOffset',
+        'stroke-linecap': 'lineCap',
+        'stroke-linejoin': 'lineJoin',
+        'stroke-miterlimit': 'miterLimit',
+        'font-family': 'fontFamily',
+        'font-size': 'fontSize',
+        'font-style': 'fontStyle',
+        'font-weight': 'fontWeight',
+        'text-anchor': 'textAlign',
+        'visibility': 'visibility',
+        'display': 'display'
+    };
+    var INHERITABLE_STYLE_ATTRIBUTES_MAP_KEYS = keys(INHERITABLE_STYLE_ATTRIBUTES_MAP);
+    var SELF_STYLE_ATTRIBUTES_MAP = {
+        'alignment-baseline': 'textBaseline',
+        'stop-color': 'stopColor'
+    };
+    var SELF_STYLE_ATTRIBUTES_MAP_KEYS = keys(SELF_STYLE_ATTRIBUTES_MAP);
+    var SVGParser = (function () {
+        function SVGParser() {
+            this._defs = {};
+            this._root = null;
+        }
+        SVGParser.prototype.parse = function (xml, opt) {
+            opt = opt || {};
+            var svg = parseXML(xml);
+            if (!svg) {
+                throw new Error('Illegal svg');
+            }
+            this._defsUsePending = [];
+            var root = new Group();
+            this._root = root;
+            var named = [];
+            var viewBox = svg.getAttribute('viewBox') || '';
+            var width = parseFloat((svg.getAttribute('width') || opt.width));
+            var height = parseFloat((svg.getAttribute('height') || opt.height));
+            isNaN(width) && (width = null);
+            isNaN(height) && (height = null);
+            parseAttributes(svg, root, null, true, false);
+            var child = svg.firstChild;
+            while (child) {
+                this._parseNode(child, root, named, null, false, false);
+                child = child.nextSibling;
+            }
+            applyDefs(this._defs, this._defsUsePending);
+            this._defsUsePending = [];
+            var viewBoxRect;
+            var viewBoxTransform;
+            if (viewBox) {
+                var viewBoxArr = splitNumberSequence(viewBox);
+                if (viewBoxArr.length >= 4) {
+                    viewBoxRect = {
+                        x: parseFloat((viewBoxArr[0] || 0)),
+                        y: parseFloat((viewBoxArr[1] || 0)),
+                        width: parseFloat(viewBoxArr[2]),
+                        height: parseFloat(viewBoxArr[3])
+                    };
+                }
+            }
+            if (viewBoxRect && width != null && height != null) {
+                viewBoxTransform = makeViewBoxTransform(viewBoxRect, { x: 0, y: 0, width: width, height: height });
+                if (!opt.ignoreViewBox) {
+                    var elRoot = root;
+                    root = new Group();
+                    root.add(elRoot);
+                    elRoot.scaleX = elRoot.scaleY = viewBoxTransform.scale;
+                    elRoot.x = viewBoxTransform.x;
+                    elRoot.y = viewBoxTransform.y;
+                }
+            }
+            if (!opt.ignoreRootClip && width != null && height != null) {
+                root.setClipPath(new Rect({
+                    shape: { x: 0, y: 0, width: width, height: height }
+                }));
+            }
+            return {
+                root: root,
+                width: width,
+                height: height,
+                viewBoxRect: viewBoxRect,
+                viewBoxTransform: viewBoxTransform,
+                named: named
+            };
+        };
+        SVGParser.prototype._parseNode = function (xmlNode, parentGroup, named, namedFrom, isInDefs, isInText) {
+            var nodeName = xmlNode.nodeName.toLowerCase();
+            var el;
+            var namedFromForSub = namedFrom;
+            if (nodeName === 'defs') {
+                isInDefs = true;
+            }
+            if (nodeName === 'text') {
+                isInText = true;
+            }
+            if (nodeName === 'defs' || nodeName === 'switch') {
+                el = parentGroup;
+            }
+            else {
+                if (!isInDefs) {
+                    var parser_1 = nodeParsers[nodeName];
+                    if (parser_1 && hasOwn(nodeParsers, nodeName)) {
+                        el = parser_1.call(this, xmlNode, parentGroup);
+                        var nameAttr = xmlNode.getAttribute('name');
+                        if (nameAttr) {
+                            var newNamed = {
+                                name: nameAttr,
+                                namedFrom: null,
+                                svgNodeTagLower: nodeName,
+                                el: el
+                            };
+                            named.push(newNamed);
+                            if (nodeName === 'g') {
+                                namedFromForSub = newNamed;
+                            }
+                        }
+                        else if (namedFrom) {
+                            named.push({
+                                name: namedFrom.name,
+                                namedFrom: namedFrom,
+                                svgNodeTagLower: nodeName,
+                                el: el
+                            });
+                        }
+                        parentGroup.add(el);
+                    }
+                }
+                var parser = paintServerParsers[nodeName];
+                if (parser && hasOwn(paintServerParsers, nodeName)) {
+                    var def = parser.call(this, xmlNode);
+                    var id = xmlNode.getAttribute('id');
+                    if (id) {
+                        this._defs[id] = def;
+                    }
+                }
+            }
+            if (el && el.isGroup) {
+                var child = xmlNode.firstChild;
+                while (child) {
+                    if (child.nodeType === 1) {
+                        this._parseNode(child, el, named, namedFromForSub, isInDefs, isInText);
+                    }
+                    else if (child.nodeType === 3 && isInText) {
+                        this._parseText(child, el);
+                    }
+                    child = child.nextSibling;
+                }
+            }
+        };
+        SVGParser.prototype._parseText = function (xmlNode, parentGroup) {
+            var text = new TSpan({
+                style: {
+                    text: xmlNode.textContent
+                },
+                silent: true,
+                x: this._textX || 0,
+                y: this._textY || 0
+            });
+            inheritStyle(parentGroup, text);
+            parseAttributes(xmlNode, text, this._defsUsePending, false, false);
+            applyTextAlignment(text, parentGroup);
+            var textStyle = text.style;
+            var fontSize = textStyle.fontSize;
+            if (fontSize && fontSize < 9) {
+                textStyle.fontSize = 9;
+                text.scaleX *= fontSize / 9;
+                text.scaleY *= fontSize / 9;
+            }
+            var font = (textStyle.fontSize || textStyle.fontFamily) && [
+                textStyle.fontStyle,
+                textStyle.fontWeight,
+                (textStyle.fontSize || 12) + 'px',
+                textStyle.fontFamily || 'sans-serif'
+            ].join(' ');
+            textStyle.font = font;
+            var rect = text.getBoundingRect();
+            this._textX += rect.width;
+            parentGroup.add(text);
+            return text;
+        };
+        SVGParser.internalField = (function () {
+            nodeParsers = {
+                'g': function (xmlNode, parentGroup) {
+                    var g = new Group();
+                    inheritStyle(parentGroup, g);
+                    parseAttributes(xmlNode, g, this._defsUsePending, false, false);
+                    return g;
+                },
+                'rect': function (xmlNode, parentGroup) {
+                    var rect = new Rect();
+                    inheritStyle(parentGroup, rect);
+                    parseAttributes(xmlNode, rect, this._defsUsePending, false, false);
+                    rect.setShape({
+                        x: parseFloat(xmlNode.getAttribute('x') || '0'),
+                        y: parseFloat(xmlNode.getAttribute('y') || '0'),
+                        width: parseFloat(xmlNode.getAttribute('width') || '0'),
+                        height: parseFloat(xmlNode.getAttribute('height') || '0')
+                    });
+                    rect.silent = true;
+                    return rect;
+                },
+                'circle': function (xmlNode, parentGroup) {
+                    var circle = new Circle();
+                    inheritStyle(parentGroup, circle);
+                    parseAttributes(xmlNode, circle, this._defsUsePending, false, false);
+                    circle.setShape({
+                        cx: parseFloat(xmlNode.getAttribute('cx') || '0'),
+                        cy: parseFloat(xmlNode.getAttribute('cy') || '0'),
+                        r: parseFloat(xmlNode.getAttribute('r') || '0')
+                    });
+                    circle.silent = true;
+                    return circle;
+                },
+                'line': function (xmlNode, parentGroup) {
+                    var line = new Line();
+                    inheritStyle(parentGroup, line);
+                    parseAttributes(xmlNode, line, this._defsUsePending, false, false);
+                    line.setShape({
+                        x1: parseFloat(xmlNode.getAttribute('x1') || '0'),
+                        y1: parseFloat(xmlNode.getAttribute('y1') || '0'),
+                        x2: parseFloat(xmlNode.getAttribute('x2') || '0'),
+                        y2: parseFloat(xmlNode.getAttribute('y2') || '0')
+                    });
+                    line.silent = true;
+                    return line;
+                },
+                'ellipse': function (xmlNode, parentGroup) {
+                    var ellipse = new Ellipse();
+                    inheritStyle(parentGroup, ellipse);
+                    parseAttributes(xmlNode, ellipse, this._defsUsePending, false, false);
+                    ellipse.setShape({
+                        cx: parseFloat(xmlNode.getAttribute('cx') || '0'),
+                        cy: parseFloat(xmlNode.getAttribute('cy') || '0'),
+                        rx: parseFloat(xmlNode.getAttribute('rx') || '0'),
+                        ry: parseFloat(xmlNode.getAttribute('ry') || '0')
+                    });
+                    ellipse.silent = true;
+                    return ellipse;
+                },
+                'polygon': function (xmlNode, parentGroup) {
+                    var pointsStr = xmlNode.getAttribute('points');
+                    var pointsArr;
+                    if (pointsStr) {
+                        pointsArr = parsePoints(pointsStr);
+                    }
+                    var polygon = new Polygon({
+                        shape: {
+                            points: pointsArr || []
+                        },
+                        silent: true
+                    });
+                    inheritStyle(parentGroup, polygon);
+                    parseAttributes(xmlNode, polygon, this._defsUsePending, false, false);
+                    return polygon;
+                },
+                'polyline': function (xmlNode, parentGroup) {
+                    var pointsStr = xmlNode.getAttribute('points');
+                    var pointsArr;
+                    if (pointsStr) {
+                        pointsArr = parsePoints(pointsStr);
+                    }
+                    var polyline = new Polyline({
+                        shape: {
+                            points: pointsArr || []
+                        },
+                        silent: true
+                    });
+                    inheritStyle(parentGroup, polyline);
+                    parseAttributes(xmlNode, polyline, this._defsUsePending, false, false);
+                    return polyline;
+                },
+                'image': function (xmlNode, parentGroup) {
+                    var img = new ZRImage();
+                    inheritStyle(parentGroup, img);
+                    parseAttributes(xmlNode, img, this._defsUsePending, false, false);
+                    img.setStyle({
+                        image: xmlNode.getAttribute('xlink:href') || xmlNode.getAttribute('href'),
+                        x: +xmlNode.getAttribute('x'),
+                        y: +xmlNode.getAttribute('y'),
+                        width: +xmlNode.getAttribute('width'),
+                        height: +xmlNode.getAttribute('height')
+                    });
+                    img.silent = true;
+                    return img;
+                },
+                'text': function (xmlNode, parentGroup) {
+                    var x = xmlNode.getAttribute('x') || '0';
+                    var y = xmlNode.getAttribute('y') || '0';
+                    var dx = xmlNode.getAttribute('dx') || '0';
+                    var dy = xmlNode.getAttribute('dy') || '0';
+                    this._textX = parseFloat(x) + parseFloat(dx);
+                    this._textY = parseFloat(y) + parseFloat(dy);
+                    var g = new Group();
+                    inheritStyle(parentGroup, g);
+                    parseAttributes(xmlNode, g, this._defsUsePending, false, true);
+                    return g;
+                },
+                'tspan': function (xmlNode, parentGroup) {
+                    var x = xmlNode.getAttribute('x');
+                    var y = xmlNode.getAttribute('y');
+                    if (x != null) {
+                        this._textX = parseFloat(x);
+                    }
+                    if (y != null) {
+                        this._textY = parseFloat(y);
+                    }
+                    var dx = xmlNode.getAttribute('dx') || '0';
+                    var dy = xmlNode.getAttribute('dy') || '0';
+                    var g = new Group();
+                    inheritStyle(parentGroup, g);
+                    parseAttributes(xmlNode, g, this._defsUsePending, false, true);
+                    this._textX += parseFloat(dx);
+                    this._textY += parseFloat(dy);
+                    return g;
+                },
+                'path': function (xmlNode, parentGroup) {
+                    var d = xmlNode.getAttribute('d') || '';
+                    var path = createFromString(d);
+                    inheritStyle(parentGroup, path);
+                    parseAttributes(xmlNode, path, this._defsUsePending, false, false);
+                    path.silent = true;
+                    return path;
+                }
+            };
+        })();
+        return SVGParser;
+    }());
+    var paintServerParsers = {
+        'lineargradient': function (xmlNode) {
+            var x1 = parseInt(xmlNode.getAttribute('x1') || '0', 10);
+            var y1 = parseInt(xmlNode.getAttribute('y1') || '0', 10);
+            var x2 = parseInt(xmlNode.getAttribute('x2') || '10', 10);
+            var y2 = parseInt(xmlNode.getAttribute('y2') || '0', 10);
+            var gradient = new LinearGradient(x1, y1, x2, y2);
+            parsePaintServerUnit(xmlNode, gradient);
+            parseGradientColorStops(xmlNode, gradient);
+            return gradient;
+        },
+        'radialgradient': function (xmlNode) {
+            var cx = parseInt(xmlNode.getAttribute('cx') || '0', 10);
+            var cy = parseInt(xmlNode.getAttribute('cy') || '0', 10);
+            var r = parseInt(xmlNode.getAttribute('r') || '0', 10);
+            var gradient = new RadialGradient(cx, cy, r);
+            parsePaintServerUnit(xmlNode, gradient);
+            parseGradientColorStops(xmlNode, gradient);
+            return gradient;
+        }
+    };
+    function parsePaintServerUnit(xmlNode, gradient) {
+        var gradientUnits = xmlNode.getAttribute('gradientUnits');
+        if (gradientUnits === 'userSpaceOnUse') {
+            gradient.global = true;
+        }
+    }
+    function parseGradientColorStops(xmlNode, gradient) {
+        var stop = xmlNode.firstChild;
+        while (stop) {
+            if (stop.nodeType === 1
+                && stop.nodeName.toLocaleLowerCase() === 'stop') {
+                var offsetStr = stop.getAttribute('offset');
+                var offset = void 0;
+                if (offsetStr && offsetStr.indexOf('%') > 0) {
+                    offset = parseInt(offsetStr, 10) / 100;
+                }
+                else if (offsetStr) {
+                    offset = parseFloat(offsetStr);
+                }
+                else {
+                    offset = 0;
+                }
+                var styleVals = {};
+                parseInlineStyle(stop, styleVals, styleVals);
+                var stopColor = styleVals.stopColor
+                    || stop.getAttribute('stop-color')
+                    || '#000000';
+                gradient.colorStops.push({
+                    offset: offset,
+                    color: stopColor
+                });
+            }
+            stop = stop.nextSibling;
+        }
+    }
+    function inheritStyle(parent, child) {
+        if (parent && parent.__inheritedStyle) {
+            if (!child.__inheritedStyle) {
+                child.__inheritedStyle = {};
+            }
+            defaults(child.__inheritedStyle, parent.__inheritedStyle);
+        }
+    }
+    function parsePoints(pointsString) {
+        var list = splitNumberSequence(pointsString);
+        var points = [];
+        for (var i = 0; i < list.length; i += 2) {
+            var x = parseFloat(list[i]);
+            var y = parseFloat(list[i + 1]);
+            points.push([x, y]);
+        }
+        return points;
+    }
+    function parseAttributes(xmlNode, el, defsUsePending, onlyInlineStyle, isTextGroup) {
+        var disp = el;
+        var inheritedStyle = disp.__inheritedStyle = disp.__inheritedStyle || {};
+        var selfStyle = {};
+        if (xmlNode.nodeType === 1) {
+            parseTransformAttribute(xmlNode, el);
+            parseInlineStyle(xmlNode, inheritedStyle, selfStyle);
+            if (!onlyInlineStyle) {
+                parseAttributeStyle(xmlNode, inheritedStyle, selfStyle);
+            }
+        }
+        disp.style = disp.style || {};
+        if (inheritedStyle.fill != null) {
+            disp.style.fill = getFillStrokeStyle(disp, 'fill', inheritedStyle.fill, defsUsePending);
+        }
+        if (inheritedStyle.stroke != null) {
+            disp.style.stroke = getFillStrokeStyle(disp, 'stroke', inheritedStyle.stroke, defsUsePending);
+        }
+        each([
+            'lineWidth', 'opacity', 'fillOpacity', 'strokeOpacity', 'miterLimit', 'fontSize'
+        ], function (propName) {
+            if (inheritedStyle[propName] != null) {
+                disp.style[propName] = parseFloat(inheritedStyle[propName]);
+            }
+        });
+        each([
+            'lineDashOffset', 'lineCap', 'lineJoin', 'fontWeight', 'fontFamily', 'fontStyle', 'textAlign'
+        ], function (propName) {
+            if (inheritedStyle[propName] != null) {
+                disp.style[propName] = inheritedStyle[propName];
+            }
+        });
+        if (isTextGroup) {
+            disp.__selfStyle = selfStyle;
+        }
+        if (inheritedStyle.lineDash) {
+            disp.style.lineDash = map(splitNumberSequence(inheritedStyle.lineDash), function (str) {
+                return parseFloat(str);
+            });
+        }
+        if (inheritedStyle.visibility === 'hidden' || inheritedStyle.visibility === 'collapse') {
+            disp.invisible = true;
+        }
+        if (inheritedStyle.display === 'none') {
+            disp.ignore = true;
+        }
+    }
+    function applyTextAlignment(text, parentGroup) {
+        var parentSelfStyle = parentGroup.__selfStyle;
+        if (parentSelfStyle) {
+            var textBaseline = parentSelfStyle.textBaseline;
+            var zrTextBaseline = textBaseline;
+            if (!textBaseline || textBaseline === 'auto') {
+                zrTextBaseline = 'alphabetic';
+            }
+            else if (textBaseline === 'baseline') {
+                zrTextBaseline = 'alphabetic';
+            }
+            else if (textBaseline === 'before-edge' || textBaseline === 'text-before-edge') {
+                zrTextBaseline = 'top';
+            }
+            else if (textBaseline === 'after-edge' || textBaseline === 'text-after-edge') {
+                zrTextBaseline = 'bottom';
+            }
+            else if (textBaseline === 'central' || textBaseline === 'mathematical') {
+                zrTextBaseline = 'middle';
+            }
+            text.style.textBaseline = zrTextBaseline;
+        }
+        var parentInheritedStyle = parentGroup.__inheritedStyle;
+        if (parentInheritedStyle) {
+            var textAlign = parentInheritedStyle.textAlign;
+            var zrTextAlign = textAlign;
+            if (textAlign) {
+                if (textAlign === 'middle') {
+                    zrTextAlign = 'center';
+                }
+                text.style.textAlign = zrTextAlign;
+            }
+        }
+    }
+    var urlRegex = /^url\(\s*#(.*?)\)/;
+    function getFillStrokeStyle(el, method, str, defsUsePending) {
+        var urlMatch = str && str.match(urlRegex);
+        if (urlMatch) {
+            var url = trim(urlMatch[1]);
+            defsUsePending.push([el, method, url]);
+            return;
+        }
+        if (str === 'none') {
+            str = null;
+        }
+        return str;
+    }
+    function applyDefs(defs, defsUsePending) {
+        for (var i = 0; i < defsUsePending.length; i++) {
+            var item = defsUsePending[i];
+            item[0].style[item[1]] = defs[item[2]];
+        }
+    }
+    var numberReg$1 = /-?([0-9]*\.)?[0-9]+([eE]-?[0-9]+)?/g;
+    function splitNumberSequence(rawStr) {
+        return rawStr.match(numberReg$1) || [];
+    }
+    var transformRegex = /(translate|scale|rotate|skewX|skewY|matrix)\(([\-\s0-9\.eE,]*)\)/g;
+    var DEGREE_TO_ANGLE = Math.PI / 180;
+    function parseTransformAttribute(xmlNode, node) {
+        var transform = xmlNode.getAttribute('transform');
+        if (transform) {
+            transform = transform.replace(/,/g, ' ');
+            var transformOps_1 = [];
+            var mt = null;
+            transform.replace(transformRegex, function (str, type, value) {
+                transformOps_1.push(type, value);
+                return '';
+            });
+            for (var i = transformOps_1.length - 1; i > 0; i -= 2) {
+                var value = transformOps_1[i];
+                var type = transformOps_1[i - 1];
+                var valueArr = splitNumberSequence(value);
+                mt = mt || create$1();
+                switch (type) {
+                    case 'translate':
+                        translate(mt, mt, [parseFloat(valueArr[0]), parseFloat(valueArr[1] || '0')]);
+                        break;
+                    case 'scale':
+                        scale$1(mt, mt, [parseFloat(valueArr[0]), parseFloat(valueArr[1] || valueArr[0])]);
+                        break;
+                    case 'rotate':
+                        rotate(mt, mt, -parseFloat(valueArr[0]) * DEGREE_TO_ANGLE);
+                        break;
+                    case 'skewX':
+                        var sx = Math.tan(parseFloat(valueArr[0]) * DEGREE_TO_ANGLE);
+                        mul$1(mt, [1, 0, sx, 1, 0, 0], mt);
+                        break;
+                    case 'skewY':
+                        var sy = Math.tan(parseFloat(valueArr[0]) * DEGREE_TO_ANGLE);
+                        mul$1(mt, [1, sy, 0, 1, 0, 0], mt);
+                        break;
+                    case 'matrix':
+                        mt[0] = parseFloat(valueArr[0]);
+                        mt[1] = parseFloat(valueArr[1]);
+                        mt[2] = parseFloat(valueArr[2]);
+                        mt[3] = parseFloat(valueArr[3]);
+                        mt[4] = parseFloat(valueArr[4]);
+                        mt[5] = parseFloat(valueArr[5]);
+                        break;
+                }
+            }
+            node.setLocalTransform(mt);
+        }
+    }
+    var styleRegex = /([^\s:;]+)\s*:\s*([^:;]+)/g;
+    function parseInlineStyle(xmlNode, inheritableStyleResult, selfStyleResult) {
+        var style = xmlNode.getAttribute('style');
+        if (!style) {
+            return;
+        }
+        styleRegex.lastIndex = 0;
+        var styleRegResult;
+        while ((styleRegResult = styleRegex.exec(style)) != null) {
+            var svgStlAttr = styleRegResult[1];
+            var zrInheritableStlAttr = hasOwn(INHERITABLE_STYLE_ATTRIBUTES_MAP, svgStlAttr)
+                ? INHERITABLE_STYLE_ATTRIBUTES_MAP[svgStlAttr]
+                : null;
+            if (zrInheritableStlAttr) {
+                inheritableStyleResult[zrInheritableStlAttr] = styleRegResult[2];
+            }
+            var zrSelfStlAttr = hasOwn(SELF_STYLE_ATTRIBUTES_MAP, svgStlAttr)
+                ? SELF_STYLE_ATTRIBUTES_MAP[svgStlAttr]
+                : null;
+            if (zrSelfStlAttr) {
+                selfStyleResult[zrSelfStlAttr] = styleRegResult[2];
+            }
+        }
+    }
+    function parseAttributeStyle(xmlNode, inheritableStyleResult, selfStyleResult) {
+        for (var i = 0; i < INHERITABLE_STYLE_ATTRIBUTES_MAP_KEYS.length; i++) {
+            var svgAttrName = INHERITABLE_STYLE_ATTRIBUTES_MAP_KEYS[i];
+            var attrValue = xmlNode.getAttribute(svgAttrName);
+            if (attrValue != null) {
+                inheritableStyleResult[INHERITABLE_STYLE_ATTRIBUTES_MAP[svgAttrName]] = attrValue;
+            }
+        }
+        for (var i = 0; i < SELF_STYLE_ATTRIBUTES_MAP_KEYS.length; i++) {
+            var svgAttrName = SELF_STYLE_ATTRIBUTES_MAP_KEYS[i];
+            var attrValue = xmlNode.getAttribute(svgAttrName);
+            if (attrValue != null) {
+                selfStyleResult[SELF_STYLE_ATTRIBUTES_MAP[svgAttrName]] = attrValue;
+            }
+        }
+    }
+    function makeViewBoxTransform(viewBoxRect, boundingRect) {
+        var scaleX = boundingRect.width / viewBoxRect.width;
+        var scaleY = boundingRect.height / viewBoxRect.height;
+        var scale = Math.min(scaleX, scaleY);
+        return {
+            scale: scale,
+            x: -(viewBoxRect.x + viewBoxRect.width / 2) * scale + (boundingRect.x + boundingRect.width / 2),
+            y: -(viewBoxRect.y + viewBoxRect.height / 2) * scale + (boundingRect.y + boundingRect.height / 2)
+        };
+    }
+    function parseSVG(xml, opt) {
+        var parser = new SVGParser();
+        return parser.parse(xml, opt);
+    }
+
+    var EPSILON$3 = 1e-8;
+    function isAroundEqual$1(a, b) {
+        return Math.abs(a - b) < EPSILON$3;
+    }
+    function contain$1(points, x, y) {
+        var w = 0;
+        var p = points[0];
+        if (!p) {
+            return false;
+        }
+        for (var i = 1; i < points.length; i++) {
+            var p2 = points[i];
+            w += windingLine(p[0], p[1], p2[0], p2[1], x, y);
+            p = p2;
+        }
+        var p0 = points[0];
+        if (!isAroundEqual$1(p[0], p0[0]) || !isAroundEqual$1(p[1], p0[1])) {
+            w += windingLine(p[0], p[1], p0[0], p0[1], x, y);
+        }
+        return w !== 0;
+    }
+
+    var TMP_TRANSFORM = [];
+
+    var Region =
+    /** @class */
+    function () {
+      function Region(name) {
+        this.name = name;
+      }
+      /**
+       * Get center point in data unit. That is,
+       * for GeoJSONRegion, the unit is lat/lng,
+       * for GeoSVGRegion, the unit is SVG local coord.
+       */
+
+
+      Region.prototype.getCenter = function () {
+        return;
+      };
+
+      return Region;
+    }();
+
+    var GeoJSONRegion =
+    /** @class */
+    function (_super) {
+      __extends(GeoJSONRegion, _super);
+
+      function GeoJSONRegion(name, geometries, cp) {
+        var _this = _super.call(this, name) || this;
+
+        _this.type = 'geoJSON';
+        _this.geometries = geometries;
+
+        if (!cp) {
+          var rect = _this.getBoundingRect();
+
+          cp = [rect.x + rect.width / 2, rect.y + rect.height / 2];
+        } else {
+          cp = [cp[0], cp[1]];
+        }
+
+        _this._center = cp;
+        return _this;
+      }
+
+      GeoJSONRegion.prototype.getBoundingRect = function () {
+        var rect = this._rect;
+
+        if (rect) {
+          return rect;
+        }
+
+        var MAX_NUMBER = Number.MAX_VALUE;
+        var min$1 = [MAX_NUMBER, MAX_NUMBER];
+        var max$1 = [-MAX_NUMBER, -MAX_NUMBER];
+        var min2 = [];
+        var max2 = [];
+        var geometries = this.geometries;
+        var i = 0;
+
+        for (; i < geometries.length; i++) {
+          // Only support polygon
+          if (geometries[i].type !== 'polygon') {
+            continue;
+          } // Doesn't consider hole
+
+
+          var exterior = geometries[i].exterior;
+          fromPoints(exterior, min2, max2);
+          min(min$1, min$1, min2);
+          max(max$1, max$1, max2);
+        } // No data
+
+
+        if (i === 0) {
+          min$1[0] = min$1[1] = max$1[0] = max$1[1] = 0;
+        }
+
+        return this._rect = new BoundingRect(min$1[0], min$1[1], max$1[0] - min$1[0], max$1[1] - min$1[1]);
+      };
+
+      GeoJSONRegion.prototype.contain = function (coord) {
+        var rect = this.getBoundingRect();
+        var geometries = this.geometries;
+
+        if (!rect.contain(coord[0], coord[1])) {
+          return false;
+        }
+
+        loopGeo: for (var i = 0, len = geometries.length; i < len; i++) {
+          // Only support polygon.
+          if (geometries[i].type !== 'polygon') {
+            continue;
+          }
+
+          var exterior = geometries[i].exterior;
+          var interiors = geometries[i].interiors;
+
+          if (contain$1(exterior, coord[0], coord[1])) {
+            // Not in the region if point is in the hole.
+            for (var k = 0; k < (interiors ? interiors.length : 0); k++) {
+              if (contain$1(interiors[k], coord[0], coord[1])) {
+                continue loopGeo;
+              }
+            }
+
+            return true;
+          }
+        }
+
+        return false;
+      };
+
+      GeoJSONRegion.prototype.transformTo = function (x, y, width, height) {
+        var rect = this.getBoundingRect();
+        var aspect = rect.width / rect.height;
+
+        if (!width) {
+          width = aspect * height;
+        } else if (!height) {
+          height = width / aspect;
+        }
+
+        var target = new BoundingRect(x, y, width, height);
+        var transform = rect.calculateTransform(target);
+        var geometries = this.geometries;
+
+        for (var i = 0; i < geometries.length; i++) {
+          // Only support polygon.
+          if (geometries[i].type !== 'polygon') {
+            continue;
+          }
+
+          var exterior = geometries[i].exterior;
+          var interiors = geometries[i].interiors;
+
+          for (var p = 0; p < exterior.length; p++) {
+            applyTransform(exterior[p], exterior[p], transform);
+          }
+
+          for (var h = 0; h < (interiors ? interiors.length : 0); h++) {
+            for (var p = 0; p < interiors[h].length; p++) {
+              applyTransform(interiors[h][p], interiors[h][p], transform);
+            }
+          }
+        }
+
+        rect = this._rect;
+        rect.copy(target); // Update center
+
+        this._center = [rect.x + rect.width / 2, rect.y + rect.height / 2];
+      };
+
+      GeoJSONRegion.prototype.cloneShallow = function (name) {
+        name == null && (name = this.name);
+        var newRegion = new GeoJSONRegion(name, this.geometries, this._center);
+        newRegion._rect = this._rect;
+        newRegion.transformTo = null; // Simply avoid to be called.
+
+        return newRegion;
+      };
+
+      GeoJSONRegion.prototype.getCenter = function () {
+        return this._center;
+      };
+
+      GeoJSONRegion.prototype.setCenter = function (center) {
+        this._center = center;
+      };
+
+      return GeoJSONRegion;
+    }(Region);
+
+    var GeoSVGRegion =
+    /** @class */
+    function (_super) {
+      __extends(GeoSVGRegion, _super);
+
+      function GeoSVGRegion(name, elOnlyForCalculate) {
+        var _this = _super.call(this, name) || this;
+
+        _this.type = 'geoSVG';
+        _this._elOnlyForCalculate = elOnlyForCalculate;
+        return _this;
+      }
+
+      GeoSVGRegion.prototype.getCenter = function () {
+        var center = this._center;
+
+        if (!center) {
+          // In most cases there are no need to calculate this center.
+          // So calculate only when called.
+          center = this._center = this._calculateCenter();
+        }
+
+        return center;
+      };
+
+      GeoSVGRegion.prototype._calculateCenter = function () {
+        var el = this._elOnlyForCalculate;
+        var rect = el.getBoundingRect();
+        var center = [rect.x + rect.width / 2, rect.y + rect.height / 2];
+        var mat = identity(TMP_TRANSFORM);
+        var target = el;
+
+        while (target && !target.isGeoSVGGraphicRoot) {
+          mul$1(mat, target.getLocalTransform(), mat);
+          target = target.parent;
+        }
+
+        invert(mat, mat);
+        applyTransform(center, center, mat);
+        return center;
+      };
+
+      return GeoSVGRegion;
+    }(Region);
+
+    /**
+     * "region available" means that: enable users to set attribute `name="xxx"` on those tags
+     * to make it be a region.
+     * 1. region styles and its label styles can be defined in echarts opton:
+     * ```js
+     * geo: {
+     *     regions: [{
+     *         name: 'xxx',
+     *         itemStyle: { ... },
+     *         label: { ... }
+     *     }, {
+     *         ...
+     *     },
+     *     ...]
+     * };
+     * ```
+     * 2. name can be duplicated in different SVG tag. All of the tags with the same name share
+     * a region option. For exampel if there are two <path> representing two lung lobes. They have
+     * no common parents but both of them need to display label "lung" inside.
+     */
+
+    var REGION_AVAILABLE_SVG_TAG_MAP = createHashMap(['rect', 'circle', 'line', 'ellipse', 'polygon', 'polyline', 'path', // <text> <tspan> are also enabled becuase some SVG might paint text itself,
+    // but still need to trigger events or tooltip.
+    'text', 'tspan', // <g> is also enabled because this case: if multiple tags share one name
+    // and need label displayed, every tags will display the name, which is not
+    // expected. So we can put them into a <g name="xxx">. Thereby only one label
+    // displayed and located based on the bounding rect of the <g>.
+    'g']);
+
+    var GeoSVGResource =
+    /** @class */
+    function () {
+      function GeoSVGResource(mapName, svg) {
+        this.type = 'geoSVG'; // All used graphics. key: hostKey, value: root
+
+        this._usedGraphicMap = createHashMap(); // All unused graphics.
+
+        this._freedGraphics = [];
+        this._mapName = mapName; // Only perform parse to XML object here, which might be time
+        // consiming for large SVG.
+        // Although convert XML to zrender element is also time consiming,
+        // if we do it here, the clone of zrender elements has to be
+        // required. So we do it once for each geo instance, util real
+        // performance issues call for optimizing it.
+
+        this._parsedXML = parseXML(svg);
+      }
+
+      GeoSVGResource.prototype.load = function ()
+      /* nameMap: NameMap */
+      {
+        // In the "load" stage, graphic need to be built to
+        // get boundingRect for geo coordinate system.
+        var firstGraphic = this._firstGraphic; // Create the return data structure only when first graphic created.
+        // Because they will be used in geo coordinate system update stage,
+        // and `regions` will be mounted at `geo` coordinate system,
+        // in which there is no "view" info, so that it should better not to
+        // make references to graphic elements.
+
+        if (!firstGraphic) {
+          firstGraphic = this._firstGraphic = this._buildGraphic(this._parsedXML);
+
+          this._freedGraphics.push(firstGraphic);
+
+          this._boundingRect = this._firstGraphic.boundingRect.clone(); // PENDING: `nameMap` will not be supported until some real requirement come.
+          // if (nameMap) {
+          //     named = applyNameMap(named, nameMap);
+          // }
+
+          var _a = createRegions(firstGraphic.named),
+              regions = _a.regions,
+              regionsMap = _a.regionsMap;
+
+          this._regions = regions;
+          this._regionsMap = regionsMap;
+        }
+
+        return {
+          boundingRect: this._boundingRect,
+          regions: this._regions,
+          regionsMap: this._regionsMap
+        };
+      };
+
+      GeoSVGResource.prototype._buildGraphic = function (svgXML) {
+        var result;
+        var rootFromParse;
+
+        try {
+          result = svgXML && parseSVG(svgXML, {
+            ignoreViewBox: true,
+            ignoreRootClip: true
+          }) || {};
+          rootFromParse = result.root;
+          assert(rootFromParse != null);
+        } catch (e) {
+          throw new Error('Invalid svg format\n' + e.message);
+        } // Note: we keep the covenant that the root has no transform. So always add an extra root.
+
+
+        var root = new Group();
+        root.add(rootFromParse);
+        root.isGeoSVGGraphicRoot = true; // [THE_RULE_OF_VIEWPORT_AND_VIEWBOX]
+        //
+        // Consider: `<svg width="..." height="..." viewBox="...">`
+        // - the `width/height` we call it `svgWidth/svgHeight` for short.
+        // - `(0, 0, svgWidth, svgHeight)` defines the viewport of the SVG, or say,
+        //   "viewport boundingRect", or `boundingRect` for short.
+        // - `viewBox` defines the transform from the real content ot the viewport.
+        //   `viewBox` has the same unit as the content of SVG.
+        //   If `viewBox` exists, a transform is defined, so the unit of `svgWidth/svgHeight` become
+        //   different from the content of SVG. Otherwise, they are the same.
+        //
+        // If both `svgWidth/svgHeight/viewBox` are specified in a SVG file, the transform rule will be:
+        // 0. `boundingRect` is `(0, 0, svgWidth, svgHeight)`. Set it to Geo['_rect'] (View['_rect']).
+        // 1. Make a transform from `viewBox` to `boundingRect`.
+        //    Note: only suport `preserveAspectRatio 'xMidYMid'` here. That is, this transform will preserve
+        //    the aspect ratio.
+        // 2. Make a transform from boundingRect to Geo['_viewRect'] (View['_viewRect'])
+        //    (`Geo`/`View` will do this job).
+        //    Note: this transform might not preserve aspect radio, which depending on how users specify
+        //    viewRect in echarts option (e.g., `geo.left/top/width/height` will not preserve aspect ratio,
+        //    but `geo.layoutCenter/layoutSize` will preserve aspect ratio).
+        //
+        // If `svgWidth/svgHeight` not specified, we use `viewBox` as the `boundingRect` to make the SVG
+        // layout look good.
+        //
+        // If neither `svgWidth/svgHeight` nor `viewBox` are not specified, we calculate the boundingRect
+        // of the SVG content and use them to make SVG layout look good.
+
+        var svgWidth = result.width;
+        var svgHeight = result.height;
+        var viewBoxRect = result.viewBoxRect;
+        var boundingRect = this._boundingRect;
+
+        if (!boundingRect) {
+          var bRectX = void 0;
+          var bRectY = void 0;
+          var bRectWidth = void 0;
+          var bRectHeight = void 0;
+
+          if (svgWidth != null) {
+            bRectX = 0;
+            bRectWidth = svgWidth;
+          } else if (viewBoxRect) {
+            bRectX = viewBoxRect.x;
+            bRectWidth = viewBoxRect.width;
+          }
+
+          if (svgHeight != null) {
+            bRectY = 0;
+            bRectHeight = svgHeight;
+          } else if (viewBoxRect) {
+            bRectY = viewBoxRect.y;
+            bRectHeight = viewBoxRect.height;
+          } // If both viewBox and svgWidth/svgHeight not specified,
+          // we have to determine how to layout those element to make them look good.
+
+
+          if (bRectX == null || bRectY == null) {
+            var calculatedBoundingRect = rootFromParse.getBoundingRect();
+
+            if (bRectX == null) {
+              bRectX = calculatedBoundingRect.x;
+              bRectWidth = calculatedBoundingRect.width;
+            }
+
+            if (bRectY == null) {
+              bRectY = calculatedBoundingRect.y;
+              bRectHeight = calculatedBoundingRect.height;
+            }
+          }
+
+          boundingRect = this._boundingRect = new BoundingRect(bRectX, bRectY, bRectWidth, bRectHeight);
+        }
+
+        if (viewBoxRect) {
+          var viewBoxTransform = makeViewBoxTransform(viewBoxRect, boundingRect); // Only support `preserveAspectRatio 'xMidYMid'`
+
+          rootFromParse.scaleX = rootFromParse.scaleY = viewBoxTransform.scale;
+          rootFromParse.x = viewBoxTransform.x;
+          rootFromParse.y = viewBoxTransform.y;
+        } // SVG needs to clip based on `viewBox`. And some SVG files really rely on this feature.
+        // They do not strictly confine all of the content inside a display rect, but deliberately
+        // use a `viewBox` to define a displayable rect.
+        // PENDING:
+        // The drawback of the `setClipPath` here is: the region label (genereted by echarts) near the
+        // edge might also be clipped, because region labels are put as `textContent` of the SVG path.
+
+
+        root.setClipPath(new Rect({
+          shape: boundingRect.plain()
+        }));
+        var named = [];
+        each(result.named, function (namedItem) {
+          if (REGION_AVAILABLE_SVG_TAG_MAP.get(namedItem.svgNodeTagLower) != null) {
+            named.push(namedItem);
+            setSilent(namedItem.el);
+          }
+        });
+        return {
+          root: root,
+          boundingRect: boundingRect,
+          named: named
+        };
+      };
+      /**
+       * Consider:
+       * (1) One graphic element can not be shared by different `geoView` running simultaneously.
+       *     Notice, also need to consider multiple echarts instances share a `mapRecord`.
+       * (2) Converting SVG to graphic elements is time consuming.
+       * (3) In the current architecture, `load` should be called frequently to get boundingRect,
+       *     and it is called without view info.
+       * So we maintain graphic elements in this module, and enables `view` to use/return these
+       * graphics from/to the pool with it's uid.
+       */
+
+
+      GeoSVGResource.prototype.useGraphic = function (hostKey
+      /*, nameMap: NameMap */
+      ) {
+        var usedRootMap = this._usedGraphicMap;
+        var svgGraphic = usedRootMap.get(hostKey);
+
+        if (svgGraphic) {
+          return svgGraphic;
+        }
+
+        svgGraphic = this._freedGraphics.pop() // use the first boundingRect to avoid duplicated boundingRect calculation.
+        || this._buildGraphic(this._parsedXML);
+        usedRootMap.set(hostKey, svgGraphic); // PENDING: `nameMap` will not be supported until some real requirement come.
+        // `nameMap` can only be obtained from echarts option.
+        // The original `named` must not be modified.
+        // if (nameMap) {
+        //     svgGraphic = extend({}, svgGraphic);
+        //     svgGraphic.named = applyNameMap(svgGraphic.named, nameMap);
+        // }
+
+        return svgGraphic;
+      };
+
+      GeoSVGResource.prototype.freeGraphic = function (hostKey) {
+        var usedRootMap = this._usedGraphicMap;
+        var svgGraphic = usedRootMap.get(hostKey);
+
+        if (svgGraphic) {
+          usedRootMap.removeKey(hostKey);
+
+          this._freedGraphics.push(svgGraphic);
+        }
+      };
+
+      return GeoSVGResource;
+    }();
+
+    function setSilent(el) {
+      // Only named element has silent: false, other elements should
+      // act as background and has no user interaction.
+      el.silent = false; // text|tspan will be converted to group.
+
+      if (el.isGroup) {
+        el.traverse(function (child) {
+          child.silent = false;
+        });
+      }
+    }
+
+    function createRegions(named) {
+      var regions = [];
+      var regionsMap = createHashMap(); // Create resions only for the first graphic.
+
+      each(named, function (namedItem) {
+        // Region has feature to calculate center for tooltip or other features.
+        // If there is a <g name="xxx">, the center should be the center of the
+        // bounding rect of the g.
+        if (namedItem.namedFrom != null) {
+          return;
+        }
+
+        var region = new GeoSVGRegion(namedItem.name, namedItem.el); // PENDING: if `nameMap` supported, this region can not be mounted on
+        // `this`, but can only be created each time `load()` called.
+
+        regions.push(region); // PENDING: if multiple tag named with the same name, only one will be
+        // found by `_regionsMap`. `_regionsMap` is used to find a coordinate
+        // by name. We use `region.getCenter()` as the coordinate.
+
+        regionsMap.set(namedItem.name, region);
+      });
+      return {
+        regions: regions,
+        regionsMap: regionsMap
+      };
+    } // PENDING: `nameMap` will not be supported until some real requirement come.
+    // /**
+    //  * Use the alias in geoNameMap.
+    //  * The input `named` must not be modified.
+    //  */
+    // function applyNameMap(
+    //     named: GeoSVGGraphicRecord['named'],
+    //     nameMap: NameMap
+    // ): GeoSVGGraphicRecord['named'] {
+    //     const result = [] as GeoSVGGraphicRecord['named'];
+    //     for (let i = 0; i < named.length; i++) {
+    //         let regionGraphic = named[i];
+    //         const name = regionGraphic.name;
+    //         if (nameMap && nameMap.hasOwnProperty(name)) {
+    //             regionGraphic = extend({}, regionGraphic);
+    //             regionGraphic.name = name;
+    //         }
+    //         result.push(regionGraphic);
+    //     }
+    //     return result;
+    // }
+
+    function decode(json) {
+      if (!json.UTF8Encoding) {
+        return json;
+      }
+
+      var jsonCompressed = json;
+      var encodeScale = jsonCompressed.UTF8Scale;
+
+      if (encodeScale == null) {
+        encodeScale = 1024;
+      }
+
+      var features = jsonCompressed.features;
+
+      for (var f = 0; f < features.length; f++) {
+        var feature = features[f];
+        var geometry = feature.geometry;
+
+        if (geometry.type === 'Polygon') {
+          var coordinates = geometry.coordinates;
+
+          for (var c = 0; c < coordinates.length; c++) {
+            coordinates[c] = decodePolygon(coordinates[c], geometry.encodeOffsets[c], encodeScale);
+          }
+        } else if (geometry.type === 'MultiPolygon') {
+          var coordinates = geometry.coordinates;
+
+          for (var c = 0; c < coordinates.length; c++) {
+            var coordinate = coordinates[c];
+
+            for (var c2 = 0; c2 < coordinate.length; c2++) {
+              coordinate[c2] = decodePolygon(coordinate[c2], geometry.encodeOffsets[c][c2], encodeScale);
+            }
+          }
+        }
+      } // Has been decoded
+
+
+      jsonCompressed.UTF8Encoding = false;
+      return jsonCompressed;
+    }
+
+    function decodePolygon(coordinate, encodeOffsets, encodeScale) {
+      var result = [];
+      var prevX = encodeOffsets[0];
+      var prevY = encodeOffsets[1];
+
+      for (var i = 0; i < coordinate.length; i += 2) {
+        var x = coordinate.charCodeAt(i) - 64;
+        var y = coordinate.charCodeAt(i + 1) - 64; // ZigZag decoding
+
+        x = x >> 1 ^ -(x & 1);
+        y = y >> 1 ^ -(y & 1); // Delta deocding
+
+        x += prevX;
+        y += prevY;
+        prevX = x;
+        prevY = y; // Dequantize
+
+        result.push([x / encodeScale, y / encodeScale]);
+      }
+
+      return result;
+    }
+
+    function parseGeoJSON(geoJson, nameProperty) {
+      geoJson = decode(geoJson);
+      return map(filter(geoJson.features, function (featureObj) {
+        // Output of mapshaper may have geometry null
+        return featureObj.geometry && featureObj.properties && featureObj.geometry.coordinates.length > 0;
+      }), function (featureObj) {
+        var properties = featureObj.properties;
+        var geo = featureObj.geometry;
+        var geometries = [];
+
+        if (geo.type === 'Polygon') {
+          var coordinates = geo.coordinates;
+          geometries.push({
+            type: 'polygon',
+            // According to the GeoJSON specification.
+            // First must be exterior, and the rest are all interior(holes).
+            exterior: coordinates[0],
+            interiors: coordinates.slice(1)
+          });
+        }
+
+        if (geo.type === 'MultiPolygon') {
+          var coordinates = geo.coordinates;
+          each(coordinates, function (item) {
+            if (item[0]) {
+              geometries.push({
+                type: 'polygon',
+                exterior: item[0],
+                interiors: item.slice(1)
+              });
+            }
+          });
+        }
+
+        var region = new GeoJSONRegion(properties[nameProperty || 'name'], geometries, properties.cp);
+        region.properties = properties;
+        return region;
+      });
+    }
+
+    var geoCoord = [126, 25];
+    var nanhaiName = '南海诸岛';
+    var points$1 = [[[0, 3.5], [7, 11.2], [15, 11.9], [30, 7], [42, 0.7], [52, 0.7], [56, 7.7], [59, 0.7], [64, 0.7], [64, 0], [5, 0], [0, 3.5]], [[13, 16.1], [19, 14.7], [16, 21.7], [11, 23.1], [13, 16.1]], [[12, 32.2], [14, 38.5], [15, 38.5], [13, 32.2], [12, 32.2]], [[16, 47.6], [12, 53.2], [13, 53.2], [18, 47.6], [16, 47.6]], [[6, 64.4], [8, 70], [9, 70], [8, 64.4], [6, 64.4]], [[23, 82.6], [29, 79.8], [30, 79.8], [25, 82.6], [23, 82.6]], [[37, 70.7], [43, 62.3], [44, 62.3], [39, 70.7], [37, 70.7]], [[48, 51.1], [51, 45.5], [53, 45.5], [50, 51.1], [48, 51.1]], [[51, 35], [51, 28.7], [53, 28.7], [53, 35], [51, 35]], [[52, 22.4], [55, 17.5], [56, 17.5], [53, 22.4], [52, 22.4]], [[58, 12.6], [62, 7], [63, 7], [60, 12.6], [58, 12.6]], [[0, 3.5], [0, 93.1], [64, 93.1], [64, 0], [63, 0], [63, 92.4], [1, 92.4], [1, 3.5], [0, 3.5]]];
+
+    for (var i = 0; i < points$1.length; i++) {
+      for (var k = 0; k < points$1[i].length; k++) {
+        points$1[i][k][0] /= 10.5;
+        points$1[i][k][1] /= -10.5 / 0.75;
+        points$1[i][k][0] += geoCoord[0];
+        points$1[i][k][1] += geoCoord[1];
+      }
+    }
+
+    function fixNanhai(mapType, regions) {
+      if (mapType === 'china') {
+        for (var i = 0; i < regions.length; i++) {
+          // Already exists.
+          if (regions[i].name === nanhaiName) {
+            return;
+          }
+        }
+
+        regions.push(new GeoJSONRegion(nanhaiName, map(points$1, function (exterior) {
+          return {
+            type: 'polygon',
+            exterior: exterior
+          };
+        }), geoCoord));
+      }
+    }
+
+    /*
+    * Licensed to the Apache Software Foundation (ASF) under one
+    * or more contributor license agreements.  See the NOTICE file
+    * distributed with this work for additional information
+    * regarding copyright ownership.  The ASF licenses this file
+    * to you under the Apache License, Version 2.0 (the
+    * "License"); you may not use this file except in compliance
+    * with the License.  You may obtain a copy of the License at
+    *
+    *   http://www.apache.org/licenses/LICENSE-2.0
+    *
+    * Unless required by applicable law or agreed to in writing,
+    * software distributed under the License is distributed on an
+    * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    * KIND, either express or implied.  See the License for the
+    * specific language governing permissions and limitations
+    * under the License.
+    */
+
+
+    /**
+     * AUTO-GENERATED FILE. DO NOT MODIFY.
+     */
+
+    /*
+    * Licensed to the Apache Software Foundation (ASF) under one
+    * or more contributor license agreements.  See the NOTICE file
+    * distributed with this work for additional information
+    * regarding copyright ownership.  The ASF licenses this file
+    * to you under the Apache License, Version 2.0 (the
+    * "License"); you may not use this file except in compliance
+    * with the License.  You may obtain a copy of the License at
+    *
+    *   http://www.apache.org/licenses/LICENSE-2.0
+    *
+    * Unless required by applicable law or agreed to in writing,
+    * software distributed under the License is distributed on an
+    * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    * KIND, either express or implied.  See the License for the
+    * specific language governing permissions and limitations
+    * under the License.
+    */
+    var coordsOffsetMap = {
+      '南海诸岛': [32, 80],
+      // 全国
+      '广东': [0, -10],
+      '香港': [10, 5],
+      '澳门': [-10, 10],
+      //'北京': [-10, 0],
+      '天津': [5, 5]
+    };
+    function fixTextCoords(mapType, region) {
+      if (mapType === 'china') {
+        var coordFix = coordsOffsetMap[region.name];
+
+        if (coordFix) {
+          var cp = region.getCenter();
+          cp[0] += coordFix[0] / 10.5;
+          cp[1] += -coordFix[1] / (10.5 / 0.75);
+          region.setCenter(cp);
+        }
+      }
+    }
+
+    /*
+    * Licensed to the Apache Software Foundation (ASF) under one
+    * or more contributor license agreements.  See the NOTICE file
+    * distributed with this work for additional information
+    * regarding copyright ownership.  The ASF licenses this file
+    * to you under the Apache License, Version 2.0 (the
+    * "License"); you may not use this file except in compliance
+    * with the License.  You may obtain a copy of the License at
+    *
+    *   http://www.apache.org/licenses/LICENSE-2.0
+    *
+    * Unless required by applicable law or agreed to in writing,
+    * software distributed under the License is distributed on an
+    * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    * KIND, either express or implied.  See the License for the
+    * specific language governing permissions and limitations
+    * under the License.
+    */
+
+
+    /**
+     * AUTO-GENERATED FILE. DO NOT MODIFY.
+     */
+
+    /*
+    * Licensed to the Apache Software Foundation (ASF) under one
+    * or more contributor license agreements.  See the NOTICE file
+    * distributed with this work for additional information
+    * regarding copyright ownership.  The ASF licenses this file
+    * to you under the Apache License, Version 2.0 (the
+    * "License"); you may not use this file except in compliance
+    * with the License.  You may obtain a copy of the License at
+    *
+    *   http://www.apache.org/licenses/LICENSE-2.0
+    *
+    * Unless required by applicable law or agreed to in writing,
+    * software distributed under the License is distributed on an
+    * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    * KIND, either express or implied.  See the License for the
+    * specific language governing permissions and limitations
+    * under the License.
+    */
+    var geoCoordMap = {
+      'Russia': [100, 60],
+      'United States': [-99, 38],
+      'United States of America': [-99, 38]
+    };
+    function fixGeoCoords(mapType, region) {
+      if (mapType === 'world') {
+        var geoCoord = geoCoordMap[region.name];
+
+        if (geoCoord) {
+          var cp = [geoCoord[0], geoCoord[1]];
+          region.setCenter(cp);
+        }
+      }
+    }
+
+    /*
+    * Licensed to the Apache Software Foundation (ASF) under one
+    * or more contributor license agreements.  See the NOTICE file
+    * distributed with this work for additional information
+    * regarding copyright ownership.  The ASF licenses this file
+    * to you under the Apache License, Version 2.0 (the
+    * "License"); you may not use this file except in compliance
+    * with the License.  You may obtain a copy of the License at
+    *
+    *   http://www.apache.org/licenses/LICENSE-2.0
+    *
+    * Unless required by applicable law or agreed to in writing,
+    * software distributed under the License is distributed on an
+    * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    * KIND, either express or implied.  See the License for the
+    * specific language governing permissions and limitations
+    * under the License.
+    */
+
+
+    /**
+     * AUTO-GENERATED FILE. DO NOT MODIFY.
+     */
+
+    /*
+    * Licensed to the Apache Software Foundation (ASF) under one
+    * or more contributor license agreements.  See the NOTICE file
+    * distributed with this work for additional information
+    * regarding copyright ownership.  The ASF licenses this file
+    * to you under the Apache License, Version 2.0 (the
+    * "License"); you may not use this file except in compliance
+    * with the License.  You may obtain a copy of the License at
+    *
+    *   http://www.apache.org/licenses/LICENSE-2.0
+    *
+    * Unless required by applicable law or agreed to in writing,
+    * software distributed under the License is distributed on an
+    * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    * KIND, either express or implied.  See the License for the
+    * specific language governing permissions and limitations
+    * under the License.
+    */
+    // Fix for 钓鱼岛
+    // let Region = require('../Region');
+    // let zrUtil = require('zrender/lib/core/util');
+    // let geoCoord = [126, 25];
+    var points$2 = [[[123.45165252685547, 25.73527164402261], [123.49731445312499, 25.73527164402261], [123.49731445312499, 25.750734064600884], [123.45165252685547, 25.750734064600884], [123.45165252685547, 25.73527164402261]]];
+    function fixDiaoyuIsland(mapType, region) {
+      if (mapType === 'china' && region.name === '台湾') {
+        region.geometries.push({
+          type: 'polygon',
+          exterior: points$2[0]
+        });
+      }
+    }
+
+    var DEFAULT_NAME_PROPERTY = 'name';
+
+    var GeoJSONResource =
+    /** @class */
+    function () {
+      function GeoJSONResource(mapName, geoJSON, specialAreas) {
+        this.type = 'geoJSON';
+        this._parsedMap = createHashMap();
+        this._mapName = mapName;
+        this._specialAreas = specialAreas; // PENDING: delay the parse to the first usage to rapid up the FMP?
+
+        this._geoJSON = parseInput(geoJSON);
+      }
+      /**
+       * @param nameMap can be null/undefined
+       * @param nameProperty can be null/undefined
+       */
+
+
+      GeoJSONResource.prototype.load = function (nameMap, nameProperty) {
+        nameProperty = nameProperty || DEFAULT_NAME_PROPERTY;
+
+        var parsed = this._parsedMap.get(nameProperty);
+
+        if (!parsed) {
+          var rawRegions = this._parseToRegions(nameProperty);
+
+          parsed = this._parsedMap.set(nameProperty, {
+            regions: rawRegions,
+            boundingRect: calculateBoundingRect(rawRegions)
+          });
+        }
+
+        var regionsMap = createHashMap();
+        var finalRegions = [];
+        each(parsed.regions, function (region) {
+          var regionName = region.name; // Try use the alias in geoNameMap
+
+          if (nameMap && nameMap.hasOwnProperty(regionName)) {
+            region = region.cloneShallow(regionName = nameMap[regionName]);
+          }
+
+          finalRegions.push(region);
+          regionsMap.set(regionName, region);
+        });
+        return {
+          regions: finalRegions,
+          boundingRect: parsed.boundingRect || new BoundingRect(0, 0, 0, 0),
+          regionsMap: regionsMap
+        };
+      };
+
+      GeoJSONResource.prototype._parseToRegions = function (nameProperty) {
+        var mapName = this._mapName;
+        var geoJSON = this._geoJSON;
+        var rawRegions; // https://jsperf.com/try-catch-performance-overhead
+
+        try {
+          rawRegions = geoJSON ? parseGeoJSON(geoJSON, nameProperty) : [];
+        } catch (e) {
+          throw new Error('Invalid geoJson format\n' + e.message);
+        }
+
+        fixNanhai(mapName, rawRegions);
+        each(rawRegions, function (region) {
+          var regionName = region.name;
+          fixTextCoords(mapName, region);
+          fixGeoCoords(mapName, region);
+          fixDiaoyuIsland(mapName, region); // Some area like Alaska in USA map needs to be tansformed
+          // to look better
+
+          var specialArea = this._specialAreas && this._specialAreas[regionName];
+
+          if (specialArea) {
+            region.transformTo(specialArea.left, specialArea.top, specialArea.width, specialArea.height);
+          }
+        }, this);
+        return rawRegions;
+      };
+      /**
+       * Only for exporting to users.
+       * **MUST NOT** used internally.
+       */
+
+
+      GeoJSONResource.prototype.getMapForUser = function () {
+        return {
+          // For backward compatibility, use geoJson
+          // PENDING: it has been returning them without clone.
+          // do we need to avoid outsite modification?
+          geoJson: this._geoJSON,
+          geoJSON: this._geoJSON,
+          specialAreas: this._specialAreas
+        };
+      };
+
+      return GeoJSONResource;
+    }();
+
+    function calculateBoundingRect(regions) {
+      var rect;
+
+      for (var i = 0; i < regions.length; i++) {
+        var regionRect = regions[i].getBoundingRect();
+        rect = rect || regionRect.clone();
+        rect.union(regionRect);
+      }
+
+      return rect;
+    }
+
+    function parseInput(source) {
+      return !isString(source) ? source : typeof JSON !== 'undefined' && JSON.parse ? JSON.parse(source) : new Function('return (' + source + ');')();
+    }
+
+    var storage = createHashMap();
+    var geoSourceManager = {
+      /**
+       * Compatible with previous `echarts.registerMap`.
+       *
+       * @usage
+       * ```js
+       *
+       * echarts.registerMap('USA', geoJson, specialAreas);
+       *
+       * echarts.registerMap('USA', {
+       *     geoJson: geoJson,
+       *     specialAreas: {...}
+       * });
+       * echarts.registerMap('USA', {
+       *     geoJSON: geoJson,
+       *     specialAreas: {...}
+       * });
+       *
+       * echarts.registerMap('airport', {
+       *     svg: svg
+       * }
+       * ```
+       *
+       * Note:
+       * Do not support that register multiple geoJSON or SVG
+       * one map name. Because different geoJSON and SVG have
+       * different unit. It's not easy to make sure how those
+       * units are mapping/normalize.
+       * If intending to use multiple geoJSON or SVG, we can
+       * use multiple geo coordinate system.
+       */
+      registerMap: function (mapName, rawDef, rawSpecialAreas) {
+        if (rawDef.svg) {
+          var resource = new GeoSVGResource(mapName, rawDef.svg);
+          storage.set(mapName, resource);
+        } else {
+          // Recommend:
+          //     echarts.registerMap('eu', { geoJSON: xxx, specialAreas: xxx });
+          // Backward compatibility:
+          //     echarts.registerMap('eu', geoJSON, specialAreas);
+          //     echarts.registerMap('eu', { geoJson: xxx, specialAreas: xxx });
+          var geoJSON = rawDef.geoJson || rawDef.geoJSON;
+
+          if (geoJSON && !rawDef.features) {
+            rawSpecialAreas = rawDef.specialAreas;
+          } else {
+            geoJSON = rawDef;
+          }
+
+          var resource = new GeoJSONResource(mapName, geoJSON, rawSpecialAreas);
+          storage.set(mapName, resource);
+        }
+      },
+      getGeoResource: function (mapName) {
+        return storage.get(mapName);
+      },
+
+      /**
+       * Only for exporting to users.
+       * **MUST NOT** used internally.
+       */
+      getMapForUser: function (mapName) {
+        var resource = storage.get(mapName); // Do not support return SVG until some real requirement come.
+
+        return resource && resource.type === 'geoJSON' && resource.getMapForUser();
+      },
+      load: function (mapName, nameMap, nameProperty) {
+        var resource = storage.get(mapName);
+
+        if (!resource) {
+          if ("development" !== 'production') {
+            console.error('Map ' + mapName + ' not exists. The GeoJSON of the map must be provided.');
+          }
+
+          return;
+        }
+
+        return resource.load(nameMap, nameProperty);
+      }
+    };
+
+    var lifecycle = new Eventful();
+
     var hasWindow = typeof window !== 'undefined';
-    var version$1 = '5.0.2';
+    var version$1 = '5.2.1';
     var dependencies = {
-      zrender: '5.0.4'
+      zrender: '5.2.1'
     };
     var TEST_FRAME_REMAIN_TIME = 1;
     var PRIORITY_PROCESSOR_SERIES_FILTER = 800; // Some data processors depends on the stack result dimension (to calculate data extent).
@@ -26297,7 +28269,7 @@
     // All events will be triggered out side main process (i.e. when !this[IN_MAIN_PROCESS]).
 
     var IN_MAIN_PROCESS_KEY = '__flagInMainProcess';
-    var OPTION_UPDATED_KEY = '__optionUpdated';
+    var PENDING_UPDATE = '__pendingUpdate';
     var STATUS_NEEDS_UPDATE_KEY = '__needsUpdateStatus';
     var ACTION_REG = /^[a-zA-Z0-9_]+$/;
     var CONNECT_STATUS_KEY = '__connectUpdateStatus';
@@ -26373,10 +28345,8 @@
     var render;
     var renderComponents;
     var renderSeries;
-    var performPostUpdateFuncs;
     var createExtensionAPI;
     var enableConnect;
-    var setTransitionOpt;
     var markStatusToUpdate;
     var applyChangedStates;
 
@@ -26437,8 +28407,7 @@
         sort(visualFuncs, prioritySortFunc);
         sort(dataProcessorFuncs, prioritySortFunc);
         _this._scheduler = new Scheduler(_this, api, dataProcessorFuncs, visualFuncs);
-        _this._messageCenter = new MessageCenter();
-        _this._labelManager = new LabelManager(); // Init mouse events
+        _this._messageCenter = new MessageCenter(); // Init mouse events
 
         _this._initEvents(); // In case some people write `window.onresize = chart.resize`
 
@@ -26460,11 +28429,11 @@
         applyChangedStates(this);
         var scheduler = this._scheduler; // Lazy update
 
-        if (this[OPTION_UPDATED_KEY]) {
-          var silent = this[OPTION_UPDATED_KEY].silent;
+        if (this[PENDING_UPDATE]) {
+          var silent = this[PENDING_UPDATE].silent;
           this[IN_MAIN_PROCESS_KEY] = true;
           prepare(this);
-          updateMethods.update.call(this); // At present, in each frame, zrender performs:
+          updateMethods.update.call(this, null, this[PENDING_UPDATE].updateParams); // At present, in each frame, zrender performs:
           //   (1) animation step forward.
           //   (2) trigger('frame') (where this `_onframe` is called)
           //   (3) zrender flush (render).
@@ -26474,7 +28443,7 @@
           this._zr.flush();
 
           this[IN_MAIN_PROCESS_KEY] = false;
-          this[OPTION_UPDATED_KEY] = false;
+          this[PENDING_UPDATE] = null;
           flushPendingActions.call(this, silent);
           triggerUpdatedEvent.call(this, silent);
         } // Avoid do both lazy update and progress in one frame.
@@ -26498,7 +28467,7 @@
               // console.log('--- ec frame visual ---', remainTime);
 
               scheduler.performVisualTasks(ecModel);
-              renderSeries(this, this._model, api, 'remain');
+              renderSeries(this, this._model, api, 'remain', {});
               remainTime -= +new Date() - startTime;
             } while (remainTime > 0 && scheduler.unfinished); // Call flush explicitly for trigger finished event.
 
@@ -26527,7 +28496,7 @@
 
       ECharts.prototype.setOption = function (option, notMerge, lazyUpdate) {
         if ("development" !== 'production') {
-          assert$1(!this[IN_MAIN_PROCESS_KEY], '`setOption` should not be called during main process.');
+          assert(!this[IN_MAIN_PROCESS_KEY], '`setOption` should not be called during main process.');
         }
 
         if (this._disposed) {
@@ -26539,7 +28508,7 @@
         var replaceMerge;
         var transitionOpt;
 
-        if (isObject$2(notMerge)) {
+        if (isObject(notMerge)) {
           lazyUpdate = notMerge.lazyUpdate;
           silent = notMerge.silent;
           replaceMerge = notMerge.replaceMerge;
@@ -26561,11 +28530,15 @@
           replaceMerge: replaceMerge
         }, optionPreprocessorFuncs);
 
-        setTransitionOpt(this, transitionOpt);
+        var updateParams = {
+          seriesTransition: transitionOpt,
+          optionChanged: true
+        };
 
         if (lazyUpdate) {
-          this[OPTION_UPDATED_KEY] = {
-            silent: silent
+          this[PENDING_UPDATE] = {
+            silent: silent,
+            updateParams: updateParams
           };
           this[IN_MAIN_PROCESS_KEY] = false; // `setOption(option, {lazyMode: true})` may be called when zrender has been slept.
           // It should wake it up to make sure zrender start to render at the next frame.
@@ -26573,12 +28546,12 @@
           this.getZr().wakeUp();
         } else {
           prepare(this);
-          updateMethods.update.call(this); // Ensure zr refresh sychronously, and then pixel in canvas can be
+          updateMethods.update.call(this, null, updateParams); // Ensure zr refresh sychronously, and then pixel in canvas can be
           // fetched after `setOption`.
 
           this._zr.flush();
 
-          this[OPTION_UPDATED_KEY] = false;
+          this[PENDING_UPDATE] = null;
           this[IN_MAIN_PROCESS_KEY] = false;
           flushPendingActions.call(this, silent);
           triggerUpdatedEvent.call(this, silent);
@@ -26625,17 +28598,11 @@
           return;
         }
 
-        opts = extend({}, opts || {});
-        opts.pixelRatio = opts.pixelRatio || this.getDevicePixelRatio();
-        opts.backgroundColor = opts.backgroundColor || this._model.get('backgroundColor');
-        var zr = this._zr; // let list = zr.storage.getDisplayList();
-        // Stop animations
-        // Never works before in init animation, so remove it.
-        // zrUtil.each(list, function (el) {
-        //     el.stopAnimation(true);
-        // });
-
-        return zr.painter.getRenderedCanvas(opts);
+        opts = opts || {};
+        return this._zr.painter.getRenderedCanvas({
+          backgroundColor: opts.backgroundColor || this._model.get('backgroundColor'),
+          pixelRatio: opts.pixelRatio || this.getDevicePixelRatio()
+        });
       };
       /**
        * Get svg data url
@@ -26667,7 +28634,7 @@
         var ecModel = this._model;
         var excludesComponentViews = [];
         var self = this;
-        each$3(excludeComponents, function (componentType) {
+        each(excludeComponents, function (componentType) {
           ecModel.eachComponent({
             mainType: componentType
           }, function (component) {
@@ -26680,7 +28647,7 @@
           });
         });
         var url = this._zr.painter.getType() === 'svg' ? this.getSvgDataURL() : this.getRenderedCanvas(opts).toDataURL('image/' + (opts && opts.type || 'png'));
-        each$3(excludesComponentViews, function (view) {
+        each(excludesComponentViews, function (view) {
           view.group.ignore = false;
         });
         return url;
@@ -26741,7 +28708,7 @@
 
           if (isSvg) {
             var content_1 = '';
-            each$3(canvasList_1, function (item) {
+            each(canvasList_1, function (item) {
               var x = item.left - left_1;
               var y = item.top - top_1;
               content_1 += '<g transform="translate(' + x + ',' + y + ')">' + item.dom + '</g>';
@@ -26770,7 +28737,7 @@
               }));
             }
 
-            each$3(canvasList_1, function (item) {
+            each(canvasList_1, function (item) {
               var img = new ZRImage({
                 style: {
                   x: item.left * dpr_1 - left_1,
@@ -26890,7 +28857,7 @@
       ECharts.prototype._initEvents = function () {
         var _this = this;
 
-        each$3(MOUSE_EVENT_NAMES, function (eveName) {
+        each(MOUSE_EVENT_NAMES, function (eveName) {
           var handler = function (e) {
             var ecModel = _this.getModel();
 
@@ -26970,14 +28937,14 @@
 
           _this._zr.on(eveName, handler, _this);
         });
-        each$3(eventActionMap, function (actionType, eventType) {
+        each(eventActionMap, function (actionType, eventType) {
           _this._messageCenter.on(eventType, function (event) {
             this.trigger(eventType, event);
           }, _this);
         }); // Extra events
         // TODO register?
 
-        each$3(['selectchanged'], function (eventType) {
+        each(['selectchanged'], function (eventType) {
           _this._messageCenter.on(eventType, function (event) {
             this.trigger(eventType, event);
           }, _this);
@@ -27008,18 +28975,22 @@
 
         this._disposed = true;
         setAttribute(this.getDom(), DOM_ATTRIBUTE_KEY, '');
-        var api = this._api;
-        var ecModel = this._model;
-        each$3(this._componentsViews, function (component) {
+        var chart = this;
+        var api = chart._api;
+        var ecModel = chart._model;
+        each(chart._componentsViews, function (component) {
           component.dispose(ecModel, api);
         });
-        each$3(this._chartsViews, function (chart) {
+        each(chart._chartsViews, function (chart) {
           chart.dispose(ecModel, api);
         }); // Dispose after all views disposed
 
-        this._zr.dispose();
+        chart._zr.dispose(); // Set properties to null.
+        // To reduce the memory cost in case the top code still holds this instance unexpectedly.
 
-        delete instances$1[this.id];
+
+        chart._dom = chart._model = chart._chartsMap = chart._componentsMap = chart._chartsViews = chart._componentsViews = chart._scheduler = chart._api = chart._zr = chart._throttledZrFlush = chart._theme = chart._coordSysMgr = chart._messageCenter = null;
+        delete instances$1[chart.id];
       };
       /**
        * Resize the chart
@@ -27028,7 +28999,7 @@
 
       ECharts.prototype.resize = function (opts) {
         if ("development" !== 'production') {
-          assert$1(!this[IN_MAIN_PROCESS_KEY], '`resize` should not be called during main process.');
+          assert(!this[IN_MAIN_PROCESS_KEY], '`resize` should not be called during main process.');
         }
 
         if (this._disposed) {
@@ -27046,16 +29017,28 @@
           return;
         }
 
-        var optionChanged = ecModel.resetOption('media');
-        var silent = opts && opts.silent;
+        var needPrepare = ecModel.resetOption('media');
+        var silent = opts && opts.silent; // There is some real cases that:
+        // chart.setOption(option, { lazyUpdate: true });
+        // chart.resize();
+
+        if (this[PENDING_UPDATE]) {
+          if (silent == null) {
+            silent = this[PENDING_UPDATE].silent;
+          }
+
+          needPrepare = true;
+          this[PENDING_UPDATE] = null;
+        }
+
         this[IN_MAIN_PROCESS_KEY] = true;
-        optionChanged && prepare(this);
+        needPrepare && prepare(this);
         updateMethods.update.call(this, {
           type: 'resize',
-          animation: {
+          animation: extend({
             // Disable animation
             duration: 0
-          }
+          }, opts && opts.animation)
         });
         this[IN_MAIN_PROCESS_KEY] = false;
         flushPendingActions.call(this, silent);
@@ -27068,7 +29051,7 @@
           return;
         }
 
-        if (isObject$2(name)) {
+        if (isObject(name)) {
           cfg = name;
           name = '';
         }
@@ -27126,7 +29109,7 @@
           return;
         }
 
-        if (!isObject$2(opt)) {
+        if (!isObject(opt)) {
           opt = {
             silent: !!opt
           };
@@ -27168,10 +29151,11 @@
       };
 
       ECharts.prototype.updateLabelLayout = function () {
-        var labelManager = this._labelManager;
-        labelManager.updateLayoutConfig(this._api);
-        labelManager.layout(this._api);
-        labelManager.processLabelsOverall();
+        lifecycle.trigger('series:layoutlabels', this._model, this._api, {
+          // Not adding series labels.
+          // TODO
+          updatedSeries: []
+        });
       };
 
       ECharts.prototype.appendData = function (params) {
@@ -27185,7 +29169,7 @@
         var seriesModel = ecModel.getSeriesByIndex(seriesIndex);
 
         if ("development" !== 'production') {
-          assert$1(params.data && seriesModel);
+          assert(params.data && seriesModel);
         }
 
         seriesModel.appendData(params); // Note: `appendData` does not support that update extent of coordinate
@@ -27256,7 +29240,7 @@
               ChartView.getClass(classType.sub);
 
               if ("development" !== 'production') {
-                assert$1(Clazz, classType.sub + ' does not exist.');
+                assert(Clazz, classType.sub + ' does not exist.');
               }
 
               view = new Clazz();
@@ -27304,7 +29288,7 @@
             // FIXME
             // Chart will not be update directly here, except set dirty.
             // But there is no such scenario now.
-            each$3([].concat(ecIns._componentsViews).concat(ecIns._chartsViews), callView);
+            each([].concat(ecIns._componentsViews).concat(ecIns._chartsViews), callView);
             return;
           }
 
@@ -27323,33 +29307,67 @@
 
           if (excludeSeriesId != null) {
             excludeSeriesIdMap = createHashMap();
-            each$3(normalizeToArray(excludeSeriesId), function (id) {
+            each(normalizeToArray(excludeSeriesId), function (id) {
               var modelId = convertOptionIdName(id, null);
 
               if (modelId != null) {
                 excludeSeriesIdMap.set(modelId, true);
               }
             });
+          }
+
+          if (isHighDownPayload(payload)) {
+            allLeaveBlur(ecIns._api);
           } // If dispatchAction before setOption, do nothing.
 
 
           ecModel && ecModel.eachComponent(condition, function (model) {
-            if (!excludeSeriesIdMap || excludeSeriesIdMap.get(model.id) == null) {
-              if (isHighDownPayload(payload) && !payload.notBlur) {
-                if (model instanceof SeriesModel) {
-                  toggleSeriesBlurStateFromPayload(model, payload, ecIns._api);
+            var isExcluded = excludeSeriesIdMap && excludeSeriesIdMap.get(model.id) !== null;
+
+            if (isExcluded) {
+              return;
+            }
+
+            if (isHighDownPayload(payload)) {
+              if (model instanceof SeriesModel) {
+                if (payload.type === HIGHLIGHT_ACTION_TYPE && !payload.notBlur) {
+                  blurSeriesFromHighlightPayload(model, payload, ecIns._api);
                 }
-              } else if (isSelectChangePayload(payload)) {
-                // TODO geo
-                if (model instanceof SeriesModel) {
-                  toggleSelectionFromPayload(model, payload, ecIns._api);
-                  updateSeriesElementSelection(model);
-                  markStatusToUpdate(ecIns);
+              } else {
+                var _a = findComponentHighDownDispatchers(model.mainType, model.componentIndex, payload.name, ecIns._api),
+                    focusSelf = _a.focusSelf,
+                    dispatchers = _a.dispatchers;
+
+                if (payload.type === HIGHLIGHT_ACTION_TYPE && focusSelf && !payload.notBlur) {
+                  blurComponent(model.mainType, model.componentIndex, ecIns._api);
+                } // PENDING:
+                // Whether to put this "enter emphasis" code in `ComponentView`,
+                // which will be the same as `ChartView` but might be not necessary
+                // and will be far from this logic.
+
+
+                if (dispatchers) {
+                  each(dispatchers, function (dispatcher) {
+                    payload.type === HIGHLIGHT_ACTION_TYPE ? enterEmphasis(dispatcher) : leaveEmphasis(dispatcher);
+                  });
                 }
               }
-
-              callView(ecIns[mainType === 'series' ? '_chartsMap' : '_componentsMap'][model.__viewId]);
+            } else if (isSelectChangePayload(payload)) {
+              // TODO geo
+              if (model instanceof SeriesModel) {
+                toggleSelectionFromPayload(model, payload, ecIns._api);
+                updateSeriesElementSelection(model);
+                markStatusToUpdate(ecIns);
+              }
             }
+          }, ecIns);
+          ecModel && ecModel.eachComponent(condition, function (model) {
+            var isExcluded = excludeSeriesIdMap && excludeSeriesIdMap.get(model.id) !== null;
+
+            if (isExcluded) {
+              return;
+            }
+            callView(ecIns[mainType === 'series' ? '_chartsMap' : '_componentsMap'][model.__viewId]);
           }, ecIns);
 
           function callView(view) {
@@ -27360,10 +29378,14 @@
         updateMethods = {
           prepareAndUpdate: function (payload) {
             prepare(this);
-            updateMethods.update.call(this, payload);
+            updateMethods.update.call(this, payload, {
+              // Needs to mark option changed if newOption is given.
+              // It's from MagicType.
+              // TODO If use a separate flag optionChanged in payload?
+              optionChanged: payload.newOption != null
+            });
           },
-          update: function (payload) {
-            // console.profile && console.profile('update');
+          update: function (payload, updateParams) {
             var ecModel = this._model;
             var api = this._api;
             var zr = this._zr;
@@ -27395,7 +29417,7 @@
             coordSysMgr.update(ecModel, api);
             clearColorPalette(ecModel);
             scheduler.performVisualTasks(ecModel, payload);
-            render(this, ecModel, api, payload); // Set background
+            render(this, ecModel, api, payload, updateParams); // Set background
 
             var backgroundColor = ecModel.get('backgroundColor') || 'transparent';
             var darkMode = ecModel.get('darkMode'); // In IE8
@@ -27415,7 +29437,7 @@
               }
             }
 
-            performPostUpdateFuncs(ecModel, api); // console.profile && console.profileEnd('update');
+            lifecycle.trigger('afterupdate', ecModel, api);
           },
           updateTransform: function (payload) {
             var _this = this;
@@ -27467,8 +29489,8 @@
             // renderComponents(ecIns, ecModel, api, payload, componentDirtyList);
 
 
-            renderSeries(this, ecModel, api, payload, seriesDirtyMap);
-            performPostUpdateFuncs(ecModel, this._api);
+            renderSeries(this, ecModel, api, payload, {}, seriesDirtyMap);
+            lifecycle.trigger('afterupdate', ecModel, api);
           },
           updateView: function (payload) {
             var ecModel = this._model; // update before setOption
@@ -27485,8 +29507,8 @@
               setDirty: true
             });
 
-            render(this, this._model, this._api, payload);
-            performPostUpdateFuncs(ecModel, this._api);
+            render(this, ecModel, this._api, payload, {});
+            lifecycle.trigger('afterupdate', ecModel, this._api);
           },
           updateVisual: function (payload) {
             // updateMethods.update.call(this, payload);
@@ -27523,7 +29545,7 @@
               var chartView = _this._chartsMap[seriesModel.__viewId];
               chartView.updateVisual(seriesModel, ecModel, _this._api, payload);
             });
-            performPostUpdateFuncs(ecModel, this._api);
+            lifecycle.trigger('afterupdate', ecModel, this._api);
           },
           updateLayout: function (payload) {
             updateMethods.update.call(this, payload);
@@ -27591,8 +29613,8 @@
           var eventObjBatch = [];
           var eventObj;
           var isSelectChange = isSelectChangePayload(payload);
-          var isStatusChange = isHighDownPayload(payload) || isSelectChange;
-          each$3(payloads, function (batchItem) {
+          var isHighDown = isHighDownPayload(payload);
+          each(payloads, function (batchItem) {
             // Action can specify the event by return it.
             eventObj = actionWrap.action(batchItem, _this._model, _this._api); // Emit event outside
 
@@ -27601,22 +29623,30 @@
             eventObj.type = actionInfo.event || eventObj.type;
             eventObjBatch.push(eventObj); // light update does not perform data process, layout and visual.
 
-            if (isStatusChange) {
-              // method, payload, mainType, subType
-              updateDirectly(_this, updateMethod, batchItem, 'series'); // Mark status to update
+            if (isHighDown) {
+              var _a = preParseFinder(payload),
+                  queryOptionMap = _a.queryOptionMap,
+                  mainTypeSpecified = _a.mainTypeSpecified;
 
+              var componentMainType = mainTypeSpecified ? queryOptionMap.keys()[0] : 'series';
+              updateDirectly(_this, updateMethod, batchItem, componentMainType);
+              markStatusToUpdate(_this);
+            } else if (isSelectChange) {
+              // At present `dispatchAction({ type: 'select', ... })` is not supported on components.
+              // geo still use 'geoselect'.
+              updateDirectly(_this, updateMethod, batchItem, 'series');
               markStatusToUpdate(_this);
             } else if (cptType) {
               updateDirectly(_this, updateMethod, batchItem, cptType.main, cptType.sub);
             }
           });
 
-          if (updateMethod !== 'none' && !isStatusChange && !cptType) {
+          if (updateMethod !== 'none' && !isHighDown && !isSelectChange && !cptType) {
             // Still dirty
-            if (this[OPTION_UPDATED_KEY]) {
+            if (this[PENDING_UPDATE]) {
               prepare(this);
               updateMethods.update.call(this, payload);
-              this[OPTION_UPDATED_KEY] = false;
+              this[PENDING_UPDATE] = null;
             } else {
               updateMethods[updateMethod].call(this, payload);
             }
@@ -27689,7 +29719,7 @@
             if ( // Although zr is dirty if initial animation is not finished
             // and this checking is called on frame, we also check
             // animation finished for robustness.
-            zr.animation.isFinished() && !ecIns[OPTION_UPDATED_KEY] && !ecIns._scheduler.unfinished && !ecIns._pendingActions.length) {
+            zr.animation.isFinished() && !ecIns[PENDING_UPDATE] && !ecIns._scheduler.unfinished && !ecIns._pendingActions.length) {
               ecIns.trigger('finished');
             }
           });
@@ -27701,11 +29731,7 @@
             var dispatcher = findEventDispatcher(el, isHighDownDispatcher);
 
             if (dispatcher) {
-              var ecData = getECData(dispatcher); // Try blur all in the related series. Then emphasis the hoverred.
-              // TODO. progressive mode.
-
-              toggleSeriesBlurState(ecData.seriesIndex, ecData.focus, ecData.blurScope, ecIns._api, true);
-              enterEmphasisWhenMouseOver(dispatcher, e);
+              handleGlobalMouseOverForHighDown(dispatcher, e, ecIns._api);
               markStatusToUpdate(ecIns);
             }
           }).on('mouseout', function (e) {
@@ -27713,9 +29739,7 @@
             var dispatcher = findEventDispatcher(el, isHighDownDispatcher);
 
             if (dispatcher) {
-              var ecData = getECData(dispatcher);
-              toggleSeriesBlurState(ecData.seriesIndex, ecData.focus, ecData.blurScope, ecIns._api, false);
-              leaveEmphasisWhenMouseOut(dispatcher, e);
+              handleGlboalMouseOutForHighDown(dispatcher, e, ecIns._api);
               markStatusToUpdate(ecIns);
             }
           }).on('click', function (e) {
@@ -27746,22 +29770,22 @@
           });
         };
 
-        render = function (ecIns, ecModel, api, payload) {
-          renderComponents(ecIns, ecModel, api, payload);
-          each$3(ecIns._chartsViews, function (chart) {
+        render = function (ecIns, ecModel, api, payload, updateParams) {
+          renderComponents(ecIns, ecModel, api, payload, updateParams);
+          each(ecIns._chartsViews, function (chart) {
             chart.__alive = false;
           });
-          renderSeries(ecIns, ecModel, api, payload); // Remove groups of unrendered charts
+          renderSeries(ecIns, ecModel, api, payload, updateParams); // Remove groups of unrendered charts
 
-          each$3(ecIns._chartsViews, function (chart) {
+          each(ecIns._chartsViews, function (chart) {
             if (!chart.__alive) {
               chart.remove(ecModel, api);
             }
           });
         };
 
-        renderComponents = function (ecIns, ecModel, api, payload, dirtyList) {
-          each$3(dirtyList || ecIns._componentsViews, function (componentView) {
+        renderComponents = function (ecIns, ecModel, api, payload, updateParams, dirtyList) {
+          each(dirtyList || ecIns._componentsViews, function (componentView) {
             var componentModel = componentView.__model;
             clearStates(componentModel, componentView);
             componentView.render(componentModel, ecModel, api, payload);
@@ -27774,11 +29798,14 @@
          */
 
 
-        renderSeries = function (ecIns, ecModel, api, payload, dirtyMap) {
+        renderSeries = function (ecIns, ecModel, api, payload, updateParams, dirtyMap) {
           // Render all charts
           var scheduler = ecIns._scheduler;
-          var labelManager = ecIns._labelManager;
-          labelManager.clearLabels();
+          updateParams = extend(updateParams || {}, {
+            updatedSeries: ecModel.getSeries()
+          }); // TODO progressive?
+
+          lifecycle.trigger('series:beforeupdate', ecModel, api, updateParams);
           var unfinished = false;
           ecModel.eachSeries(function (seriesModel) {
             var chartView = ecIns._chartsMap[seriesModel.__viewId];
@@ -27796,20 +29823,17 @@
               unfinished = true;
             }
 
-            seriesModel.__transientTransitionOpt = null;
             chartView.group.silent = !!seriesModel.get('silent'); // Should not call markRedraw on group, because it will disable zrender
             // increamental render (alway render from the __startIndex each frame)
             // chartView.group.markRedraw();
 
             updateBlend(seriesModel, chartView);
-            updateSeriesElementSelection(seriesModel); // Add labels.
-
-            labelManager.addLabelsOfSeries(chartView);
+            updateSeriesElementSelection(seriesModel);
           });
           scheduler.unfinished = unfinished || scheduler.unfinished;
-          labelManager.updateLayoutConfig(api);
-          labelManager.layout(api);
-          labelManager.processLabelsOverall();
+          lifecycle.trigger('series:layoutlabels', ecModel, api, updateParams); // transition after label is layouted.
+
+          lifecycle.trigger('series:transition', ecModel, api, updateParams);
           ecModel.eachSeries(function (seriesModel) {
             var chartView = ecIns._chartsMap[seriesModel.__viewId]; // Update Z after labels updated. Before applying states.
 
@@ -27820,12 +29844,7 @@
           }); // If use hover layer
 
           updateHoverLayerStatus(ecIns, ecModel);
-        };
-
-        performPostUpdateFuncs = function (ecModel, api) {
-          each$3(postUpdateFuncs, function (func) {
-            func(ecModel, api);
-          });
+          lifecycle.trigger('series:afterupdate', ecModel, api, updateParams);
         };
 
         markStatusToUpdate = function (ecIns) {
@@ -27935,37 +29954,53 @@
         function updateZ(model, view) {
           if (model.preventAutoZ) {
             return;
+          } // Set z and zlevel
+
+
+          _updateZ(view.group, model.get('z') || 0, model.get('zlevel') || 0, -Infinity);
+        }
+
+        function _updateZ(el, z, zlevel, maxZ2) {
+          // Group may also have textContent
+          var label = el.getTextContent();
+          var labelLine = el.getTextGuideLine();
+          var isGroup = el.isGroup;
+
+          if (isGroup) {
+            // set z & zlevel of children elements of Group
+            // el.traverse((childEl: Element) => _updateZ(childEl, z, zlevel));
+            var children = el.childrenRef();
+
+            for (var i = 0; i < children.length; i++) {
+              maxZ2 = Math.max(_updateZ(children[i], z, zlevel, maxZ2), maxZ2);
+            }
+          } else {
+            // not Group
+            el.z = z;
+            el.zlevel = zlevel;
+            maxZ2 = Math.max(el.z2, maxZ2);
+          } // always set z and zlevel if label/labelLine exists
+
+
+          if (label) {
+            label.z = z;
+            label.zlevel = zlevel; // lift z2 of text content
+            // TODO if el.emphasis.z2 is spcefied, what about textContent.
+
+            isFinite(maxZ2) && (label.z2 = maxZ2 + 2);
           }
 
-          var z = model.get('z');
-          var zlevel = model.get('zlevel'); // Set z and zlevel
+          if (labelLine) {
+            var textGuideLineConfig = el.textGuideLineConfig;
+            labelLine.z = z;
+            labelLine.zlevel = zlevel;
+            isFinite(maxZ2) && (labelLine.z2 = maxZ2 + (textGuideLineConfig && textGuideLineConfig.showAbove ? 1 : -1));
+          }
 
-          view.group.traverse(function (el) {
-            if (!el.isGroup) {
-              z != null && (el.z = z);
-              zlevel != null && (el.zlevel = zlevel); // TODO if textContent is on group.
-
-              var label = el.getTextContent();
-              var labelLine = el.getTextGuideLine();
-
-              if (label) {
-                label.z = el.z;
-                label.zlevel = el.zlevel; // lift z2 of text content
-                // TODO if el.emphasis.z2 is spcefied, what about textContent.
-
-                label.z2 = el.z2 + 2;
-              }
-
-              if (labelLine) {
-                var showAbove = el.textGuideLineConfig && el.textGuideLineConfig.showAbove;
-                labelLine.z = el.z;
-                labelLine.zlevel = el.zlevel;
-                labelLine.z2 = el.z2 + (showAbove ? 1 : -1);
-              }
-            }
-          });
-        }
+          return maxZ2;
+        } // Clear states without animation.
         // TODO States on component.
+
 
         function clearStates(model, view) {
           view.group.traverse(function (el) {
@@ -28133,7 +30168,7 @@
             }
           }
 
-          each$3(eventActionMap, function (actionType, eventType) {
+          each(eventActionMap, function (actionType, eventType) {
             chart._messageCenter.on(eventType, function (event) {
               if (connectedGroups[chart.group] && chart[CONNECT_STATUS_KEY] !== CONNECT_STATUS_PENDING) {
                 if (event && event.escapeConnect) {
@@ -28142,13 +30177,13 @@
 
                 var action_1 = chart.makeActionFromEvent(event);
                 var otherCharts_1 = [];
-                each$3(instances$1, function (otherChart) {
+                each(instances$1, function (otherChart) {
                   if (otherChart !== chart && otherChart.group === chart.group) {
                     otherCharts_1.push(otherChart);
                   }
                 });
                 updateConnectedChartsStatus(otherCharts_1, CONNECT_STATUS_PENDING);
-                each$3(otherCharts_1, function (otherChart) {
+                each(otherCharts_1, function (otherChart) {
                   if (otherChart[CONNECT_STATUS_KEY] !== CONNECT_STATUS_UPDATING) {
                     otherChart.dispatchAction(action_1);
                   }
@@ -28156,59 +30191,6 @@
                 updateConnectedChartsStatus(otherCharts_1, CONNECT_STATUS_UPDATED);
               }
             });
-          });
-        };
-
-        setTransitionOpt = function (chart, transitionOpt) {
-          var ecModel = chart._model;
-          each(normalizeToArray(transitionOpt), function (transOpt) {
-            var errMsg;
-            var fromOpt = transOpt.from;
-            var toOpt = transOpt.to;
-
-            if (toOpt == null) {
-              if ("development" !== 'production') {
-                errMsg = '`transition.to` must be specified.';
-              }
-
-              throwError(errMsg);
-            }
-
-            var finderOpt = {
-              includeMainTypes: ['series'],
-              enableAll: false,
-              enableNone: false
-            };
-            var fromResult = fromOpt ? parseFinder(ecModel, fromOpt, finderOpt) : null;
-            var toResult = parseFinder(ecModel, toOpt, finderOpt);
-            var toSeries = toResult.seriesModel;
-
-            if (toSeries == null) {
-              errMsg = '';
-
-              if ("development" !== 'production') {
-                errMsg = '`transition` is only supported on series.';
-              }
-            }
-
-            if (fromResult && fromResult.seriesModel !== toSeries) {
-              errMsg = '';
-
-              if ("development" !== 'production') {
-                errMsg = '`transition.from` and `transition.to` must be specified to the same series.';
-              }
-            }
-
-            if (errMsg != null) {
-              throwError(errMsg);
-            } // Just a temp solution: mount them on series.
-
-
-            toSeries.__transientTransitionOpt = {
-              from: fromOpt ? fromOpt.dimension : null,
-              to: toOpt.dimension,
-              dividingMethod: transOpt.dividingMethod
-            };
           });
         };
       }();
@@ -28281,8 +30263,6 @@
     var eventActionMap = {};
     var dataProcessorFuncs = [];
     var optionPreprocessorFuncs = [];
-    var postInitFuncs = [];
-    var postUpdateFuncs = [];
     var visualFuncs = [];
     var themeStorage = {};
     var loadingEffects = {};
@@ -28298,6 +30278,8 @@
      *        Can be 'auto' (the same as null/undefined)
      * @param opts.height Use clientHeight of the input `dom` by default.
      *        Can be 'auto' (the same as null/undefined)
+     * @param opts.locale Specify the locale.
+     * @param opts.useDirtyRect Enable dirty rectangle rendering or not.
      */
 
     function init$1(dom, theme, opts) {
@@ -28328,9 +30310,7 @@
       instances$1[chart.id] = chart;
       setAttribute(dom, DOM_ATTRIBUTE_KEY, chart.id);
       enableConnect(chart);
-      each$3(postInitFuncs, function (postInitFunc) {
-        postInitFunc(chart);
-      });
+      lifecycle.trigger('afterinit', chart);
       return chart;
     }
     /**
@@ -28357,13 +30337,13 @@
         var charts = groupId;
         groupId = null; // If any chart has group
 
-        each$3(charts, function (chart) {
+        each(charts, function (chart) {
           if (chart.group != null) {
             groupId = chart.group;
           }
         });
         groupId = groupId || 'g_' + groupIdBase++;
-        each$3(charts, function (chart) {
+        each(charts, function (chart) {
           chart.group = groupId;
         });
       }
@@ -28417,7 +30397,7 @@
      */
 
     function registerPreprocessor(preprocessorFunc) {
-      if (indexOf$1(optionPreprocessorFuncs, preprocessorFunc) < 0) {
+      if (indexOf(optionPreprocessorFuncs, preprocessorFunc) < 0) {
         optionPreprocessorFuncs.push(preprocessorFunc);
       }
     }
@@ -28430,9 +30410,7 @@
      */
 
     function registerPostInit(postInitFunc) {
-      if (indexOf$1(postInitFuncs, postInitFunc) < 0) {
-        postInitFunc && postInitFuncs.push(postInitFunc);
-      }
+      registerUpdateLifecycle('afterinit', postInitFunc);
     }
     /**
      * Register postUpdater
@@ -28440,9 +30418,10 @@
      */
 
     function registerPostUpdate(postUpdateFunc) {
-      if (indexOf$1(postUpdateFuncs, postUpdateFunc) < 0) {
-        postUpdateFunc && postUpdateFuncs.push(postUpdateFunc);
-      }
+      registerUpdateLifecycle('afterupdate', postUpdateFunc);
+    }
+    function registerUpdateLifecycle(name, cb) {
+      lifecycle.on(name, cb);
     }
     function registerAction(actionInfo, eventName, action) {
       if (typeof eventName === 'function') {
@@ -28450,7 +30429,7 @@
         eventName = '';
       }
 
-      var actionType = isObject$2(actionInfo) ? actionInfo.type : [actionInfo, actionInfo = {
+      var actionType = isObject(actionInfo) ? actionInfo.type : [actionInfo, actionInfo = {
         event: eventName
       }][0]; // Event name is all lowercase
 
@@ -28463,7 +30442,7 @@
       } // Validate action type and event name.
 
 
-      assert$1(ACTION_REG.test(actionType) && ACTION_REG.test(eventName));
+      assert(ACTION_REG.test(actionType) && ACTION_REG.test(eventName));
 
       if (!actions[actionType]) {
         actions[actionType] = {
@@ -28501,7 +30480,7 @@
     var registeredTasks = [];
 
     function normalizeRegister(targetList, priority, fn, defaultPriority, visualType) {
-      if (isFunction$1(priority) || isObject$2(priority)) {
+      if (isFunction(priority) || isObject(priority)) {
         fn = priority;
         priority = defaultPriority;
       }
@@ -28512,13 +30491,13 @@
         } // Check duplicate
 
 
-        each$3(targetList, function (wrap) {
-          assert$1(wrap.__raw !== fn);
+        each(targetList, function (wrap) {
+          assert(wrap.__raw !== fn);
         });
       } // Already registered
 
 
-      if (indexOf$1(registeredTasks, fn) >= 0) {
+      if (indexOf(registeredTasks, fn) >= 0) {
         return;
       }
 
@@ -28552,22 +30531,15 @@
       $override('createCanvas', creator);
     }
     /**
-     * The parameters and usage: see `mapDataStorage.registerMap`.
+     * The parameters and usage: see `geoSourceManager.registerMap`.
      * Compatible with previous `echarts.registerMap`.
      */
 
     function registerMap(mapName, geoJson, specialAreas) {
-      mapDataStorage.registerMap(mapName, geoJson, specialAreas);
+      geoSourceManager.registerMap(mapName, geoJson, specialAreas);
     }
     function getMap(mapName) {
-      // For backward compatibility, only return the first one.
-      var records = mapDataStorage.retrieveMap(mapName); // FIXME support SVG, where return not only records[0].
-
-      return records && records[0] && {
-        // @ts-ignore
-        geoJson: records[0].geoJSON,
-        specialAreas: records[0].specialAreas
-      };
+      return geoSourceManager.getMapForUser(mapName);
     }
     var registerTransform = registerExternalTransform;
     /**
@@ -28633,6 +30605,7 @@
       registerProcessor: registerProcessor,
       registerPostInit: registerPostInit,
       registerPostUpdate: registerPostUpdate,
+      registerUpdateLifecycle: registerUpdateLifecycle,
       registerAction: registerAction,
       registerCoordinateSystem: registerCoordinateSystem,
       registerLayout: registerLayout,
@@ -28792,6 +30765,15 @@
         return this;
       };
       /**
+       * Callback function when update a data and only work in `cbMode: 'byKey'`.
+       */
+
+
+      DataDiffer.prototype.updateManyToMany = function (func) {
+        this._updateManyToMany = func;
+        return this;
+      };
+      /**
        * Callback function when remove a data
        */
 
@@ -28896,6 +30878,9 @@
           } else if (oldIdxMapValLen === 1 && newIdxMapValLen === 1) {
             this._update && this._update(newIdxMapVal, oldIdxMapVal);
             newDataIndexMap[oldKey] = null;
+          } else if (oldIdxMapValLen > 1 && newIdxMapValLen > 1) {
+            this._updateManyToMany && this._updateManyToMany(newIdxMapVal, oldIdxMapVal);
+            newDataIndexMap[oldKey] = null;
           } else if (oldIdxMapValLen > 1) {
             for (var i_1 = 0; i_1 < oldIdxMapValLen; i_1++) {
               this._remove && this._remove(oldIdxMapVal[i_1]);
@@ -28968,17 +30953,47 @@
       return DataDiffer;
     }();
 
-    function summarizeDimensions(data) {
+    var DimensionUserOuput =
+    /** @class */
+    function () {
+      function DimensionUserOuput(encode, dimRequest) {
+        this._encode = encode;
+        this._schema = dimRequest;
+      }
+
+      DimensionUserOuput.prototype.get = function () {
+        return {
+          // Do not generate full dimension name until fist used.
+          fullDimensions: this._getFullDimensionNames(),
+          encode: this._encode
+        };
+      };
+      /**
+       * Get all data store dimension names.
+       * Theoretically a series data store is defined both by series and used dataset (if any).
+       * If some dimensions are omitted for performance reason in `this.dimensions`,
+       * the dimension name may not be auto-generated if user does not specify a dimension name.
+       * In this case, the dimension name is `null`/`undefined`.
+       */
+
+
+      DimensionUserOuput.prototype._getFullDimensionNames = function () {
+        if (!this._cachedDimNames) {
+          this._cachedDimNames = this._schema ? this._schema.makeOutputDimensionNames() : [];
+        }
+
+        return this._cachedDimNames;
+      };
+
+      return DimensionUserOuput;
+    }();
+    function summarizeDimensions(data, schema) {
       var summary = {};
       var encode = summary.encode = {};
       var notExtraCoordDimMap = createHashMap();
       var defaultedLabel = [];
-      var defaultedTooltip = []; // See the comment of `List.js#userOutput`.
-
-      var userOutput = summary.userOutput = {
-        dimensionNames: data.dimensions.slice(),
-        encode: {}
-      };
+      var defaultedTooltip = [];
+      var userOutputEncode = {};
       each(data.dimensions, function (dimName) {
         var dimItem = data.getDimensionInfo(dimName);
         var coordDim = dimItem.coordDim;
@@ -29003,7 +31018,7 @@
             // And it only has index. User can use index to retrieve value from the raw item array.
 
 
-            getOrCreateEncodeArr(userOutput.encode, coordDim)[coordDimIndex] = dimItem.index;
+            getOrCreateEncodeArr(userOutputEncode, coordDim)[coordDimIndex] = data.getDimensionIndex(dimItem.name);
           }
 
           if (dimItem.defaultTooltip) {
@@ -29030,6 +31045,9 @@
         dataDimsOnCoord = dataDimsOnCoord.concat(dimArr);
       });
       summary.dataDimsOnCoord = dataDimsOnCoord;
+      summary.dataDimIndicesOnCoord = map(dataDimsOnCoord, function (dimName) {
+        return data.getDimensionInfo(dimName).storeDimIndex;
+      });
       summary.encodeFirstDimNotExtra = encodeFirstDimNotExtra;
       var encodeLabel = encode.label; // FIXME `encode.label` is not recommanded, because formatter can not be set
       // in this way. Use label.formatter instead. May be remove this approach someday.
@@ -29048,6 +31066,7 @@
 
       encode.defaultedLabel = defaultedLabel;
       encode.defaultedTooltip = defaultedTooltip;
+      summary.userOutput = new DimensionUserOuput(userOutputEncode, schema);
       return summary;
     }
 
@@ -29081,21 +31100,21 @@
     //     return valueDim;
     // }
 
-    var DataDimensionInfo =
+    var SeriesDimensionDefine =
     /** @class */
     function () {
       /**
        * @param opt All of the fields will be shallow copied.
        */
-      function DataDimensionInfo(opt) {
+      function SeriesDimensionDefine(opt) {
         /**
          * The format of `otherDims` is:
          * ```js
          * {
-         *     tooltip: number optional,
-         *     label: number optional,
-         *     itemName: number optional,
-         *     seriesName: number optional,
+         *     tooltip?: number
+         *     label?: number
+         *     itemName?: number
+         *     seriesName?: number
          * }
          * ```
          *
@@ -29114,7 +31133,7 @@
          * this.otherDims = {
          *     // `3` is at the index `0` of the `encode.tooltip`
          *     tooltip: 0,
-         *     // `3` is at the index `1` of the `encode.tooltip`
+         *     // `3` is at the index `1` of the `encode.label`
          *     label: 1
          * };
          * ```
@@ -29128,69 +31147,248 @@
         }
       }
 
-      return DataDimensionInfo;
+      return SeriesDimensionDefine;
     }();
 
-    var mathFloor = Math.floor;
-    var isObject$3 = isObject;
+    var inner$4 = makeInner();
+    var dimTypeShort = {
+      float: 'f',
+      int: 'i',
+      ordinal: 'o',
+      number: 'n',
+      time: 't'
+    };
+    /**
+     * Represents the dimension requirement of a series.
+     *
+     * NOTICE:
+     * When there are too many dimensions in dataset and many series, only the used dimensions
+     * (i.e., used by coord sys and declared in `series.encode`) are add to `dimensionDefineList`.
+     * But users may query data by other unused dimension names.
+     * In this case, users can only query data if and only if they have defined dimension names
+     * via ec option, so we provide `getDimensionIndexFromSource`, which only query them from
+     * `source` dimensions.
+     */
+
+    var SeriesDataSchema =
+    /** @class */
+    function () {
+      function SeriesDataSchema(opt) {
+        this.dimensions = opt.dimensions;
+        this._dimOmitted = opt.dimensionOmitted;
+        this.source = opt.source;
+        this._fullDimCount = opt.fullDimensionCount;
+
+        this._updateDimOmitted(opt.dimensionOmitted);
+      }
+
+      SeriesDataSchema.prototype.isDimensionOmitted = function () {
+        return this._dimOmitted;
+      };
+
+      SeriesDataSchema.prototype._updateDimOmitted = function (dimensionOmitted) {
+        this._dimOmitted = dimensionOmitted;
+
+        if (!dimensionOmitted) {
+          return;
+        }
+
+        if (!this._dimNameMap) {
+          this._dimNameMap = ensureSourceDimNameMap(this.source);
+        }
+      };
+      /**
+       * @caution Can only be used when `dimensionOmitted: true`.
+       *
+       * Get index by user defined dimension name (i.e., not internal generate name).
+       * That is, get index from `dimensionsDefine`.
+       * If no `dimensionsDefine`, or no name get, return -1.
+       */
+
+
+      SeriesDataSchema.prototype.getSourceDimensionIndex = function (dimName) {
+        return retrieve2(this._dimNameMap.get(dimName), -1);
+      };
+      /**
+       * @caution Can only be used when `dimensionOmitted: true`.
+       *
+       * Notice: may return `null`/`undefined` if user not specify dimension names.
+       */
+
+
+      SeriesDataSchema.prototype.getSourceDimension = function (dimIndex) {
+        var dimensionsDefine = this.source.dimensionsDefine;
+
+        if (dimensionsDefine) {
+          return dimensionsDefine[dimIndex];
+        }
+      };
+
+      SeriesDataSchema.prototype.makeStoreSchema = function () {
+        var dimCount = this._fullDimCount;
+        var willRetrieveDataByName = shouldRetrieveDataByName(this.source);
+        var makeHashStrict = !shouldOmitUnusedDimensions(dimCount); // If source don't have dimensions or series don't omit unsed dimensions.
+        // Generate from seriesDimList directly
+
+        var dimHash = '';
+        var dims = [];
+
+        for (var fullDimIdx = 0, seriesDimIdx = 0; fullDimIdx < dimCount; fullDimIdx++) {
+          var property = void 0;
+          var type = void 0;
+          var ordinalMeta = void 0;
+          var seriesDimDef = this.dimensions[seriesDimIdx]; // The list has been sorted by `storeDimIndex` asc.
+
+          if (seriesDimDef && seriesDimDef.storeDimIndex === fullDimIdx) {
+            property = willRetrieveDataByName ? seriesDimDef.name : null;
+            type = seriesDimDef.type;
+            ordinalMeta = seriesDimDef.ordinalMeta;
+            seriesDimIdx++;
+          } else {
+            var sourceDimDef = this.getSourceDimension(fullDimIdx);
+
+            if (sourceDimDef) {
+              property = willRetrieveDataByName ? sourceDimDef.name : null;
+              type = sourceDimDef.type;
+            }
+          }
+
+          dims.push({
+            property: property,
+            type: type,
+            ordinalMeta: ordinalMeta
+          }); // If retrieving data by index,
+          //   use <index, type, ordinalMeta> to determine whether data can be shared.
+          //   (Becuase in this case there might be no dimension name defined in dataset, but indices always exists).
+          //   (indices are always 0, 1, 2, ..., so we can ignore them to shorten the hash).
+          // Otherwise if retrieving data by property name (like `data: [{aa: 123, bb: 765}, ...]`),
+          //   use <property, type, ordinalMeta> in hash.
+
+          if (willRetrieveDataByName && property != null // For data stack, we have make sure each series has its own dim on this store.
+          // So we do not add property to hash to make sure they can share this store.
+          && (!seriesDimDef || !seriesDimDef.isCalculationCoord)) {
+            dimHash += makeHashStrict // Use escape character '`' in case that property name contains '$'.
+            ? property.replace(/\`/g, '`1').replace(/\$/g, '`2') // For better performance, when there are large dimensions, tolerant this defects that hardly meet.
+            : property;
+          }
+
+          dimHash += '$';
+          dimHash += dimTypeShort[type] || 'f';
+
+          if (ordinalMeta) {
+            dimHash += ordinalMeta.uid;
+          }
+
+          dimHash += '$';
+        } // Source from endpoint(usually series) will be read differently
+        // when seriesLayoutBy or startIndex(which is affected by sourceHeader) are different.
+        // So we use this three props as key.
+
+
+        var source = this.source;
+        var hash = [source.seriesLayoutBy, source.startIndex, dimHash].join('$$');
+        return {
+          dimensions: dims,
+          hash: hash
+        };
+      };
+
+      SeriesDataSchema.prototype.makeOutputDimensionNames = function () {
+        var result = [];
+
+        for (var fullDimIdx = 0, seriesDimIdx = 0; fullDimIdx < this._fullDimCount; fullDimIdx++) {
+          var name_1 = void 0;
+          var seriesDimDef = this.dimensions[seriesDimIdx]; // The list has been sorted by `storeDimIndex` asc.
+
+          if (seriesDimDef && seriesDimDef.storeDimIndex === fullDimIdx) {
+            if (!seriesDimDef.isCalculationCoord) {
+              name_1 = seriesDimDef.name;
+            }
+
+            seriesDimIdx++;
+          } else {
+            var sourceDimDef = this.getSourceDimension(fullDimIdx);
+
+            if (sourceDimDef) {
+              name_1 = sourceDimDef.name;
+            }
+          }
+
+          result.push(name_1);
+        }
+
+        return result;
+      };
+
+      SeriesDataSchema.prototype.appendCalculationDimension = function (dimDef) {
+        this.dimensions.push(dimDef);
+        dimDef.isCalculationCoord = true;
+        this._fullDimCount++; // If append dimension on a data store, consider the store
+        // might be shared by different series, series dimensions not
+        // really map to store dimensions.
+
+        this._updateDimOmitted(true);
+      };
+
+      return SeriesDataSchema;
+    }();
+    function isSeriesDataSchema(schema) {
+      return schema instanceof SeriesDataSchema;
+    }
+    function createDimNameMap(dimsDef) {
+      var dataDimNameMap = createHashMap();
+
+      for (var i = 0; i < (dimsDef || []).length; i++) {
+        var dimDefItemRaw = dimsDef[i];
+        var userDimName = isObject(dimDefItemRaw) ? dimDefItemRaw.name : dimDefItemRaw;
+
+        if (userDimName != null && dataDimNameMap.get(userDimName) == null) {
+          dataDimNameMap.set(userDimName, i);
+        }
+      }
+
+      return dataDimNameMap;
+    }
+    function ensureSourceDimNameMap(source) {
+      var innerSource = inner$4(source);
+      return innerSource.dimNameMap || (innerSource.dimNameMap = createDimNameMap(source.dimensionsDefine));
+    }
+    function shouldOmitUnusedDimensions(dimCount) {
+      return dimCount > 30;
+    }
+
+    var isObject$2 = isObject;
     var map$1 = map;
-    var UNDEFINED = 'undefined';
-    var INDEX_NOT_FOUND = -1; // Use prefix to avoid index to be the same as otherIdList[idx],
+    var CtorInt32Array$1 = typeof Int32Array === 'undefined' ? Array : Int32Array; // Use prefix to avoid index to be the same as otherIdList[idx],
     // which will cause weird udpate animation.
 
     var ID_PREFIX = 'e\0\0';
-    var dataCtors = {
-      'float': typeof Float64Array === UNDEFINED ? Array : Float64Array,
-      'int': typeof Int32Array === UNDEFINED ? Array : Int32Array,
-      // Ordinal data type can be string or int
-      'ordinal': Array,
-      'number': Array,
-      'time': Array
-    }; // Caution: MUST not use `new CtorUint32Array(arr, 0, len)`, because the Ctor of array is
-    // different from the Ctor of typed array.
+    var INDEX_NOT_FOUND = -1; // type SeriesDimensionIndex = DimensionIndex;
 
-    var CtorUint32Array = typeof Uint32Array === UNDEFINED ? Array : Uint32Array;
-    var CtorInt32Array = typeof Int32Array === UNDEFINED ? Array : Int32Array;
-    var CtorUint16Array = typeof Uint16Array === UNDEFINED ? Array : Uint16Array;
-    var TRANSFERABLE_PROPERTIES = ['hasItemOption', '_nameList', '_idList', '_invertedIndicesMap', '_rawData', '_dimValueGetter', '_count', '_rawCount', '_nameDimIdx', '_idDimIdx', '_nameRepeatCount'];
-    var CLONE_PROPERTIES = ['_extent', '_approximateExtent', '_rawExtent']; // -----------------------------
+    var TRANSFERABLE_PROPERTIES = ['hasItemOption', '_nameList', '_idList', '_invertedIndicesMap', '_dimSummary', 'userOutput', '_rawData', '_dimValueGetter', '_nameDimIdx', '_idDimIdx', '_nameRepeatCount'];
+    var CLONE_PROPERTIES = ['_approximateExtent']; // -----------------------------
     // Internal method declarations:
     // -----------------------------
 
-    var defaultDimValueGetters;
     var prepareInvertedIndex;
-    var getIndicesCtor;
-    var prepareStorage;
-    var getRawIndexWithoutIndices;
-    var getRawIndexWithIndices;
     var getId;
     var getIdNameFromStore;
-    var makeIdFromName;
     var normalizeDimensions;
-    var validateDimensions;
-    var cloneListForMapAndSample;
-    var getInitialExtent;
-    var setItemDataAndSeriesIndex;
     var transferProperties;
+    var cloneListForMapAndSample;
+    var makeIdFromName;
 
-    var List =
+    var SeriesData =
     /** @class */
     function () {
       /**
-       * @param dimensions
+       * @param dimensionsInput.dimensions
        *        For example, ['someDimName', {name: 'someDimName', type: 'someDimType'}, ...].
        *        Dimensions should be concrete names like x, y, z, lng, lat, angle, radius
        */
-      function List(dimensions, hostModel) {
+      function SeriesData(dimensionsInput, hostModel) {
         this.type = 'list';
-        this._count = 0;
-        this._rawCount = 0;
-        this._storage = {}; // We have an extra array store here. It's faster to be acessed than KV structured `_storage`.
-        // We profile the code `storage[dim]` and it seems to be KeyedLoadIC_Megamorphic instead of fast property access.
-        // Not sure why this happens. But using an extra array seems leads to faster `initData`
-        // See https://github.com/apache/incubator-echarts/pull/13314 for more explanation.
-
-        this._storageArr = [];
+        this._dimOmitted = false;
         this._nameList = [];
         this._idList = []; // Models of data option is stored sparse for optimizing memory cost
         // Never used yet (not used yet).
@@ -29205,11 +31403,7 @@
 
         this._itemLayouts = []; // Graphic elemnents
 
-        this._graphicEls = []; // Raw extent will not be cloned, but only transfered.
-        // It will not be calculated util needed.
-
-        this._rawExtent = {};
-        this._extent = {}; // key: dim, value: extent
+        this._graphicEls = []; // key: dim, value: extent
 
         this._approximateExtent = {};
         this._calculationInfo = {}; // Having detected that there is data item is non primitive type
@@ -29217,31 +31411,38 @@
         // Like `data: [ { value: xx, itemStyle: {...} }, ...]`
         // At present it only happen in `SOURCE_FORMAT_ORIGINAL`.
 
-        this.hasItemOption = true; // Methods that create a new list based on this list should be listed here.
+        this.hasItemOption = false; // Methods that create a new list based on this list should be listed here.
         // Notice that those method should `RETURN` the new list.
 
         this.TRANSFERABLE_METHODS = ['cloneShallow', 'downSample', 'lttbDownSample', 'map']; // Methods that change indices of this list should be listed here.
 
         this.CHANGABLE_METHODS = ['filterSelf', 'selectRange'];
         this.DOWNSAMPLE_METHODS = ['downSample', 'lttbDownSample'];
-        /**
-         * Get raw data index.
-         * Do not initialize.
-         * Default `getRawIndex`. And it can be changed.
-         */
+        var dimensions;
+        var assignStoreDimIdx = false;
 
-        this.getRawIndex = getRawIndexWithoutIndices;
+        if (isSeriesDataSchema(dimensionsInput)) {
+          dimensions = dimensionsInput.dimensions;
+          this._dimOmitted = dimensionsInput.isDimensionOmitted();
+          this._schema = dimensionsInput;
+        } else {
+          assignStoreDimIdx = true;
+          dimensions = dimensionsInput;
+        }
+
         dimensions = dimensions || ['x', 'y'];
         var dimensionInfos = {};
         var dimensionNames = [];
         var invertedIndicesMap = {};
+        var needsHasOwn = false;
+        var emptyObj = {};
 
         for (var i = 0; i < dimensions.length; i++) {
           // Use the original dimensions[i], where other flag props may exists.
           var dimInfoInput = dimensions[i];
-          var dimensionInfo = isString(dimInfoInput) ? new DataDimensionInfo({
+          var dimensionInfo = isString(dimInfoInput) ? new SeriesDimensionDefine({
             name: dimInfoInput
-          }) : !(dimInfoInput instanceof DataDimensionInfo) ? new DataDimensionInfo(dimInfoInput) : dimInfoInput;
+          }) : !(dimInfoInput instanceof SeriesDimensionDefine) ? new SeriesDimensionDefine(dimInfoInput) : dimInfoInput;
           var dimensionName = dimensionInfo.name;
           dimensionInfo.type = dimensionInfo.type || 'float';
 
@@ -29253,7 +31454,10 @@
           var otherDims = dimensionInfo.otherDims = dimensionInfo.otherDims || {};
           dimensionNames.push(dimensionName);
           dimensionInfos[dimensionName] = dimensionInfo;
-          dimensionInfo.index = i;
+
+          if (emptyObj[dimensionName] != null) {
+            needsHasOwn = true;
+          }
 
           if (dimensionInfo.createInvertedIndices) {
             invertedIndicesMap[dimensionName] = [];
@@ -29261,30 +31465,111 @@
 
           if (otherDims.itemName === 0) {
             this._nameDimIdx = i;
-            this._nameOrdinalMeta = dimensionInfo.ordinalMeta;
           }
 
           if (otherDims.itemId === 0) {
             this._idDimIdx = i;
-            this._idOrdinalMeta = dimensionInfo.ordinalMeta;
+          }
+
+          if ("development" !== 'production') {
+            assert(assignStoreDimIdx || dimensionInfo.storeDimIndex >= 0);
+          }
+
+          if (assignStoreDimIdx) {
+            dimensionInfo.storeDimIndex = i;
           }
         }
 
         this.dimensions = dimensionNames;
-        this._dimensionInfos = dimensionInfos;
-        this.hostModel = hostModel; // Cache summary info for fast visit. See "dimensionHelper".
+        this._dimInfos = dimensionInfos;
 
-        this._dimensionsSummary = summarizeDimensions(this);
+        this._initGetDimensionInfo(needsHasOwn);
+
+        this.hostModel = hostModel;
         this._invertedIndicesMap = invertedIndicesMap;
-        this.userOutput = this._dimensionsSummary.userOutput;
+
+        if (this._dimOmitted) {
+          var dimIdxToName_1 = this._dimIdxToName = createHashMap();
+          each(dimensionNames, function (dimName) {
+            dimIdxToName_1.set(dimensionInfos[dimName].storeDimIndex, dimName);
+          });
+        }
       }
+      /**
+       *
+       * Get concrete dimension name by dimension name or dimension index.
+       * If input a dimension name, do not validate whether the dimension name exits.
+       *
+       * @caution
+       * @param dim Must make sure the dimension is `SeriesDimensionLoose`.
+       * Because only those dimensions will have auto-generated dimension names if not
+       * have a user-specified name, and other dimensions will get a return of null/undefined.
+       *
+       * @notice Becuause of this reason, should better use `getDimensionIndex` instead, for examples:
+       * ```js
+       * const val = data.getStore().get(data.getDimensionIndex(dim), dataIdx);
+       * ```
+       *
+       * @return Concrete dim name.
+       */
+
+
+      SeriesData.prototype.getDimension = function (dim) {
+        var dimIdx = this._recognizeDimIndex(dim);
+
+        if (dimIdx == null) {
+          return dim;
+        }
+
+        dimIdx = dim;
+
+        if (!this._dimOmitted) {
+          return this.dimensions[dimIdx];
+        } // Retrieve from series dimension definition becuase it probably contains
+        // generated dimension name (like 'x', 'y').
+
+
+        var dimName = this._dimIdxToName.get(dimIdx);
+
+        if (dimName != null) {
+          return dimName;
+        }
+
+        var sourceDimDef = this._schema.getSourceDimension(dimIdx);
+
+        if (sourceDimDef) {
+          return sourceDimDef.name;
+        }
+      };
+      /**
+       * Get dimension index in data store. Return -1 if not found.
+       * Can be used to index value from getRawValue.
+       */
+
+
+      SeriesData.prototype.getDimensionIndex = function (dim) {
+        var dimIdx = this._recognizeDimIndex(dim);
+
+        if (dimIdx != null) {
+          return dimIdx;
+        }
+
+        if (dim == null) {
+          return -1;
+        }
+
+        var dimInfo = this._getDimInfo(dim);
+
+        return dimInfo ? dimInfo.storeDimIndex : this._dimOmitted ? this._schema.getSourceDimensionIndex(dim) : -1;
+      };
       /**
        * The meanings of the input parameter `dim`:
        *
        * + If dim is a number (e.g., `1`), it means the index of the dimension.
        *   For example, `getDimension(0)` will return 'x' or 'lng' or 'radius'.
        * + If dim is a number-like string (e.g., `"1"`):
-       *     + If there is the same concrete dim name defined in `this.dimensions`, it means that concrete name.
+       *     + If there is the same concrete dim name defined in `series.dimensions` or `dataset.dimensions`,
+       *        it means that concrete name.
        *     + If not, it will be converted to a number, which means the index of the dimension.
        *        (why? because of the backward compatbility. We have been tolerating number-like string in
        *        dimension setting, although now it seems that it is not a good idea.)
@@ -29294,19 +31579,27 @@
        *   For example, it can be be default name `"x"`, `"y"`, `"z"`, `"lng"`, `"lat"`, `"angle"`, `"radius"`,
        *   or customized in `dimensions` property of option like `"age"`.
        *
-       * Get dimension name
-       * @param dim See above.
-       * @return Concrete dim name.
+       * @return recogonized `DimensionIndex`. Otherwise return null/undefined (means that dim is `DimensionName`).
        */
 
 
-      List.prototype.getDimension = function (dim) {
-        if (typeof dim === 'number' // If being a number-like string but not being defined a dimension name.
-        || !isNaN(dim) && !this._dimensionInfos.hasOwnProperty(dim)) {
-          dim = this.dimensions[dim];
+      SeriesData.prototype._recognizeDimIndex = function (dim) {
+        if (typeof dim === 'number' // If being a number-like string but not being defined as a dimension name.
+        || dim != null && !isNaN(dim) && !this._getDimInfo(dim) && (!this._dimOmitted || this._schema.getSourceDimensionIndex(dim) < 0)) {
+          return +dim;
+        }
+      };
+
+      SeriesData.prototype._getStoreDimIndex = function (dim) {
+        var dimIdx = this.getDimensionIndex(dim);
+
+        if ("development" !== 'production') {
+          if (dimIdx == null) {
+            throw new Error('Unkown dimension ' + dim);
+          }
         }
 
-        return dim;
+        return dimIdx;
       };
       /**
        * Get type and calculation info of particular dimension
@@ -29316,21 +31609,30 @@
        */
 
 
-      List.prototype.getDimensionInfo = function (dim) {
+      SeriesData.prototype.getDimensionInfo = function (dim) {
         // Do not clone, because there may be categories in dimInfo.
-        return this._dimensionInfos[this.getDimension(dim)];
+        return this._getDimInfo(this.getDimension(dim));
+      };
+
+      SeriesData.prototype._initGetDimensionInfo = function (needsHasOwn) {
+        var dimensionInfos = this._dimInfos;
+        this._getDimInfo = needsHasOwn ? function (dimName) {
+          return dimensionInfos.hasOwnProperty(dimName) ? dimensionInfos[dimName] : undefined;
+        } : function (dimName) {
+          return dimensionInfos[dimName];
+        };
       };
       /**
        * concrete dimension name list on coord.
        */
 
 
-      List.prototype.getDimensionsOnCoord = function () {
-        return this._dimensionsSummary.dataDimsOnCoord.slice();
+      SeriesData.prototype.getDimensionsOnCoord = function () {
+        return this._dimSummary.dataDimsOnCoord.slice();
       };
 
-      List.prototype.mapDimension = function (coordDim, idx) {
-        var dimensionsSummary = this._dimensionsSummary;
+      SeriesData.prototype.mapDimension = function (coordDim, idx) {
+        var dimensionsSummary = this._dimSummary;
 
         if (idx == null) {
           return dimensionsSummary.encodeFirstDimNotExtra[coordDim];
@@ -29340,14 +31642,18 @@
         return dims ? dims[idx] : null;
       };
 
-      List.prototype.mapDimensionsAll = function (coordDim) {
-        var dimensionsSummary = this._dimensionsSummary;
+      SeriesData.prototype.mapDimensionsAll = function (coordDim) {
+        var dimensionsSummary = this._dimSummary;
         var dims = dimensionsSummary.encode[coordDim];
         return (dims || []).slice();
       };
+
+      SeriesData.prototype.getStore = function () {
+        return this._store;
+      };
       /**
        * Initialize from data
-       * @param data source or data or data provider.
+       * @param data source or data or data store.
        * @param nameList The name of a datum is used on data diff and
        *        default label/tooltip.
        *        A name can be specified in encode.itemName,
@@ -29356,72 +31662,55 @@
        */
 
 
-      List.prototype.initData = function (data, nameList, dimValueGetter) {
-        var notProvider = isSourceInstance(data) || isArrayLike(data);
-        var provider = notProvider ? new DefaultDataProvider(data, this.dimensions.length) : data;
+      SeriesData.prototype.initData = function (data, nameList, dimValueGetter) {
+        var _this = this;
 
-        if ("development" !== 'production') {
-          assert(notProvider || isFunction(provider.getItem) && isFunction(provider.count), 'Inavlid data provider.');
+        var store;
+
+        if (data instanceof DataStore) {
+          store = data;
         }
 
-        this._rawData = provider;
-        var sourceFormat = provider.getSource().sourceFormat; // Clear
+        if (!store) {
+          var dimensions = this.dimensions;
+          var provider = isSourceInstance(data) || isArrayLike(data) ? new DefaultDataProvider(data, dimensions.length) : data;
+          store = new DataStore();
+          var dimensionInfos = map$1(dimensions, function (dimName) {
+            return {
+              type: _this._dimInfos[dimName].type,
+              property: dimName
+            };
+          });
+          store.initData(provider, dimensionInfos, dimValueGetter);
+        }
 
-        this._storage = {};
-        this._indices = null;
-        this._dontMakeIdFromName = this._idDimIdx != null || sourceFormat === SOURCE_FORMAT_TYPED_ARRAY // Cosndier performance.
-        || !!provider.fillStorage;
+        this._store = store; // Reset
+
         this._nameList = (nameList || []).slice();
         this._idList = [];
         this._nameRepeatCount = {};
 
-        if (!dimValueGetter) {
-          this.hasItemOption = false;
-        }
-
-        this.defaultDimValueGetter = defaultDimValueGetters[sourceFormat]; // Default dim value getter
-
-        this._dimValueGetter = dimValueGetter = dimValueGetter || this.defaultDimValueGetter;
-        this._dimValueGetterArrayRows = defaultDimValueGetters.arrayRows; // Reset raw extent.
-
-        this._rawExtent = {};
-
-        this._initDataFromProvider(0, provider.count()); // If data has no item option.
+        this._doInit(0, store.count()); // Cache summary info for fast visit. See "dimensionHelper".
+        // Needs to be initialized after store is prepared.
 
 
-        if (provider.pure) {
-          this.hasItemOption = false;
-        }
-      };
-
-      List.prototype.getProvider = function () {
-        return this._rawData;
+        this._dimSummary = summarizeDimensions(this, this._schema);
+        this.userOutput = this._dimSummary.userOutput;
       };
       /**
        * Caution: Can be only called on raw data (before `this._indices` created).
        */
 
 
-      List.prototype.appendData = function (data) {
-        if ("development" !== 'production') {
-          assert(!this._indices, 'appendData can only be called on raw data.');
-        }
+      SeriesData.prototype.appendData = function (data) {
+        var range = this._store.appendData(data);
 
-        var rawData = this._rawData;
-        var start = this.count();
-        rawData.appendData(data);
-        var end = rawData.count();
-
-        if (!rawData.persistent) {
-          end += start;
-        }
-
-        this._initDataFromProvider(start, end, true);
+        this._doInit(range[0], range[1]);
       };
       /**
        * Caution: Can be only called on raw data (before `this._indices` created).
        * This method does not modify `rawData` (`dataProvider`), but only
-       * add values to storage.
+       * add values to store.
        *
        * The final count will be increased by `Math.max(values.length, names.length)`.
        *
@@ -29435,124 +31724,80 @@
        */
 
 
-      List.prototype.appendValues = function (values, names) {
-        var storage = this._storage;
-        var dimensions = this.dimensions;
-        var dimLen = dimensions.length;
-        var rawExtent = this._rawExtent;
-        var start = this.count();
-        var end = start + Math.max(values.length, names ? names.length : 0);
+      SeriesData.prototype.appendValues = function (values, names) {
+        var _a = this._store.appendValues(values, names.length),
+            start = _a.start,
+            end = _a.end;
 
-        for (var i = 0; i < dimLen; i++) {
-          var dim = dimensions[i];
+        var shouldMakeIdFromName = this._shouldMakeIdFromName();
 
-          if (!rawExtent[dim]) {
-            rawExtent[dim] = getInitialExtent();
-          }
+        this._updateOrdinalMeta();
 
-          prepareStorage(storage, this._dimensionInfos[dim], end, true);
-        }
-
-        var rawExtentArr = map$1(dimensions, function (dim) {
-          return rawExtent[dim];
-        });
-        var storageArr = this._storageArr = map$1(dimensions, function (dim) {
-          return storage[dim];
-        });
-        var emptyDataItem = [];
-
-        for (var idx = start; idx < end; idx++) {
-          var sourceIdx = idx - start; // Store the data by dimensions
-
-          for (var dimIdx = 0; dimIdx < dimLen; dimIdx++) {
-            var dim = dimensions[dimIdx];
-
-            var val = this._dimValueGetterArrayRows(values[sourceIdx] || emptyDataItem, dim, sourceIdx, dimIdx);
-
-            storageArr[dimIdx][idx] = val;
-            var dimRawExtent = rawExtentArr[dimIdx];
-            val < dimRawExtent[0] && (dimRawExtent[0] = val);
-            val > dimRawExtent[1] && (dimRawExtent[1] = val);
-          }
-
-          if (names) {
+        if (names) {
+          for (var idx = start; idx < end; idx++) {
+            var sourceIdx = idx - start;
             this._nameList[idx] = names[sourceIdx];
 
-            if (!this._dontMakeIdFromName) {
+            if (shouldMakeIdFromName) {
               makeIdFromName(this, idx);
             }
           }
         }
-
-        this._rawCount = this._count = end; // Reset data extent
-
-        this._extent = {};
-        prepareInvertedIndex(this);
       };
 
-      List.prototype._initDataFromProvider = function (start, end, append) {
+      SeriesData.prototype._updateOrdinalMeta = function () {
+        var store = this._store;
+        var dimensions = this.dimensions;
+
+        for (var i = 0; i < dimensions.length; i++) {
+          var dimInfo = this._dimInfos[dimensions[i]];
+
+          if (dimInfo.ordinalMeta) {
+            store.collectOrdinalMeta(dimInfo.storeDimIndex, dimInfo.ordinalMeta);
+          }
+        }
+      };
+
+      SeriesData.prototype._shouldMakeIdFromName = function () {
+        var provider = this._store.getProvider();
+
+        return this._idDimIdx == null && provider.getSource().sourceFormat !== SOURCE_FORMAT_TYPED_ARRAY && !provider.fillStorage;
+      };
+
+      SeriesData.prototype._doInit = function (start, end) {
         if (start >= end) {
           return;
         }
 
-        var rawData = this._rawData;
-        var storage = this._storage;
-        var dimensions = this.dimensions;
-        var dimLen = dimensions.length;
-        var dimensionInfoMap = this._dimensionInfos;
+        var store = this._store;
+        var provider = store.getProvider();
+
+        this._updateOrdinalMeta();
+
         var nameList = this._nameList;
         var idList = this._idList;
-        var rawExtent = this._rawExtent;
-        var sourceFormat = rawData.getSource().sourceFormat;
-        var isFormatOriginal = sourceFormat === SOURCE_FORMAT_ORIGINAL;
+        var sourceFormat = provider.getSource().sourceFormat;
+        var isFormatOriginal = sourceFormat === SOURCE_FORMAT_ORIGINAL; // Each data item is value
+        // [1, 2]
+        // 2
+        // Bar chart, line chart which uses category axis
+        // only gives the 'y' value. 'x' value is the indices of category
+        // Use a tempValue to normalize the value to be a (x, y) value
+        // If dataItem is {name: ...} or {id: ...}, it has highest priority.
+        // This kind of ids and names are always stored `_nameList` and `_idList`.
 
-        for (var i = 0; i < dimLen; i++) {
-          var dim = dimensions[i];
-
-          if (!rawExtent[dim]) {
-            rawExtent[dim] = getInitialExtent();
-          }
-
-          prepareStorage(storage, dimensionInfoMap[dim], end, append);
-        }
-
-        var storageArr = this._storageArr = map$1(dimensions, function (dim) {
-          return storage[dim];
-        });
-        var rawExtentArr = map$1(dimensions, function (dim) {
-          return rawExtent[dim];
-        });
-
-        if (rawData.fillStorage) {
-          rawData.fillStorage(start, end, storageArr, rawExtentArr);
-        } else {
-          var dataItem = [];
+        if (isFormatOriginal && !provider.pure) {
+          var sharedDataItem = [];
 
           for (var idx = start; idx < end; idx++) {
             // NOTICE: Try not to write things into dataItem
-            dataItem = rawData.getItem(idx, dataItem); // Each data item is value
-            // [1, 2]
-            // 2
-            // Bar chart, line chart which uses category axis
-            // only gives the 'y' value. 'x' value is the indices of category
-            // Use a tempValue to normalize the value to be a (x, y) value
-            // Store the data by dimensions
+            var dataItem = provider.getItem(idx, sharedDataItem);
 
-            for (var dimIdx = 0; dimIdx < dimLen; dimIdx++) {
-              var dim = dimensions[dimIdx];
-              var dimStorage = storageArr[dimIdx]; // PENDING NULL is empty or zero
+            if (!this.hasItemOption && isDataItemOption(dataItem)) {
+              this.hasItemOption = true;
+            }
 
-              var val = this._dimValueGetter(dataItem, dim, idx, dimIdx);
-
-              dimStorage[idx] = val;
-              var dimRawExtent = rawExtentArr[dimIdx];
-              val < dimRawExtent[0] && (dimRawExtent[0] = val);
-              val > dimRawExtent[1] && (dimRawExtent[1] = val);
-            } // If dataItem is {name: ...} or {id: ...}, it has highest priority.
-            // This kind of ids and names are always stored `_nameList` and `_idList`.
-
-
-            if (isFormatOriginal && !rawData.pure && dataItem) {
+            if (dataItem) {
               var itemName = dataItem.name;
 
               if (nameList[idx] == null && itemName != null) {
@@ -29565,183 +31810,16 @@
                 idList[idx] = convertOptionIdName(itemId, null);
               }
             }
-
-            if (!this._dontMakeIdFromName) {
-              makeIdFromName(this, idx);
-            }
           }
         }
 
-        if (!rawData.persistent && rawData.clean) {
-          // Clean unused data if data source is typed array.
-          rawData.clean();
+        if (this._shouldMakeIdFromName()) {
+          for (var idx = start; idx < end; idx++) {
+            makeIdFromName(this, idx);
+          }
         }
 
-        this._rawCount = this._count = end; // Reset data extent
-
-        this._extent = {};
         prepareInvertedIndex(this);
-      };
-
-      List.prototype.count = function () {
-        return this._count;
-      };
-
-      List.prototype.getIndices = function () {
-        var newIndices;
-        var indices = this._indices;
-
-        if (indices) {
-          var Ctor = indices.constructor;
-          var thisCount = this._count; // `new Array(a, b, c)` is different from `new Uint32Array(a, b, c)`.
-
-          if (Ctor === Array) {
-            newIndices = new Ctor(thisCount);
-
-            for (var i = 0; i < thisCount; i++) {
-              newIndices[i] = indices[i];
-            }
-          } else {
-            newIndices = new Ctor(indices.buffer, 0, thisCount);
-          }
-        } else {
-          var Ctor = getIndicesCtor(this);
-          newIndices = new Ctor(this.count());
-
-          for (var i = 0; i < newIndices.length; i++) {
-            newIndices[i] = i;
-          }
-        }
-
-        return newIndices;
-      }; // Get data by index of dimension.
-      // Because in v8 access array by number variable is faster than access object by string variable
-      // Not sure why but the optimization just works.
-
-
-      List.prototype.getByDimIdx = function (dimIdx, idx) {
-        if (!(idx >= 0 && idx < this._count)) {
-          return NaN;
-        }
-
-        var dimStore = this._storageArr[dimIdx];
-        return dimStore ? dimStore[this.getRawIndex(idx)] : NaN;
-      };
-      /**
-       * Get value. Return NaN if idx is out of range.
-       * @param dim Dim must be concrete name.
-       */
-
-
-      List.prototype.get = function (dim, idx) {
-        if (!(idx >= 0 && idx < this._count)) {
-          return NaN;
-        }
-
-        var dimStore = this._storage[dim];
-        return dimStore ? dimStore[this.getRawIndex(idx)] : NaN;
-      };
-      /**
-       * @param dim concrete dim
-       */
-
-
-      List.prototype.getByRawIndex = function (dim, rawIdx) {
-        if (!(rawIdx >= 0 && rawIdx < this._rawCount)) {
-          return NaN;
-        }
-
-        var dimStore = this._storage[dim];
-        return dimStore ? dimStore[rawIdx] : NaN;
-      };
-
-      List.prototype.getValues = function (dimensions, idx) {
-        var values = [];
-
-        if (!isArray(dimensions)) {
-          // stack = idx;
-          idx = dimensions;
-          dimensions = this.dimensions;
-        }
-
-        for (var i = 0, len = dimensions.length; i < len; i++) {
-          values.push(this.get(dimensions[i], idx
-          /*, stack */
-          ));
-        }
-
-        return values;
-      };
-      /**
-       * If value is NaN. Inlcuding '-'
-       * Only check the coord dimensions.
-       */
-
-
-      List.prototype.hasValue = function (idx) {
-        var dataDimsOnCoord = this._dimensionsSummary.dataDimsOnCoord;
-
-        for (var i = 0, len = dataDimsOnCoord.length; i < len; i++) {
-          // Ordinal type originally can be string or number.
-          // But when an ordinal type is used on coord, it can
-          // not be string but only number. So we can also use isNaN.
-          if (isNaN(this.get(dataDimsOnCoord[i], idx))) {
-            return false;
-          }
-        }
-
-        return true;
-      };
-      /**
-       * Get extent of data in one dimension
-       */
-
-
-      List.prototype.getDataExtent = function (dim) {
-        // Make sure use concrete dim as cache name.
-        dim = this.getDimension(dim);
-        var dimData = this._storage[dim];
-        var initialExtent = getInitialExtent(); // stack = !!((stack || false) && this.getCalculationInfo(dim));
-
-        if (!dimData) {
-          return initialExtent;
-        } // Make more strict checkings to ensure hitting cache.
-
-
-        var currEnd = this.count(); // let cacheName = [dim, !!stack].join('_');
-        // let cacheName = dim;
-        // Consider the most cases when using data zoom, `getDataExtent`
-        // happened before filtering. We cache raw extent, which is not
-        // necessary to be cleared and recalculated when restore data.
-
-        var useRaw = !this._indices; // && !stack;
-
-        var dimExtent;
-
-        if (useRaw) {
-          return this._rawExtent[dim].slice();
-        }
-
-        dimExtent = this._extent[dim];
-
-        if (dimExtent) {
-          return dimExtent.slice();
-        }
-
-        dimExtent = initialExtent;
-        var min = dimExtent[0];
-        var max = dimExtent[1];
-
-        for (var i = 0; i < currEnd; i++) {
-          var rawIdx = this.getRawIndex(i);
-          var value = dimData[rawIdx];
-          value < min && (min = value);
-          value > max && (max = value);
-        }
-
-        dimExtent = [min, max];
-        this._extent[dim] = dimExtent;
-        return dimExtent;
       };
       /**
        * PENDING: In fact currently this function is only used to short-circuit
@@ -29759,9 +31837,8 @@
        */
 
 
-      List.prototype.getApproximateExtent = function (dim) {
-        dim = this.getDimension(dim);
-        return this._approximateExtent[dim] || this.getDataExtent(dim);
+      SeriesData.prototype.getApproximateExtent = function (dim) {
+        return this._approximateExtent[dim] || this._store.getDataExtent(this._getStoreDimIndex(dim));
       };
       /**
        * Calculate extent on a filtered data might be time consuming.
@@ -29769,85 +31846,162 @@
        */
 
 
-      List.prototype.setApproximateExtent = function (extent, dim) {
+      SeriesData.prototype.setApproximateExtent = function (extent, dim) {
         dim = this.getDimension(dim);
         this._approximateExtent[dim] = extent.slice();
       };
 
-      List.prototype.getCalculationInfo = function (key) {
+      SeriesData.prototype.getCalculationInfo = function (key) {
         return this._calculationInfo[key];
       };
 
-      List.prototype.setCalculationInfo = function (key, value) {
-        isObject$3(key) ? extend(this._calculationInfo, key) : this._calculationInfo[key] = value;
+      SeriesData.prototype.setCalculationInfo = function (key, value) {
+        isObject$2(key) ? extend(this._calculationInfo, key) : this._calculationInfo[key] = value;
       };
       /**
-       * Get sum of data in one dimension
+       * @return Never be null/undefined. `number` will be converted to string. Becuase:
+       * In most cases, name is used in display, where returning a string is more convenient.
+       * In other cases, name is used in query (see `indexOfName`), where we can keep the
+       * rule that name `2` equals to name `'2'`.
        */
 
 
-      List.prototype.getSum = function (dim) {
-        var dimData = this._storage[dim];
-        var sum = 0;
+      SeriesData.prototype.getName = function (idx) {
+        var rawIndex = this.getRawIndex(idx);
+        var name = this._nameList[rawIndex];
 
-        if (dimData) {
-          for (var i = 0, len = this.count(); i < len; i++) {
-            var value = this.get(dim, i);
+        if (name == null && this._nameDimIdx != null) {
+          name = getIdNameFromStore(this, this._nameDimIdx, rawIndex);
+        }
 
-            if (!isNaN(value)) {
-              sum += value;
-            }
+        if (name == null) {
+          name = '';
+        }
+
+        return name;
+      };
+
+      SeriesData.prototype._getCategory = function (dimIdx, idx) {
+        var ordinal = this._store.get(dimIdx, idx);
+
+        var ordinalMeta = this._store.getOrdinalMeta(dimIdx);
+
+        if (ordinalMeta) {
+          return ordinalMeta.categories[ordinal];
+        }
+
+        return ordinal;
+      };
+      /**
+       * @return Never null/undefined. `number` will be converted to string. Becuase:
+       * In all cases having encountered at present, id is used in making diff comparison, which
+       * are usually based on hash map. We can keep the rule that the internal id are always string
+       * (treat `2` is the same as `'2'`) to make the related logic simple.
+       */
+
+
+      SeriesData.prototype.getId = function (idx) {
+        return getId(this, this.getRawIndex(idx));
+      };
+
+      SeriesData.prototype.count = function () {
+        return this._store.count();
+      };
+      /**
+       * Get value. Return NaN if idx is out of range.
+       *
+       * @notice Should better to use `data.getStore().get(dimIndex, dataIdx)` instead.
+       */
+
+
+      SeriesData.prototype.get = function (dim, idx) {
+        var store = this._store;
+        var dimInfo = this._dimInfos[dim];
+
+        if (dimInfo) {
+          return store.get(dimInfo.storeDimIndex, idx);
+        }
+      };
+      /**
+       * @notice Should better to use `data.getStore().getByRawIndex(dimIndex, dataIdx)` instead.
+       */
+
+
+      SeriesData.prototype.getByRawIndex = function (dim, rawIdx) {
+        var store = this._store;
+        var dimInfo = this._dimInfos[dim];
+
+        if (dimInfo) {
+          return store.getByRawIndex(dimInfo.storeDimIndex, rawIdx);
+        }
+      };
+
+      SeriesData.prototype.getIndices = function () {
+        return this._store.getIndices();
+      };
+
+      SeriesData.prototype.getDataExtent = function (dim) {
+        return this._store.getDataExtent(this._getStoreDimIndex(dim));
+      };
+
+      SeriesData.prototype.getSum = function (dim) {
+        return this._store.getSum(this._getStoreDimIndex(dim));
+      };
+
+      SeriesData.prototype.getMedian = function (dim) {
+        return this._store.getMedian(this._getStoreDimIndex(dim));
+      };
+
+      SeriesData.prototype.getValues = function (dimensions, idx) {
+        var _this = this;
+
+        var store = this._store;
+        return isArray(dimensions) ? store.getValues(map$1(dimensions, function (dim) {
+          return _this._getStoreDimIndex(dim);
+        }), idx) : store.getValues(dimensions);
+      };
+      /**
+       * If value is NaN. Inlcuding '-'
+       * Only check the coord dimensions.
+       */
+
+
+      SeriesData.prototype.hasValue = function (idx) {
+        var dataDimIndicesOnCoord = this._dimSummary.dataDimIndicesOnCoord;
+
+        for (var i = 0, len = dataDimIndicesOnCoord.length; i < len; i++) {
+          // Ordinal type originally can be string or number.
+          // But when an ordinal type is used on coord, it can
+          // not be string but only number. So we can also use isNaN.
+          if (isNaN(this._store.get(dataDimIndicesOnCoord[i], idx))) {
+            return false;
           }
         }
 
-        return sum;
+        return true;
       };
       /**
-       * Get median of data in one dimension
+       * Retreive the index with given name
        */
 
 
-      List.prototype.getMedian = function (dim) {
-        var dimDataArray = []; // map all data of one dimension
-
-        this.each(dim, function (val) {
-          if (!isNaN(val)) {
-            dimDataArray.push(val);
+      SeriesData.prototype.indexOfName = function (name) {
+        for (var i = 0, len = this._store.count(); i < len; i++) {
+          if (this.getName(i) === name) {
+            return i;
           }
-        }); // TODO
-        // Use quick select?
+        }
 
-        var sortedDimDataArray = dimDataArray.sort(function (a, b) {
-          return a - b;
-        });
-        var len = this.count(); // calculate median
+        return -1;
+      };
 
-        return len === 0 ? 0 : len % 2 === 1 ? sortedDimDataArray[(len - 1) / 2] : (sortedDimDataArray[len / 2] + sortedDimDataArray[len / 2 - 1]) / 2;
-      }; // /**
-      //  * Retreive the index with given value
-      //  * @param {string} dim Concrete dimension.
-      //  * @param {number} value
-      //  * @return {number}
-      //  */
-      // Currently incorrect: should return dataIndex but not rawIndex.
-      // Do not fix it until this method is to be used somewhere.
-      // FIXME Precision of float value
-      // indexOf(dim, value) {
-      //     let storage = this._storage;
-      //     let dimData = storage[dim];
-      //     let chunkSize = this._chunkSize;
-      //     if (dimData) {
-      //         for (let i = 0, len = this.count(); i < len; i++) {
-      //             let chunkIndex = mathFloor(i / chunkSize);
-      //             let chunkOffset = i % chunkSize;
-      //             if (dimData[chunkIndex][chunkOffset] === value) {
-      //                 return i;
-      //             }
-      //         }
-      //     }
-      //     return -1;
-      // }
+      SeriesData.prototype.getRawIndex = function (idx) {
+        return this._store.getRawIndex(idx);
+      };
 
+      SeriesData.prototype.indexOfRawIndex = function (rawIndex) {
+        return this._store.indexOfRawIndex(rawIndex);
+      };
       /**
        * Only support the dimension which inverted index created.
        * Do not support other cases until required.
@@ -29857,7 +32011,7 @@
        */
 
 
-      List.prototype.rawIndexOf = function (dim, value) {
+      SeriesData.prototype.rawIndexOf = function (dim, value) {
         var invertedIndices = dim && this._invertedIndicesMap[dim];
 
         if ("development" !== 'production') {
@@ -29875,60 +32029,6 @@
         return rawIndex;
       };
       /**
-       * Retreive the index with given name
-       */
-
-
-      List.prototype.indexOfName = function (name) {
-        for (var i = 0, len = this.count(); i < len; i++) {
-          if (this.getName(i) === name) {
-            return i;
-          }
-        }
-
-        return -1;
-      };
-      /**
-       * Retreive the index with given raw data index
-       */
-
-
-      List.prototype.indexOfRawIndex = function (rawIndex) {
-        if (rawIndex >= this._rawCount || rawIndex < 0) {
-          return -1;
-        }
-
-        if (!this._indices) {
-          return rawIndex;
-        } // Indices are ascending
-
-
-        var indices = this._indices; // If rawIndex === dataIndex
-
-        var rawDataIndex = indices[rawIndex];
-
-        if (rawDataIndex != null && rawDataIndex < this._count && rawDataIndex === rawIndex) {
-          return rawIndex;
-        }
-
-        var left = 0;
-        var right = this._count - 1;
-
-        while (left <= right) {
-          var mid = (left + right) / 2 | 0;
-
-          if (indices[mid] < rawIndex) {
-            left = mid + 1;
-          } else if (indices[mid] > rawIndex) {
-            right = mid - 1;
-          } else {
-            return mid;
-          }
-        }
-
-        return -1;
-      };
-      /**
        * Retreive the index of nearest value
        * @param dim
        * @param value
@@ -29938,232 +32038,37 @@
        */
 
 
-      List.prototype.indicesOfNearest = function (dim, value, maxDistance) {
-        var storage = this._storage;
-        var dimData = storage[dim];
-        var nearestIndices = [];
-
-        if (!dimData) {
-          return nearestIndices;
-        }
-
-        if (maxDistance == null) {
-          maxDistance = Infinity;
-        }
-
-        var minDist = Infinity;
-        var minDiff = -1;
-        var nearestIndicesLen = 0; // Check the test case of `test/ut/spec/data/List.js`.
-
-        for (var i = 0, len = this.count(); i < len; i++) {
-          var dataIndex = this.getRawIndex(i);
-          var diff = value - dimData[dataIndex];
-          var dist = Math.abs(diff);
-
-          if (dist <= maxDistance) {
-            // When the `value` is at the middle of `this.get(dim, i)` and `this.get(dim, i+1)`,
-            // we'd better not push both of them to `nearestIndices`, otherwise it is easy to
-            // get more than one item in `nearestIndices` (more specifically, in `tooltip`).
-            // So we chose the one that `diff >= 0` in this csae.
-            // But if `this.get(dim, i)` and `this.get(dim, j)` get the same value, both of them
-            // should be push to `nearestIndices`.
-            if (dist < minDist || dist === minDist && diff >= 0 && minDiff < 0) {
-              minDist = dist;
-              minDiff = diff;
-              nearestIndicesLen = 0;
-            }
-
-            if (diff === minDiff) {
-              nearestIndices[nearestIndicesLen++] = i;
-            }
-          }
-        }
-
-        nearestIndices.length = nearestIndicesLen;
-        return nearestIndices;
-      };
-      /**
-       * Get raw data item
-       */
-
-
-      List.prototype.getRawDataItem = function (idx) {
-        if (!this._rawData.persistent) {
-          var val = [];
-
-          for (var i = 0; i < this.dimensions.length; i++) {
-            var dim = this.dimensions[i];
-            val.push(this.get(dim, idx));
-          }
-
-          return val;
-        } else {
-          return this._rawData.getItem(this.getRawIndex(idx));
-        }
-      };
-      /**
-       * @return Never be null/undefined. `number` will be converted to string. Becuase:
-       * In most cases, name is used in display, where returning a string is more convenient.
-       * In other cases, name is used in query (see `indexOfName`), where we can keep the
-       * rule that name `2` equals to name `'2'`.
-       */
-
-
-      List.prototype.getName = function (idx) {
-        var rawIndex = this.getRawIndex(idx);
-        var name = this._nameList[rawIndex];
-
-        if (name == null && this._nameDimIdx != null) {
-          name = getIdNameFromStore(this, this._nameDimIdx, this._nameOrdinalMeta, rawIndex);
-        }
-
-        if (name == null) {
-          name = '';
-        }
-
-        return name;
-      };
-      /**
-       * @return Never null/undefined. `number` will be converted to string. Becuase:
-       * In all cases having encountered at present, id is used in making diff comparison, which
-       * are usually based on hash map. We can keep the rule that the internal id are always string
-       * (treat `2` is the same as `'2'`) to make the related logic simple.
-       */
-
-
-      List.prototype.getId = function (idx) {
-        return getId(this, this.getRawIndex(idx));
+      SeriesData.prototype.indicesOfNearest = function (dim, value, maxDistance) {
+        return this._store.indicesOfNearest(this._getStoreDimIndex(dim), value, maxDistance);
       };
 
-      List.prototype.each = function (dims, cb, ctx, ctxCompat) {
-
-        var _this = this;
-
-        if (!this._count) {
-          return;
-        }
+      SeriesData.prototype.each = function (dims, cb, ctx) {
 
         if (typeof dims === 'function') {
-          ctxCompat = ctx;
           ctx = cb;
           cb = dims;
           dims = [];
         } // ctxCompat just for compat echarts3
 
 
-        var fCtx = ctx || ctxCompat || this;
-        var dimNames = map$1(normalizeDimensions(dims), this.getDimension, this);
+        var fCtx = ctx || this;
+        var dimIndices = map$1(normalizeDimensions(dims), this._getStoreDimIndex, this);
 
-        if ("development" !== 'production') {
-          validateDimensions(this, dimNames);
-        }
-
-        var dimSize = dimNames.length;
-        var dimIndices = map$1(dimNames, function (dimName) {
-          return _this._dimensionInfos[dimName].index;
-        });
-        var storageArr = this._storageArr;
-
-        for (var i = 0, len = this.count(); i < len; i++) {
-          var rawIdx = this.getRawIndex(i); // Simple optimization
-
-          switch (dimSize) {
-            case 0:
-              cb.call(fCtx, i);
-              break;
-
-            case 1:
-              cb.call(fCtx, storageArr[dimIndices[0]][rawIdx], i);
-              break;
-
-            case 2:
-              cb.call(fCtx, storageArr[dimIndices[0]][rawIdx], storageArr[dimIndices[1]][rawIdx], i);
-              break;
-
-            default:
-              var k = 0;
-              var value = [];
-
-              for (; k < dimSize; k++) {
-                value[k] = storageArr[dimIndices[k]][rawIdx];
-              } // Index
-
-
-              value[k] = i;
-              cb.apply(fCtx, value);
-          }
-        }
+        this._store.each(dimIndices, fCtx ? bind(cb, fCtx) : cb);
       };
 
-      List.prototype.filterSelf = function (dims, cb, ctx, ctxCompat) {
-
-        var _this = this;
-
-        if (!this._count) {
-          return;
-        }
+      SeriesData.prototype.filterSelf = function (dims, cb, ctx) {
 
         if (typeof dims === 'function') {
-          ctxCompat = ctx;
           ctx = cb;
           cb = dims;
           dims = [];
         } // ctxCompat just for compat echarts3
 
 
-        var fCtx = ctx || ctxCompat || this;
-        var dimNames = map$1(normalizeDimensions(dims), this.getDimension, this);
-
-        if ("development" !== 'production') {
-          validateDimensions(this, dimNames);
-        }
-
-        var count = this.count();
-        var Ctor = getIndicesCtor(this);
-        var newIndices = new Ctor(count);
-        var value = [];
-        var dimSize = dimNames.length;
-        var offset = 0;
-        var dimIndices = map$1(dimNames, function (dimName) {
-          return _this._dimensionInfos[dimName].index;
-        });
-        var dim0 = dimIndices[0];
-        var storageArr = this._storageArr;
-
-        for (var i = 0; i < count; i++) {
-          var keep = void 0;
-          var rawIdx = this.getRawIndex(i); // Simple optimization
-
-          if (dimSize === 0) {
-            keep = cb.call(fCtx, i);
-          } else if (dimSize === 1) {
-            var val = storageArr[dim0][rawIdx];
-            keep = cb.call(fCtx, val, i);
-          } else {
-            var k = 0;
-
-            for (; k < dimSize; k++) {
-              value[k] = storageArr[dimIndices[k]][rawIdx];
-            }
-
-            value[k] = i;
-            keep = cb.apply(fCtx, value);
-          }
-
-          if (keep) {
-            newIndices[offset++] = rawIdx;
-          }
-        } // Set indices after filtered.
-
-
-        if (offset < count) {
-          this._indices = newIndices;
-        }
-
-        this._count = offset; // Reset data extent
-
-        this._extent = {};
-        this.getRawIndex = this._indices ? getRawIndexWithIndices : getRawIndexWithoutIndices;
+        var fCtx = ctx || this;
+        var dimIndices = map$1(normalizeDimensions(dims), this._getStoreDimIndex, this);
+        this._store = this._store.filter(dimIndices, fCtx ? bind(cb, fCtx) : cb);
         return this;
       };
       /**
@@ -30172,146 +32077,33 @@
        */
 
 
-      List.prototype.selectRange = function (range) {
+      SeriesData.prototype.selectRange = function (range) {
 
         var _this = this;
 
-        var len = this._count;
+        var innerRange = {};
+        var dims = keys(range);
+        each(dims, function (dim) {
+          var dimIdx = _this._getStoreDimIndex(dim);
 
-        if (!len) {
-          return;
-        }
-
-        var dimensions = [];
-
-        for (var dim in range) {
-          if (range.hasOwnProperty(dim)) {
-            dimensions.push(dim);
-          }
-        }
-
-        if ("development" !== 'production') {
-          validateDimensions(this, dimensions);
-        }
-
-        var dimSize = dimensions.length;
-
-        if (!dimSize) {
-          return;
-        }
-
-        var originalCount = this.count();
-        var Ctor = getIndicesCtor(this);
-        var newIndices = new Ctor(originalCount);
-        var offset = 0;
-        var dim0 = dimensions[0];
-        var dimIndices = map$1(dimensions, function (dimName) {
-          return _this._dimensionInfos[dimName].index;
+          innerRange[dimIdx] = range[dim];
         });
-        var min = range[dim0][0];
-        var max = range[dim0][1];
-        var storageArr = this._storageArr;
-        var quickFinished = false;
-
-        if (!this._indices) {
-          // Extreme optimization for common case. About 2x faster in chrome.
-          var idx = 0;
-
-          if (dimSize === 1) {
-            var dimStorage = storageArr[dimIndices[0]];
-
-            for (var i = 0; i < len; i++) {
-              var val = dimStorage[i]; // NaN will not be filtered. Consider the case, in line chart, empty
-              // value indicates the line should be broken. But for the case like
-              // scatter plot, a data item with empty value will not be rendered,
-              // but the axis extent may be effected if some other dim of the data
-              // item has value. Fortunately it is not a significant negative effect.
-
-              if (val >= min && val <= max || isNaN(val)) {
-                newIndices[offset++] = idx;
-              }
-
-              idx++;
-            }
-
-            quickFinished = true;
-          } else if (dimSize === 2) {
-            var dimStorage = storageArr[dimIndices[0]];
-            var dimStorage2 = storageArr[dimIndices[1]];
-            var min2 = range[dimensions[1]][0];
-            var max2 = range[dimensions[1]][1];
-
-            for (var i = 0; i < len; i++) {
-              var val = dimStorage[i];
-              var val2 = dimStorage2[i]; // Do not filter NaN, see comment above.
-
-              if ((val >= min && val <= max || isNaN(val)) && (val2 >= min2 && val2 <= max2 || isNaN(val2))) {
-                newIndices[offset++] = idx;
-              }
-
-              idx++;
-            }
-
-            quickFinished = true;
-          }
-        }
-
-        if (!quickFinished) {
-          if (dimSize === 1) {
-            for (var i = 0; i < originalCount; i++) {
-              var rawIndex = this.getRawIndex(i);
-              var val = storageArr[dimIndices[0]][rawIndex]; // Do not filter NaN, see comment above.
-
-              if (val >= min && val <= max || isNaN(val)) {
-                newIndices[offset++] = rawIndex;
-              }
-            }
-          } else {
-            for (var i = 0; i < originalCount; i++) {
-              var keep = true;
-              var rawIndex = this.getRawIndex(i);
-
-              for (var k = 0; k < dimSize; k++) {
-                var dimk = dimensions[k];
-                var val = storageArr[dimIndices[k]][rawIndex]; // Do not filter NaN, see comment above.
-
-                if (val < range[dimk][0] || val > range[dimk][1]) {
-                  keep = false;
-                }
-              }
-
-              if (keep) {
-                newIndices[offset++] = this.getRawIndex(i);
-              }
-            }
-          }
-        } // Set indices after filtered.
-
-
-        if (offset < originalCount) {
-          this._indices = newIndices;
-        }
-
-        this._count = offset; // Reset data extent
-
-        this._extent = {};
-        this.getRawIndex = this._indices ? getRawIndexWithIndices : getRawIndexWithoutIndices;
+        this._store = this._store.selectRange(innerRange);
         return this;
       };
-      /* eslint-enable */
+      /* eslint-enable max-len */
 
 
-      List.prototype.mapArray = function (dims, cb, ctx, ctxCompat) {
+      SeriesData.prototype.mapArray = function (dims, cb, ctx) {
 
         if (typeof dims === 'function') {
-          ctxCompat = ctx;
           ctx = cb;
           cb = dims;
           dims = [];
         } // ctxCompat just for compat echarts3
 
 
-        ctx = ctx || ctxCompat || this;
+        ctx = ctx || this;
         var result = [];
         this.each(dims, function () {
           result.push(cb && cb.apply(this, arguments));
@@ -30319,66 +32111,37 @@
         return result;
       };
 
-      List.prototype.map = function (dims, cb, ctx, ctxCompat) {
+      SeriesData.prototype.map = function (dims, cb, ctx, ctxCompat) {
 
         var fCtx = ctx || ctxCompat || this;
-        var dimNames = map$1(normalizeDimensions(dims), this.getDimension, this);
+        var dimIndices = map$1(normalizeDimensions(dims), this._getStoreDimIndex, this);
+        var list = cloneListForMapAndSample(this);
+        list._store = this._store.map(dimIndices, fCtx ? bind(cb, fCtx) : cb);
+        return list;
+      };
+
+      SeriesData.prototype.modify = function (dims, cb, ctx, ctxCompat) {
+        var _this = this; // ctxCompat just for compat echarts3
+
+
+        var fCtx = ctx || ctxCompat || this;
 
         if ("development" !== 'production') {
-          validateDimensions(this, dimNames);
+          each(normalizeDimensions(dims), function (dim) {
+            var dimInfo = _this.getDimensionInfo(dim);
+
+            if (!dimInfo.isCalculationCoord) {
+              console.error('Danger: only stack dimension can be modified');
+            }
+          });
         }
 
-        var list = cloneListForMapAndSample(this, dimNames);
-        var storage = list._storage; // Following properties are all immutable.
-        // So we can reference to the same value
+        var dimIndices = map$1(normalizeDimensions(dims), this._getStoreDimIndex, this); // If do shallow clone here, if there are too many stacked series,
+        // it still cost lots of memory, becuase `_store.dimensions` are not shared.
+        // We should consider there probably be shallow clone happen in each sereis
+        // in consequent filter/map.
 
-        list._indices = this._indices;
-        list.getRawIndex = list._indices ? getRawIndexWithIndices : getRawIndexWithoutIndices;
-        var tmpRetValue = [];
-        var dimSize = dimNames.length;
-        var dataCount = this.count();
-        var values = [];
-        var rawExtent = list._rawExtent;
-
-        for (var dataIndex = 0; dataIndex < dataCount; dataIndex++) {
-          for (var dimIndex = 0; dimIndex < dimSize; dimIndex++) {
-            values[dimIndex] = this.get(dimNames[dimIndex], dataIndex);
-          }
-
-          values[dimSize] = dataIndex;
-          var retValue = cb && cb.apply(fCtx, values);
-
-          if (retValue != null) {
-            // a number or string (in oridinal dimension)?
-            if (typeof retValue !== 'object') {
-              tmpRetValue[0] = retValue;
-              retValue = tmpRetValue;
-            }
-
-            var rawIndex = this.getRawIndex(dataIndex);
-
-            for (var i = 0; i < retValue.length; i++) {
-              var dim = dimNames[i];
-              var val = retValue[i];
-              var rawExtentOnDim = rawExtent[dim];
-              var dimStore = storage[dim];
-
-              if (dimStore) {
-                dimStore[rawIndex] = val;
-              }
-
-              if (val < rawExtentOnDim[0]) {
-                rawExtentOnDim[0] = val;
-              }
-
-              if (val > rawExtentOnDim[1]) {
-                rawExtentOnDim[1] = val;
-              }
-            }
-          }
-        }
-
-        return list;
+        this._store.modify(dimIndices, fCtx ? bind(cb, fCtx) : cb);
       };
       /**
        * Large data down sampling on given dimension
@@ -30386,48 +32149,9 @@
        */
 
 
-      List.prototype.downSample = function (dimension, rate, sampleValue, sampleIndex) {
-        var list = cloneListForMapAndSample(this, [dimension]);
-        var targetStorage = list._storage;
-        var frameValues = [];
-        var frameSize = mathFloor(1 / rate);
-        var dimStore = targetStorage[dimension];
-        var len = this.count();
-        var rawExtentOnDim = list._rawExtent[dimension];
-        var newIndices = new (getIndicesCtor(this))(len);
-        var offset = 0;
-
-        for (var i = 0; i < len; i += frameSize) {
-          // Last frame
-          if (frameSize > len - i) {
-            frameSize = len - i;
-            frameValues.length = frameSize;
-          }
-
-          for (var k = 0; k < frameSize; k++) {
-            var dataIdx = this.getRawIndex(i + k);
-            frameValues[k] = dimStore[dataIdx];
-          }
-
-          var value = sampleValue(frameValues);
-          var sampleFrameIdx = this.getRawIndex(Math.min(i + sampleIndex(frameValues, value) || 0, len - 1)); // Only write value on the filtered data
-
-          dimStore[sampleFrameIdx] = value;
-
-          if (value < rawExtentOnDim[0]) {
-            rawExtentOnDim[0] = value;
-          }
-
-          if (value > rawExtentOnDim[1]) {
-            rawExtentOnDim[1] = value;
-          }
-
-          newIndices[offset++] = sampleFrameIdx;
-        }
-
-        list._count = offset;
-        list._indices = newIndices;
-        list.getRawIndex = getRawIndexWithIndices;
+      SeriesData.prototype.downSample = function (dimension, rate, sampleValue, sampleIndex) {
+        var list = cloneListForMapAndSample(this);
+        list._store = this._store.downSample(this._getStoreDimIndex(dimension), rate, sampleValue, sampleIndex);
         return list;
       };
       /**
@@ -30437,74 +32161,14 @@
        */
 
 
-      List.prototype.lttbDownSample = function (valueDimension, rate) {
-        var list = cloneListForMapAndSample(this, []);
-        var targetStorage = list._storage;
-        var dimStore = targetStorage[valueDimension];
-        var len = this.count();
-        var newIndices = new (getIndicesCtor(this))(len);
-        var sampledIndex = 0;
-        var frameSize = mathFloor(1 / rate);
-        var currentRawIndex = this.getRawIndex(0);
-        var maxArea;
-        var area;
-        var nextRawIndex; // First frame use the first data.
-
-        newIndices[sampledIndex++] = currentRawIndex;
-
-        for (var i = 1; i < len - 1; i += frameSize) {
-          var nextFrameStart = Math.min(i + frameSize, len - 1);
-          var nextFrameEnd = Math.min(i + frameSize * 2, len);
-          var avgX = (nextFrameEnd + nextFrameStart) / 2;
-          var avgY = 0;
-
-          for (var idx = nextFrameStart; idx < nextFrameEnd; idx++) {
-            var rawIndex = this.getRawIndex(idx);
-            var y = dimStore[rawIndex];
-
-            if (isNaN(y)) {
-              continue;
-            }
-
-            avgY += y;
-          }
-
-          avgY /= nextFrameEnd - nextFrameStart;
-          var frameStart = i;
-          var frameEnd = Math.min(i + frameSize, len);
-          var pointAX = i - 1;
-          var pointAY = dimStore[currentRawIndex];
-          maxArea = -1;
-          nextRawIndex = frameStart; // Find a point from current frame that construct a triangel with largest area with previous selected point
-          // And the average of next frame.
-
-          for (var idx = frameStart; idx < frameEnd; idx++) {
-            var rawIndex = this.getRawIndex(idx);
-            var y = dimStore[rawIndex];
-
-            if (isNaN(y)) {
-              continue;
-            } // Calculate triangle area over three buckets
-
-
-            area = Math.abs((pointAX - avgX) * (y - pointAY) - (pointAX - idx) * (avgY - pointAY));
-
-            if (area > maxArea) {
-              maxArea = area;
-              nextRawIndex = rawIndex; // Next a is this b
-            }
-          }
-
-          newIndices[sampledIndex++] = nextRawIndex;
-          currentRawIndex = nextRawIndex; // This a is the next a (chosen b)
-        } // First frame use the last data.
-
-
-        newIndices[sampledIndex++] = this.getRawIndex(len - 1);
-        list._count = sampledIndex;
-        list._indices = newIndices;
-        list.getRawIndex = getRawIndexWithIndices;
+      SeriesData.prototype.lttbDownSample = function (valueDimension, rate) {
+        var list = cloneListForMapAndSample(this);
+        list._store = this._store.lttbDownSample(this._getStoreDimIndex(valueDimension), rate);
         return list;
+      };
+
+      SeriesData.prototype.getRawDataItem = function (idx) {
+        return this._store.getRawDataItem(idx);
       };
       /**
        * Get model of one data item.
@@ -30512,7 +32176,7 @@
       // TODO: Type of data item
 
 
-      List.prototype.getItemModel = function (idx) {
+      SeriesData.prototype.getItemModel = function (idx) {
         var hostModel = this.hostModel;
         var dataItem = this.getRawDataItem(idx);
         return new Model(dataItem, hostModel, hostModel && hostModel.ecModel);
@@ -30522,9 +32186,9 @@
        */
 
 
-      List.prototype.diff = function (otherList) {
+      SeriesData.prototype.diff = function (otherList) {
         var thisList = this;
-        return new DataDiffer(otherList ? otherList.getIndices() : [], this.getIndices(), function (idx) {
+        return new DataDiffer(otherList ? otherList.getStore().getIndices() : [], this.getStore().getIndices(), function (idx) {
           return getId(otherList, idx);
         }, function (idx) {
           return getId(thisList, idx);
@@ -30535,15 +32199,15 @@
        */
 
 
-      List.prototype.getVisual = function (key) {
+      SeriesData.prototype.getVisual = function (key) {
         var visual = this._visual;
         return visual && visual[key];
       };
 
-      List.prototype.setVisual = function (kvObj, val) {
+      SeriesData.prototype.setVisual = function (kvObj, val) {
         this._visual = this._visual || {};
 
-        if (isObject$3(kvObj)) {
+        if (isObject$2(kvObj)) {
           extend(this._visual, kvObj);
         } else {
           this._visual[kvObj] = val;
@@ -30555,7 +32219,7 @@
       // eslint-disable-next-line
 
 
-      List.prototype.getItemVisual = function (idx, key) {
+      SeriesData.prototype.getItemVisual = function (idx, key) {
         var itemVisual = this._itemVisuals[idx];
         var val = itemVisual && itemVisual[key];
 
@@ -30571,7 +32235,7 @@
        */
 
 
-      List.prototype.hasItemVisual = function () {
+      SeriesData.prototype.hasItemVisual = function () {
         return this._itemVisuals.length > 0;
       };
       /**
@@ -30580,7 +32244,7 @@
       // TODO: use key to save visual to reduce memory.
 
 
-      List.prototype.ensureUniqueItemVisual = function (idx, key) {
+      SeriesData.prototype.ensureUniqueItemVisual = function (idx, key) {
         var itemVisuals = this._itemVisuals;
         var itemVisual = itemVisuals[idx];
 
@@ -30595,7 +32259,7 @@
 
           if (isArray(val)) {
             val = val.slice();
-          } else if (isObject$3(val)) {
+          } else if (isObject$2(val)) {
             val = extend({}, val);
           }
 
@@ -30606,11 +32270,11 @@
       }; // eslint-disable-next-line
 
 
-      List.prototype.setItemVisual = function (idx, key, value) {
+      SeriesData.prototype.setItemVisual = function (idx, key, value) {
         var itemVisual = this._itemVisuals[idx] || {};
         this._itemVisuals[idx] = itemVisual;
 
-        if (isObject$3(key)) {
+        if (isObject$2(key)) {
           extend(itemVisual, key);
         } else {
           itemVisual[key] = value;
@@ -30621,13 +32285,13 @@
        */
 
 
-      List.prototype.clearAllVisual = function () {
+      SeriesData.prototype.clearAllVisual = function () {
         this._visual = {};
         this._itemVisuals = [];
       };
 
-      List.prototype.setLayout = function (key, val) {
-        if (isObject$3(key)) {
+      SeriesData.prototype.setLayout = function (key, val) {
+        if (isObject$2(key)) {
           for (var name_1 in key) {
             if (key.hasOwnProperty(name_1)) {
               this.setLayout(name_1, key[name_1]);
@@ -30644,7 +32308,7 @@
        */
 
 
-      List.prototype.getLayout = function (key) {
+      SeriesData.prototype.getLayout = function (key) {
         return this._layout[key];
       };
       /**
@@ -30652,7 +32316,7 @@
        */
 
 
-      List.prototype.getItemLayout = function (idx) {
+      SeriesData.prototype.getItemLayout = function (idx) {
         return this._itemLayouts[idx];
       };
       /**
@@ -30660,7 +32324,7 @@
        */
 
 
-      List.prototype.setItemLayout = function (idx, layout, merge) {
+      SeriesData.prototype.setItemLayout = function (idx, layout, merge) {
         this._itemLayouts[idx] = merge ? extend(this._itemLayouts[idx] || {}, layout) : layout;
       };
       /**
@@ -30668,7 +32332,7 @@
        */
 
 
-      List.prototype.clearItemLayouts = function () {
+      SeriesData.prototype.clearItemLayouts = function () {
         this._itemLayouts.length = 0;
       };
       /**
@@ -30676,30 +32340,17 @@
        */
 
 
-      List.prototype.setItemGraphicEl = function (idx, el) {
-        var hostModel = this.hostModel;
-
-        if (el) {
-          var ecData = getECData(el); // Add data index and series index for indexing the data by element
-          // Useful in tooltip
-
-          ecData.dataIndex = idx;
-          ecData.dataType = this.dataType;
-          ecData.seriesIndex = hostModel && hostModel.seriesIndex; // TODO: not store dataIndex on children.
-
-          if (el.type === 'group') {
-            el.traverse(setItemDataAndSeriesIndex, el);
-          }
-        }
-
+      SeriesData.prototype.setItemGraphicEl = function (idx, el) {
+        var seriesIndex = this.hostModel && this.hostModel.seriesIndex;
+        setCommonECData(seriesIndex, this.dataType, idx, el);
         this._graphicEls[idx] = el;
       };
 
-      List.prototype.getItemGraphicEl = function (idx) {
+      SeriesData.prototype.getItemGraphicEl = function (idx) {
         return this._graphicEls[idx];
       };
 
-      List.prototype.eachItemGraphicEl = function (cb, context) {
+      SeriesData.prototype.eachItemGraphicEl = function (cb, context) {
         each(this._graphicEls, function (el, idx) {
           if (el) {
             cb && cb.call(context, el, idx);
@@ -30712,35 +32363,13 @@
        */
 
 
-      List.prototype.cloneShallow = function (list) {
+      SeriesData.prototype.cloneShallow = function (list) {
         if (!list) {
-          var dimensionInfoList = map$1(this.dimensions, this.getDimensionInfo, this);
-          list = new List(dimensionInfoList, this.hostModel);
-        } // FIXME
-
-
-        list._storage = this._storage;
-        list._storageArr = this._storageArr;
-        transferProperties(list, this); // Clone will not change the data extent and indices
-
-        if (this._indices) {
-          var Ctor = this._indices.constructor;
-
-          if (Ctor === Array) {
-            var thisCount = this._indices.length;
-            list._indices = new Ctor(thisCount);
-
-            for (var i = 0; i < thisCount; i++) {
-              list._indices[i] = this._indices[i];
-            }
-          } else {
-            list._indices = new Ctor(this._indices);
-          }
-        } else {
-          list._indices = null;
+          list = new SeriesData(this._schema ? this._schema : map$1(this.dimensions, this._getDimInfo, this), this.hostModel);
         }
 
-        list.getRawIndex = list._indices ? getRawIndexWithIndices : getRawIndexWithoutIndices;
+        transferProperties(list, this);
+        list._store = this._store;
         return list;
       };
       /**
@@ -30748,7 +32377,7 @@
        */
 
 
-      List.prototype.wrapMethod = function (methodName, injectFunction) {
+      SeriesData.prototype.wrapMethod = function (methodName, injectFunction) {
         var originalMethod = this[methodName];
 
         if (typeof originalMethod !== 'function') {
@@ -30768,123 +32397,44 @@
       // ----------------------------------------------------------
 
 
-      List.internalField = function () {
-        defaultDimValueGetters = {
-          arrayRows: getDimValueSimply,
-          objectRows: function (dataItem, dimName, dataIndex, dimIndex) {
-            return parseDataValue(dataItem[dimName], this._dimensionInfos[dimName]);
-          },
-          keyedColumns: getDimValueSimply,
-          original: function (dataItem, dimName, dataIndex, dimIndex) {
-            // Performance sensitive, do not use modelUtil.getDataItemValue.
-            // If dataItem is an plain object with no value field, the let `value`
-            // will be assigned with the object, but it will be tread correctly
-            // in the `convertValue`.
-            var value = dataItem && (dataItem.value == null ? dataItem : dataItem.value); // If any dataItem is like { value: 10 }
-
-            if (!this._rawData.pure && isDataItemOption(dataItem)) {
-              this.hasItemOption = true;
-            }
-
-            return parseDataValue(value instanceof Array ? value[dimIndex] // If value is a single number or something else not array.
-            : value, this._dimensionInfos[dimName]);
-          },
-          typedArray: function (dataItem, dimName, dataIndex, dimIndex) {
-            return dataItem[dimIndex];
-          }
-        };
-
-        function getDimValueSimply(dataItem, dimName, dataIndex, dimIndex) {
-          return parseDataValue(dataItem[dimIndex], this._dimensionInfos[dimName]);
-        }
-
-        prepareInvertedIndex = function (list) {
-          var invertedIndicesMap = list._invertedIndicesMap;
+      SeriesData.internalField = function () {
+        prepareInvertedIndex = function (data) {
+          var invertedIndicesMap = data._invertedIndicesMap;
           each(invertedIndicesMap, function (invertedIndices, dim) {
-            var dimInfo = list._dimensionInfos[dim]; // Currently, only dimensions that has ordinalMeta can create inverted indices.
+            var dimInfo = data._dimInfos[dim]; // Currently, only dimensions that has ordinalMeta can create inverted indices.
 
             var ordinalMeta = dimInfo.ordinalMeta;
+            var store = data._store;
 
             if (ordinalMeta) {
-              invertedIndices = invertedIndicesMap[dim] = new CtorInt32Array(ordinalMeta.categories.length); // The default value of TypedArray is 0. To avoid miss
+              invertedIndices = invertedIndicesMap[dim] = new CtorInt32Array$1(ordinalMeta.categories.length); // The default value of TypedArray is 0. To avoid miss
               // mapping to 0, we should set it as INDEX_NOT_FOUND.
 
               for (var i = 0; i < invertedIndices.length; i++) {
                 invertedIndices[i] = INDEX_NOT_FOUND;
               }
 
-              for (var i = 0; i < list._count; i++) {
+              for (var i = 0; i < store.count(); i++) {
                 // Only support the case that all values are distinct.
-                invertedIndices[list.get(dim, i)] = i;
+                invertedIndices[store.get(dimInfo.storeDimIndex, i)] = i;
               }
             }
           });
         };
 
-        getIdNameFromStore = function (list, dimIdx, ordinalMeta, rawIndex) {
-          var val;
-          var chunk = list._storageArr[dimIdx];
-
-          if (chunk) {
-            val = chunk[rawIndex];
-
-            if (ordinalMeta && ordinalMeta.categories.length) {
-              val = ordinalMeta.categories[val];
-            }
-          }
-
-          return convertOptionIdName(val, null);
-        };
-
-        getIndicesCtor = function (list) {
-          // The possible max value in this._indicies is always this._rawCount despite of filtering.
-          return list._rawCount > 65535 ? CtorUint32Array : CtorUint16Array;
-        };
-
-        prepareStorage = function (storage, dimInfo, end, append) {
-          var DataCtor = dataCtors[dimInfo.type];
-          var dim = dimInfo.name;
-
-          if (append) {
-            var oldStore = storage[dim];
-            var oldLen = oldStore && oldStore.length;
-
-            if (!(oldLen === end)) {
-              var newStore = new DataCtor(end); // The cost of the copy is probably inconsiderable
-              // within the initial chunkSize.
-
-              for (var j = 0; j < oldLen; j++) {
-                newStore[j] = oldStore[j];
-              }
-
-              storage[dim] = newStore;
-            }
-          } else {
-            storage[dim] = new DataCtor(end);
-          }
-        };
-
-        getRawIndexWithoutIndices = function (idx) {
-          return idx;
-        };
-
-        getRawIndexWithIndices = function (idx) {
-          if (idx < this._count && idx >= 0) {
-            return this._indices[idx];
-          }
-
-          return -1;
+        getIdNameFromStore = function (data, dimIdx, idx) {
+          return convertOptionIdName(data._getCategory(dimIdx, idx), null);
         };
         /**
          * @see the comment of `List['getId']`.
          */
 
 
-        getId = function (list, rawIndex) {
-          var id = list._idList[rawIndex];
+        getId = function (data, rawIndex) {
+          var id = data._idList[rawIndex];
 
-          if (id == null && list._idDimIdx != null) {
-            id = getIdNameFromStore(list, list._idDimIdx, list._idOrdinalMeta, rawIndex);
+          if (id == null && data._idDimIdx != null) {
+            id = getIdNameFromStore(data, data._idDimIdx, rawIndex);
           }
 
           if (id == null) {
@@ -30901,65 +32451,16 @@
 
           return dimensions;
         };
-
-        validateDimensions = function (list, dims) {
-          for (var i = 0; i < dims.length; i++) {
-            // stroage may be empty when no data, so use
-            // dimensionInfos to check.
-            if (!list._dimensionInfos[dims[i]]) {
-              console.error('Unkown dimension ' + dims[i]);
-            }
-          }
-        }; // Data in excludeDimensions is copied, otherwise transfered.
+        /**
+         * Data in excludeDimensions is copied, otherwise transfered.
+         */
 
 
-        cloneListForMapAndSample = function (original, excludeDimensions) {
-          var allDimensions = original.dimensions;
-          var list = new List(map$1(allDimensions, original.getDimensionInfo, original), original.hostModel); // FIXME If needs stackedOn, value may already been stacked
+        cloneListForMapAndSample = function (original) {
+          var list = new SeriesData(original._schema ? original._schema : map$1(original.dimensions, original._getDimInfo, original), original.hostModel); // FIXME If needs stackedOn, value may already been stacked
 
           transferProperties(list, original);
-          var storage = list._storage = {};
-          var originalStorage = original._storage;
-          var storageArr = list._storageArr = []; // Init storage
-
-          for (var i = 0; i < allDimensions.length; i++) {
-            var dim = allDimensions[i];
-
-            if (originalStorage[dim]) {
-              // Notice that we do not reset invertedIndicesMap here, becuase
-              // there is no scenario of mapping or sampling ordinal dimension.
-              if (indexOf(excludeDimensions, dim) >= 0) {
-                storage[dim] = cloneChunk(originalStorage[dim]);
-                list._rawExtent[dim] = getInitialExtent();
-                list._extent[dim] = null;
-              } else {
-                // Direct reference for other dimensions
-                storage[dim] = originalStorage[dim];
-              }
-
-              storageArr.push(storage[dim]);
-            }
-          }
-
           return list;
-        };
-
-        function cloneChunk(originalChunk) {
-          var Ctor = originalChunk.constructor; // Only shallow clone is enough when Array.
-
-          return Ctor === Array ? originalChunk.slice() : new Ctor(originalChunk);
-        }
-
-        getInitialExtent = function () {
-          return [Infinity, -Infinity];
-        };
-
-        setItemDataAndSeriesIndex = function (child) {
-          var childECData = getECData(child);
-          var thisECData = getECData(this);
-          childECData.seriesIndex = thisECData.seriesIndex;
-          childECData.dataIndex = thisECData.dataIndex;
-          childECData.dataType = thisECData.dataType;
         };
 
         transferProperties = function (target, source) {
@@ -30975,24 +32476,24 @@
           target._calculationInfo = extend({}, source._calculationInfo);
         };
 
-        makeIdFromName = function (list, idx) {
-          var nameList = list._nameList;
-          var idList = list._idList;
-          var nameDimIdx = list._nameDimIdx;
-          var idDimIdx = list._idDimIdx;
+        makeIdFromName = function (data, idx) {
+          var nameList = data._nameList;
+          var idList = data._idList;
+          var nameDimIdx = data._nameDimIdx;
+          var idDimIdx = data._idDimIdx;
           var name = nameList[idx];
           var id = idList[idx];
 
           if (name == null && nameDimIdx != null) {
-            nameList[idx] = name = getIdNameFromStore(list, nameDimIdx, list._nameOrdinalMeta, idx);
+            nameList[idx] = name = getIdNameFromStore(data, nameDimIdx, idx);
           }
 
           if (id == null && idDimIdx != null) {
-            idList[idx] = id = getIdNameFromStore(list, idDimIdx, list._idOrdinalMeta, idx);
+            idList[idx] = id = getIdNameFromStore(data, idDimIdx, idx);
           }
 
           if (id == null && name != null) {
-            var nameRepeatCount = list._nameRepeatCount;
+            var nameRepeatCount = data._nameRepeatCount;
             var nmCnt = nameRepeatCount[name] = (nameRepeatCount[name] || 0) + 1;
             id = name;
 
@@ -31005,90 +32506,95 @@
         };
       }();
 
-      return List;
+      return SeriesData;
     }();
 
     /**
-     * @see {module:echarts/test/ut/spec/data/completeDimensions}
-     *
+     * For outside usage compat (like echarts-gl are using it).
+     */
+
+    function createDimensions(source, opt) {
+      return prepareSeriesDataSchema(source, opt).dimensions;
+    }
+    /**
      * This method builds the relationship between:
-     * + "what the coord sys or series requires (see `sysDims`)",
-     * + "what the user defines (in `encode` and `dimensions`, see `opt.dimsDef` and `opt.encodeDef`)"
+     * + "what the coord sys or series requires (see `coordDimensions`)",
+     * + "what the user defines (in `encode` and `dimensions`, see `opt.dimensionsDefine` and `opt.encodeDefine`)"
      * + "what the data source provids (see `source`)".
      *
      * Some guess strategy will be adapted if user does not define something.
      * If no 'value' dimension specified, the first no-named dimension will be
      * named as 'value'.
      *
-     * @param {Array.<string>} sysDims Necessary dimensions, like ['x', 'y'], which
-     *      provides not only dim template, but also default order.
-     *      properties: 'name', 'type', 'displayName'.
-     *      `name` of each item provides default coord name.
-     *      [{dimsDef: [string|Object, ...]}, ...] dimsDef of sysDim item provides default dim name, and
-     *                                    provide dims count that the sysDim required.
-     *      [{ordinalMeta}] can be specified.
-     * @param {module:echarts/data/Source|Array|Object} source or data (for compatibal with pervious)
-     * @param {Object} [opt]
-     * @param {Array.<Object|string>} [opt.dimsDef] option.series.dimensions User defined dimensions
-     *      For example: ['asdf', {name, type}, ...].
-     * @param {Object|HashMap} [opt.encodeDef] option.series.encode {x: 2, y: [3, 1], tooltip: [1, 2], label: 3}
-     * @param {Function} [opt.encodeDefaulter] Called if no `opt.encodeDef` exists.
-     *      If not specified, auto find the next available data dim.
-     *      param source {module:data/Source}
-     *      param dimCount {number}
-     *      return {Object} encode Never be `null/undefined`.
-     * @param {string} [opt.generateCoord] Generate coord dim with the given name.
-     *      If not specified, extra dim names will be:
-     *      'value', 'value0', 'value1', ...
-     * @param {number} [opt.generateCoordCount] By default, the generated dim name is `generateCoord`.
-     *      If `generateCoordCount` specified, the generated dim names will be:
-     *      `generateCoord` + 0, `generateCoord` + 1, ...
-     *      can be Infinity, indicate that use all of the remain columns.
-     * @param {number} [opt.dimCount] If not specified, guess by the first data item.
-     * @return {Array.<module:data/DataDimensionInfo>}
+     * @return The results are always sorted by `storeDimIndex` asc.
      */
 
-    function completeDimensions(sysDims, source, opt) {
+    function prepareSeriesDataSchema( // TODO: TYPE completeDimensions type
+    source, opt) {
       if (!isSourceInstance(source)) {
         source = createSourceFromSeriesDataOption(source);
       }
 
       opt = opt || {};
-      sysDims = (sysDims || []).slice();
-      var dimsDef = (opt.dimsDef || []).slice();
-      var dataDimNameMap = createHashMap();
-      var coordDimNameMap = createHashMap(); // let valueCandidate;
+      var sysDims = opt.coordDimensions || [];
+      var dimsDef = opt.dimensionsDefine || source.dimensionsDefine || [];
+      var coordDimNameMap = createHashMap();
+      var resultList = [];
+      var dimCount = getDimCount(source, sysDims, dimsDef, opt.dimensionsCount); // Try to ignore unsed dimensions if sharing a high dimension datastore
+      // 30 is an experience value.
 
-      var result = [];
-      var dimCount = getDimCount(source, sysDims, dimsDef, opt.dimCount); // Apply user defined dims (`name` and `type`) and init result.
-
-      for (var i = 0; i < dimCount; i++) {
-        var dimDefItemRaw = dimsDef[i];
-        var dimDefItem = dimsDef[i] = extend({}, isObject(dimDefItemRaw) ? dimDefItemRaw : {
-          name: dimDefItemRaw
-        });
-        var userDimName = dimDefItem.name;
-        var resultItem = result[i] = new DataDimensionInfo(); // Name will be applied later for avoiding duplication.
-
-        if (userDimName != null && dataDimNameMap.get(userDimName) == null) {
-          // Only if `series.dimensions` is defined in option
-          // displayName, will be set, and dimension will be diplayed vertically in
-          // tooltip by default.
-          resultItem.name = resultItem.displayName = userDimName;
-          dataDimNameMap.set(userDimName, i);
-        }
-
-        dimDefItem.type != null && (resultItem.type = dimDefItem.type);
-        dimDefItem.displayName != null && (resultItem.displayName = dimDefItem.displayName);
-      }
-
-      var encodeDef = opt.encodeDef;
+      var omitUnusedDimensions = opt.canOmitUnusedDimensions && shouldOmitUnusedDimensions(dimCount);
+      var isUsingSourceDimensionsDef = dimsDef === source.dimensionsDefine;
+      var dataDimNameMap = isUsingSourceDimensionsDef ? ensureSourceDimNameMap(source) : createDimNameMap(dimsDef);
+      var encodeDef = opt.encodeDefine;
 
       if (!encodeDef && opt.encodeDefaulter) {
         encodeDef = opt.encodeDefaulter(source, dimCount);
       }
 
-      var encodeDefMap = createHashMap(encodeDef); // Set `coordDim` and `coordDimIndex` by `encodeDefMap` and normalize `encodeDefMap`.
+      var encodeDefMap = createHashMap(encodeDef);
+      var indicesMap = new CtorInt32Array(dimCount);
+
+      for (var i = 0; i < indicesMap.length; i++) {
+        indicesMap[i] = -1;
+      }
+
+      function getResultItem(dimIdx) {
+        var idx = indicesMap[dimIdx];
+
+        if (idx < 0) {
+          var dimDefItemRaw = dimsDef[dimIdx];
+          var dimDefItem = isObject(dimDefItemRaw) ? dimDefItemRaw : {
+            name: dimDefItemRaw
+          };
+          var resultItem = new SeriesDimensionDefine();
+          var userDimName = dimDefItem.name;
+
+          if (userDimName != null && dataDimNameMap.get(userDimName) != null) {
+            // Only if `series.dimensions` is defined in option
+            // displayName, will be set, and dimension will be diplayed vertically in
+            // tooltip by default.
+            resultItem.name = resultItem.displayName = userDimName;
+          }
+
+          dimDefItem.type != null && (resultItem.type = dimDefItem.type);
+          dimDefItem.displayName != null && (resultItem.displayName = dimDefItem.displayName);
+          var newIdx = resultList.length;
+          indicesMap[dimIdx] = newIdx;
+          resultItem.storeDimIndex = dimIdx;
+          resultList.push(resultItem);
+          return resultItem;
+        }
+
+        return resultList[idx];
+      }
+
+      if (!omitUnusedDimensions) {
+        for (var i = 0; i < dimCount; i++) {
+          getResultItem(i);
+        }
+      } // Set `coordDim` and `coordDimIndex` by `encodeDefMap` and normalize `encodeDefMap`.
+
 
       encodeDefMap.each(function (dataDimsRaw, coordDim) {
         var dataDims = normalizeToArray(dataDimsRaw).slice(); // Note: It is allowed that `dataDims.length` is `0`, e.g., options is
@@ -31107,7 +32613,7 @@
 
           if (resultDimIdx != null && resultDimIdx < dimCount) {
             validDataDims[idx] = resultDimIdx;
-            applyDim(result[resultDimIdx], coordDim, idx);
+            applyDim(getResultItem(resultDimIdx), coordDim, idx);
           }
         });
       }); // Apply templetes and default order from `sysDims`.
@@ -31127,7 +32633,7 @@
           coordDim = sysDimItem.name;
           var ordinalMeta = sysDimItem.ordinalMeta;
           sysDimItem.ordinalMeta = null;
-          sysDimItem = clone(sysDimItem);
+          sysDimItem = extend({}, sysDimItem);
           sysDimItem.ordinalMeta = ordinalMeta; // `coordDimIndex` should not be set directly.
 
           sysDimItemDimsDef = sysDimItem.dimsDef;
@@ -31145,17 +32651,22 @@
 
         if (!dataDims.length) {
           for (var i = 0; i < (sysDimItemDimsDef && sysDimItemDimsDef.length || 1); i++) {
-            while (availDimIdx < result.length && result[availDimIdx].coordDim != null) {
+            while (availDimIdx < dimCount && getResultItem(availDimIdx).coordDim != null) {
               availDimIdx++;
             }
 
-            availDimIdx < result.length && dataDims.push(availDimIdx++);
+            availDimIdx < dimCount && dataDims.push(availDimIdx++);
           }
         } // Apply templates.
 
 
         each(dataDims, function (resultDimIdx, coordDimIndex) {
-          var resultItem = result[resultDimIdx];
+          var resultItem = getResultItem(resultDimIdx); // Coordinate system has a higher priority on dim type than source.
+
+          if (isUsingSourceDimensionsDef && sysDimItem.type != null) {
+            resultItem.type = sysDimItem.type;
+          }
+
           applyDim(defaults(resultItem, sysDimItem), coordDim, coordDimIndex);
 
           if (resultItem.name == null && sysDimItemDimsDef) {
@@ -31187,43 +32698,88 @@
       var generateCoordCount = opt.generateCoordCount;
       var fromZero = generateCoordCount != null;
       generateCoordCount = generateCoord ? generateCoordCount || 1 : 0;
-      var extra = generateCoord || 'value'; // Set dim `name` and other `coordDim` and other props.
+      var extra = generateCoord || 'value';
 
-      for (var resultDimIdx = 0; resultDimIdx < dimCount; resultDimIdx++) {
-        var resultItem = result[resultDimIdx] = result[resultDimIdx] || new DataDimensionInfo();
-        var coordDim = resultItem.coordDim;
+      function ifNoNameFillWithCoordName(resultItem) {
+        if (resultItem.name == null) {
+          // Duplication will be removed in the next step.
+          resultItem.name = resultItem.coordDim;
+        }
+      } // Set dim `name` and other `coordDim` and other props.
 
-        if (coordDim == null) {
-          resultItem.coordDim = genName(extra, coordDimNameMap, fromZero);
-          resultItem.coordDimIndex = 0;
 
-          if (!generateCoord || generateCoordCount <= 0) {
-            resultItem.isExtraCoord = true;
+      if (!omitUnusedDimensions) {
+        for (var resultDimIdx = 0; resultDimIdx < dimCount; resultDimIdx++) {
+          var resultItem = getResultItem(resultDimIdx);
+          var coordDim = resultItem.coordDim;
+
+          if (coordDim == null) {
+            // TODO no need to generate coordDim for isExtraCoord?
+            resultItem.coordDim = genCoordDimName(extra, coordDimNameMap, fromZero);
+            resultItem.coordDimIndex = 0; // Series specified generateCoord is using out.
+
+            if (!generateCoord || generateCoordCount <= 0) {
+              resultItem.isExtraCoord = true;
+            }
+
+            generateCoordCount--;
           }
 
-          generateCoordCount--;
-        }
+          ifNoNameFillWithCoordName(resultItem);
 
-        resultItem.name == null && (resultItem.name = genName(resultItem.coordDim, dataDimNameMap, false));
-
-        if (resultItem.type == null && (guessOrdinal(source, resultDimIdx) === BE_ORDINAL.Must // Consider the case:
-        // {
-        //    dataset: {source: [
-        //        ['2001', 123],
-        //        ['2002', 456],
-        //        ...
-        //        ['The others', 987],
-        //    ]},
-        //    series: {type: 'pie'}
-        // }
-        // The first colum should better be treated as a "ordinal" although it
-        // might not able to be detected as an "ordinal" by `guessOrdinal`.
-        || resultItem.isExtraCoord && (resultItem.otherDims.itemName != null || resultItem.otherDims.seriesName != null))) {
-          resultItem.type = 'ordinal';
+          if (resultItem.type == null && (guessOrdinal(source, resultDimIdx) === BE_ORDINAL.Must // Consider the case:
+          // {
+          //    dataset: {source: [
+          //        ['2001', 123],
+          //        ['2002', 456],
+          //        ...
+          //        ['The others', 987],
+          //    ]},
+          //    series: {type: 'pie'}
+          // }
+          // The first colum should better be treated as a "ordinal" although it
+          // might not able to be detected as an "ordinal" by `guessOrdinal`.
+          || resultItem.isExtraCoord && (resultItem.otherDims.itemName != null || resultItem.otherDims.seriesName != null))) {
+            resultItem.type = 'ordinal';
+          }
         }
+      } else {
+        each(resultList, function (resultItem) {
+          // PENDING: guessOrdinal or let user specify type: 'ordinal' manually?
+          ifNoNameFillWithCoordName(resultItem);
+        }); // Sort dimensions: there are some rule that use the last dim as label,
+        // and for some latter travel process easier.
+
+        resultList.sort(function (item0, item1) {
+          return item0.storeDimIndex - item1.storeDimIndex;
+        });
       }
 
-      return result;
+      removeDuplication(resultList);
+      return new SeriesDataSchema({
+        source: source,
+        dimensions: resultList,
+        fullDimensionCount: dimCount,
+        dimensionOmitted: omitUnusedDimensions
+      });
+    }
+
+    function removeDuplication(result) {
+      var duplicationMap = createHashMap();
+
+      for (var i = 0; i < result.length; i++) {
+        var dim = result[i];
+        var dimOriginalName = dim.name;
+        var count = duplicationMap.get(dimOriginalName) || 0;
+
+        if (count > 0) {
+          // Starts from 0.
+          dim.name = dimOriginalName + (count - 1);
+        }
+
+        count++;
+        duplicationMap.set(dimOriginalName, count);
+      }
     } // ??? TODO
     // Originally detect dimCount by data[0]. Should we
     // optimize it to only by sysDims and dimensions and encode.
@@ -31233,7 +32789,7 @@
     // may be visited.
     // (2) sometimes user need to calcualte bubble size or use visualMap
     // on other dimensions besides coordSys needed.
-    // So, dims that is not used by system, should be shared in storage?
+    // So, dims that is not used by system, should be shared in data store?
 
 
     function getDimCount(source, sysDims, dimsDef, optDimCount) {
@@ -31250,11 +32806,13 @@
       return dimCount;
     }
 
-    function genName(name, map, fromZero) {
-      if (fromZero || map.get(name) != null) {
+    function genCoordDimName(name, map, fromZero) {
+      var mapData = map.data;
+
+      if (fromZero || mapData.hasOwnProperty(name)) {
         var i = 0;
 
-        while (map.get(name + i) != null) {
+        while (mapData.hasOwnProperty(name + i)) {
           i++;
         }
 
@@ -31263,27 +32821,6 @@
 
       map.set(name, true);
       return name;
-    }
-
-    /**
-     * @param opt.coordDimensions
-     * @param opt.dimensionsDefine By default `source.dimensionsDefine` Overwrite source define.
-     * @param opt.encodeDefine By default `source.encodeDefine` Overwrite source define.
-     * @param opt.encodeDefaulter Make default encode if user not specified.
-     */
-
-    function createDimensions( // TODO: TYPE completeDimensions type
-    source, opt) {
-      opt = opt || {};
-      return completeDimensions(opt.coordDimensions || [], source, {
-        // FIXME:TS detect whether source then call `.dimensionsDefine` and `.encodeDefine`?
-        dimsDef: opt.dimensionsDefine || source.dimensionsDefine,
-        encodeDef: opt.encodeDefine || source.encodeDefine,
-        dimCount: opt.dimensionsCount,
-        encodeDefaulter: opt.encodeDefaulter,
-        generateCoord: opt.generateCoord,
-        generateCoordCount: opt.generateCoordCount
-      });
     }
 
     /**
@@ -31438,8 +32975,8 @@
      * we just support that stacked by index.
      *
      * @param seriesModel
-     * @param dimensionInfoList The same as the input of <module:echarts/data/List>.
-     *        The input dimensionInfoList will be modified.
+     * @param dimensionsInput The same as the input of <module:echarts/data/SeriesData>.
+     *        The input will be modified.
      * @param opt
      * @param opt.stackedCoordDimension Specify a coord dimension if needed.
      * @param opt.byIndex=false
@@ -31453,19 +32990,31 @@
      * }
      */
 
-    function enableDataStack(seriesModel, dimensionInfoList, opt) {
+    function enableDataStack(seriesModel, dimensionsInput, opt) {
       opt = opt || {};
       var byIndex = opt.byIndex;
-      var stackedCoordDimension = opt.stackedCoordDimension; // Compatibal: when `stack` is set as '', do not stack.
+      var stackedCoordDimension = opt.stackedCoordDimension;
+      var dimensionDefineList;
+      var schema;
+      var store;
+
+      if (isLegacyDimensionsInput(dimensionsInput)) {
+        dimensionDefineList = dimensionsInput;
+      } else {
+        schema = dimensionsInput.schema;
+        dimensionDefineList = schema.dimensions;
+        store = dimensionsInput.store;
+      } // Compatibal: when `stack` is set as '', do not stack.
+
 
       var mayStack = !!(seriesModel && seriesModel.get('stack'));
       var stackedByDimInfo;
       var stackedDimInfo;
       var stackResultDimension;
       var stackedOverDimension;
-      each(dimensionInfoList, function (dimensionInfo, index) {
+      each(dimensionDefineList, function (dimensionInfo, index) {
         if (isString(dimensionInfo)) {
-          dimensionInfoList[index] = dimensionInfo = {
+          dimensionDefineList[index] = dimensionInfo = {
             name: dimensionInfo
           };
         }
@@ -31494,8 +33043,10 @@
 
       if (stackedDimInfo) {
         // Use a weird name that not duplicated with other names.
-        stackResultDimension = '__\0ecstackresult';
-        stackedOverDimension = '__\0ecstackedover'; // Create inverted index to fast query index by value.
+        // Also need to use seriesModel.id as postfix because different
+        // series may share same data store. The stack dimension needs to be distinguished.
+        stackResultDimension = '__\0ecstackresult_' + seriesModel.id;
+        stackedOverDimension = '__\0ecstackedover_' + seriesModel.id; // Create inverted index to fast query index by value.
 
         if (stackedByDimInfo) {
           stackedByDimInfo.createInvertedIndices = true;
@@ -31504,30 +33055,44 @@
         var stackedDimCoordDim_1 = stackedDimInfo.coordDim;
         var stackedDimType = stackedDimInfo.type;
         var stackedDimCoordIndex_1 = 0;
-        each(dimensionInfoList, function (dimensionInfo) {
+        each(dimensionDefineList, function (dimensionInfo) {
           if (dimensionInfo.coordDim === stackedDimCoordDim_1) {
             stackedDimCoordIndex_1++;
           }
         });
-        dimensionInfoList.push({
+        var stackedOverDimensionDefine = {
           name: stackResultDimension,
           coordDim: stackedDimCoordDim_1,
           coordDimIndex: stackedDimCoordIndex_1,
           type: stackedDimType,
           isExtraCoord: true,
-          isCalculationCoord: true
-        });
-        stackedDimCoordIndex_1++;
-        dimensionInfoList.push({
+          isCalculationCoord: true,
+          storeDimIndex: dimensionDefineList.length
+        };
+        var stackResultDimensionDefine = {
           name: stackedOverDimension,
           // This dimension contains stack base (generally, 0), so do not set it as
           // `stackedDimCoordDim` to avoid extent calculation, consider log scale.
           coordDim: stackedOverDimension,
-          coordDimIndex: stackedDimCoordIndex_1,
+          coordDimIndex: stackedDimCoordIndex_1 + 1,
           type: stackedDimType,
           isExtraCoord: true,
-          isCalculationCoord: true
-        });
+          isCalculationCoord: true,
+          storeDimIndex: dimensionDefineList.length + 1
+        };
+
+        if (schema) {
+          if (store) {
+            stackedOverDimensionDefine.storeDimIndex = store.ensureCalculationDimension(stackedOverDimension, stackedDimType);
+            stackResultDimensionDefine.storeDimIndex = store.ensureCalculationDimension(stackResultDimension, stackedDimType);
+          }
+
+          schema.appendCalculationDimension(stackedOverDimensionDefine);
+          schema.appendCalculationDimension(stackResultDimensionDefine);
+        } else {
+          dimensionDefineList.push(stackedOverDimensionDefine);
+          dimensionDefineList.push(stackResultDimensionDefine);
+        }
       }
 
       return {
@@ -31538,31 +33103,23 @@
         stackResultDimension: stackResultDimension
       };
     }
-    function isDimensionStacked(data, stackedDim
-    /*, stackedByDim*/
-    ) {
+
+    function isLegacyDimensionsInput(dimensionsInput) {
+      return !isSeriesDataSchema(dimensionsInput.schema);
+    }
+
+    function isDimensionStacked(data, stackedDim) {
       // Each single series only maps to one pair of axis. So we do not need to
       // check stackByDim, whatever stacked by a dimension or stacked by index.
-      return !!stackedDim && stackedDim === data.getCalculationInfo('stackedDimension'); // && (
-      //     stackedByDim != null
-      //         ? stackedByDim === data.getCalculationInfo('stackedByDimension')
-      //         : data.getCalculationInfo('isStackedByIndex')
-      // );
+      return !!stackedDim && stackedDim === data.getCalculationInfo('stackedDimension');
     }
     function getStackedDimension(data, targetDim) {
       return isDimensionStacked(data, targetDim) ? data.getCalculationInfo('stackResultDimension') : targetDim;
     }
 
-    function createListFromArray(source, seriesModel, opt) {
-      opt = opt || {};
-
-      if (!isSourceInstance(source)) {
-        source = createSourceFromSeriesDataOption(source);
-      }
-
+    function getCoordSysDimDefs(seriesModel, coordSysInfo) {
       var coordSysName = seriesModel.get('coordinateSystem');
       var registeredCoordSys = CoordinateSystemManager.get(coordSysName);
-      var coordSysInfo = getCoordSysInfoBySeries(seriesModel);
       var coordSysDimDefs;
 
       if (coordSysInfo && coordSysInfo.coordSysDims) {
@@ -31574,7 +33131,7 @@
 
           if (axisModel) {
             var axisType = axisModel.get('type');
-            dimInfo.type = getDimensionTypeByAxis(axisType); // dimInfo.stackable = isStackable(axisType);
+            dimInfo.type = getDimensionTypeByAxis(axisType);
           }
 
           return dimInfo;
@@ -31586,12 +33143,10 @@
         coordSysDimDefs = registeredCoordSys && (registeredCoordSys.getDimensionsInfo ? registeredCoordSys.getDimensionsInfo() : registeredCoordSys.dimensions.slice()) || ['x', 'y'];
       }
 
-      var useEncodeDefaulter = opt.useEncodeDefaulter;
-      var dimInfoList = createDimensions(source, {
-        coordDimensions: coordSysDimDefs,
-        generateCoord: opt.generateCoord,
-        encodeDefaulter: isFunction(useEncodeDefaulter) ? useEncodeDefaulter : useEncodeDefaulter ? curry(makeSeriesEncodeForAxisCoordSys, coordSysDimDefs, seriesModel) : null
-      });
+      return coordSysDimDefs;
+    }
+
+    function injectOrdinalMeta(dimInfoList, createInvertedIndices, coordSysInfo) {
       var firstCategoryDimIndex;
       var hasNameEncode;
       coordSysInfo && each(dimInfoList, function (dimInfo, dimIndex) {
@@ -31605,7 +33160,7 @@
 
           dimInfo.ordinalMeta = categoryAxisModel.getOrdinalMeta();
 
-          if (opt.createInvertedIndices) {
+          if (createInvertedIndices) {
             dimInfo.createInvertedIndices = true;
           }
         }
@@ -31619,16 +33174,57 @@
         dimInfoList[firstCategoryDimIndex].otherDims.itemName = 0;
       }
 
-      var stackCalculationInfo = enableDataStack(seriesModel, dimInfoList);
-      var list = new List(dimInfoList, seriesModel);
-      list.setCalculationInfo(stackCalculationInfo);
+      return firstCategoryDimIndex;
+    }
+    /**
+     * Caution: there are side effects to `sourceManager` in this method.
+     * Should better only be called in `Series['getInitialData']`.
+     */
+
+
+    function createSeriesData(sourceRaw, seriesModel, opt) {
+      opt = opt || {};
+      var sourceManager = seriesModel.getSourceManager();
+      var source;
+      var isOriginalSource = false;
+
+      if (sourceRaw) {
+        isOriginalSource = true;
+        source = createSourceFromSeriesDataOption(sourceRaw);
+      } else {
+        source = sourceManager.getSource(); // Is series.data. not dataset.
+
+        isOriginalSource = source.sourceFormat === SOURCE_FORMAT_ORIGINAL;
+      }
+
+      var coordSysInfo = getCoordSysInfoBySeries(seriesModel);
+      var coordSysDimDefs = getCoordSysDimDefs(seriesModel, coordSysInfo);
+      var useEncodeDefaulter = opt.useEncodeDefaulter;
+      var encodeDefaulter = isFunction(useEncodeDefaulter) ? useEncodeDefaulter : useEncodeDefaulter ? curry(makeSeriesEncodeForAxisCoordSys, coordSysDimDefs, seriesModel) : null;
+      var createDimensionOptions = {
+        coordDimensions: coordSysDimDefs,
+        generateCoord: opt.generateCoord,
+        encodeDefine: seriesModel.getEncode(),
+        encodeDefaulter: encodeDefaulter,
+        canOmitUnusedDimensions: !isOriginalSource
+      };
+      var schema = prepareSeriesDataSchema(source, createDimensionOptions);
+      var firstCategoryDimIndex = injectOrdinalMeta(schema.dimensions, opt.createInvertedIndices, coordSysInfo);
+      var store = !isOriginalSource ? sourceManager.getSharedDataStore(schema) : null;
+      var stackCalculationInfo = enableDataStack(seriesModel, {
+        schema: schema,
+        store: store
+      });
+      var data = new SeriesData(schema, seriesModel);
+      data.setCalculationInfo(stackCalculationInfo);
       var dimValueGetter = firstCategoryDimIndex != null && isNeedCompleteOrdinalData(source) ? function (itemOpt, dimName, dataIndex, dimIndex) {
         // Use dataIndex as ordinal value in categoryAxis
         return dimIndex === firstCategoryDimIndex ? dataIndex : this.defaultDimValueGetter(itemOpt, dimName, dataIndex, dimIndex);
       } : null;
-      list.hasItemOption = false;
-      list.initData(source, null, dimValueGetter);
-      return list;
+      data.hasItemOption = false;
+      data.initData( // Try to reuse the data store in sourceManager if using dataset.
+      isOriginalSource ? source : store, null, dimValueGetter);
+      return data;
     }
 
     function isNeedCompleteOrdinalData(source) {
@@ -31638,14 +33234,14 @@
       }
     }
 
-    function firstDataNotNull(data) {
+    function firstDataNotNull(arr) {
       var i = 0;
 
-      while (i < data.length && data[i] == null) {
+      while (i < arr.length && arr[i] == null) {
         i++;
       }
 
-      return data[i];
+      return arr[i];
     }
 
     var Scale =
@@ -31736,6 +33332,8 @@
 
     enableClassManagement(Scale);
 
+    var uidBase = 0;
+
     var OrdinalMeta =
     /** @class */
     function () {
@@ -31743,6 +33341,7 @@
         this.categories = opt.categories || [];
         this._needCollect = opt.needCollect;
         this._deduplication = opt.deduplication;
+        this.uid = ++uidBase;
       }
 
       OrdinalMeta.createByAxisModel = function (axisModel) {
@@ -31860,7 +33459,7 @@
 
     function getIntervalPrecision(interval) {
       // Tow more digital for tick.
-      return getPrecisionSafe(interval) + 2;
+      return getPrecision(interval) + 2;
     }
 
     function clamp(niceTickExtent, idx, extent) {
@@ -31878,7 +33477,7 @@
         niceTickExtent[0] = niceTickExtent[1];
       }
     }
-    function contain$1(val, extent) {
+    function contain$2(val, extent) {
       return val >= extent[0] && val <= extent[1];
     }
     function normalize$1(val, extent) {
@@ -31930,7 +33529,7 @@
 
       OrdinalScale.prototype.contain = function (rank) {
         rank = this.parse(rank);
-        return contain$1(rank, this._extent) && this._ordinalMeta.categories[rank] != null;
+        return contain$2(rank, this._extent) && this._ordinalMeta.categories[rank] != null;
       };
       /**
        * Normalize given rank or name to linear [0, 1]
@@ -32107,7 +33706,7 @@
       };
 
       IntervalScale.prototype.contain = function (val) {
-        return contain$1(val, this._extent);
+        return contain$2(val, this._extent);
       };
 
       IntervalScale.prototype.normalize = function (val) {
@@ -32261,7 +33860,7 @@
         var precision = opt && opt.precision;
 
         if (precision == null) {
-          precision = getPrecisionSafe(data.value) || 0;
+          precision = getPrecision(data.value) || 0;
         } else if (precision === 'auto') {
           // Should be more precise then tick.
           precision = this._intervalPrecision;
@@ -32397,10 +33996,11 @@
 
         var data = seriesModel.getData();
         var key = baseAxis.dim + '_' + baseAxis.index;
-        var dim = data.mapDimension(baseAxis.dim);
+        var dimIdx = data.getDimensionIndex(data.mapDimension(baseAxis.dim));
+        var store = data.getStore();
 
-        for (var i = 0, cnt = data.count(); i < cnt; ++i) {
-          var value = data.get(dim, i);
+        for (var i = 0, cnt = store.count(); i < cnt; ++i) {
+          var value = store.get(dimIdx, i);
 
           if (!axisValues[key]) {
             // No previous data for the axis
@@ -32665,15 +34265,16 @@
         });
         var valueDim = data.mapDimension(valueAxis.dim);
         var baseDim = data.mapDimension(baseAxis.dim);
-        var stacked = isDimensionStacked(data, valueDim
-        /*, baseDim*/
-        );
+        var stacked = isDimensionStacked(data, valueDim);
         var isValueAxisH = valueAxis.isHorizontal();
         var valueAxisStart = getValueAxisStart(baseAxis, valueAxis);
+        var store = data.getStore();
+        var valueDimIdx = data.getDimensionIndex(valueDim);
+        var baseDimIdx = data.getDimensionIndex(baseDim);
 
-        for (var idx = 0, len = data.count(); idx < len; idx++) {
-          var value = data.get(valueDim, idx);
-          var baseValue = data.get(baseDim, idx);
+        for (var idx = 0, len = store.count(); idx < len; idx++) {
+          var value = store.get(valueDimIdx, idx);
+          var baseValue = store.get(baseDimIdx, idx);
           var sign = value >= 0 ? 'p' : 'n';
           var baseCoord = valueAxisStart; // Because of the barMinHeight, we can not use the value in
           // stackResultDimension directly.
@@ -32753,8 +34354,8 @@
         var coordLayout = cartesian.master.getRect();
         var baseAxis = cartesian.getBaseAxis();
         var valueAxis = cartesian.getOtherAxis(baseAxis);
-        var valueDim = data.mapDimension(valueAxis.dim);
-        var baseDim = data.mapDimension(baseAxis.dim);
+        var valueDimI = data.getDimensionIndex(data.mapDimension(valueAxis.dim));
+        var baseDimI = data.getDimensionIndex(data.mapDimension(baseAxis.dim));
         var valueAxisHorizontal = valueAxis.isHorizontal();
         var valueDimIdx = valueAxisHorizontal ? 0 : 1;
         var barWidth = retrieveColumnLayout(makeColumnLayout([seriesModel]), baseAxis, seriesModel).width;
@@ -32775,11 +34376,12 @@
             var valuePair = [];
             var pointsOffset = 0;
             var idxOffset = 0;
+            var store = data.getStore();
 
             while ((dataIndex = params.next()) != null) {
-              valuePair[valueDimIdx] = data.get(valueDim, dataIndex);
-              valuePair[1 - valueDimIdx] = data.get(baseDim, dataIndex);
-              coord = cartesian.dataToPoint(valuePair, null, coord); // Data index might not be in order, depends on `progressiveChunkMode`.
+              valuePair[valueDimIdx] = store.get(valueDimI, dataIndex);
+              valuePair[1 - valueDimIdx] = store.get(baseDimI, dataIndex);
+              coord = cartesian.dataToPoint(valuePair, null); // Data index might not be in order, depends on `progressiveChunkMode`.
 
               largeBackgroundPoints[pointsOffset] = valueAxisHorizontal ? coordLayout.x + coordLayout.width : coord[0];
               largePoints[pointsOffset++] = coord[0];
@@ -32932,7 +34534,7 @@
       };
 
       TimeScale.prototype.contain = function (val) {
-        return contain$1(this.parse(val), this._extent);
+        return contain$2(this.parse(val), this._extent);
       };
 
       TimeScale.prototype.normalize = function (val) {
@@ -33353,9 +34955,8 @@
     var scaleProto = Scale.prototype; // FIXME:TS refactor: not good to call it directly with `this`?
 
     var intervalScaleProto = IntervalScale.prototype;
-    var getPrecisionSafe$1 = getPrecisionSafe;
     var roundingErrorFix = round;
-    var mathFloor$1 = Math.floor;
+    var mathFloor = Math.floor;
     var mathCeil = Math.ceil;
     var mathPow$1 = Math.pow;
     var mathLog = Math.log;
@@ -33462,7 +35063,7 @@
           interval *= 10;
         }
 
-        var niceExtent = [round(mathCeil(extent[0] / interval) * interval), round(mathFloor$1(extent[1] / interval) * interval)];
+        var niceExtent = [round(mathCeil(extent[0] / interval) * interval), round(mathFloor(extent[1] / interval) * interval)];
         this._interval = interval;
         this._niceExtent = niceExtent;
       };
@@ -33479,7 +35080,7 @@
 
       LogScale.prototype.contain = function (val) {
         val = mathLog(val) / mathLog(this.base);
-        return contain$1(val, this._extent);
+        return contain$2(val, this._extent);
       };
 
       LogScale.prototype.normalize = function (val) {
@@ -33501,7 +35102,7 @@
     proto.getLabel = intervalScaleProto.getLabel;
 
     function fixRoundingError(val, originalVal) {
-      return roundingErrorFix(val, getPrecisionSafe$1(originalVal));
+      return roundingErrorFix(val, getPrecision(originalVal));
     }
 
     Scale.registerClass(LogScale);
@@ -33828,7 +35429,8 @@
     // `scale.setExtent` or `scale.unionExtentFromData`;
 
 
-    function niceScaleExtent(scale, model) {
+    function niceScaleExtent(scale, inModel) {
+      var model = inModel;
       var extentInfo = getScaleExtent(scale, model);
       var extent = extentInfo.extent;
       var splitNumber = model.get('splitNumber');
@@ -34088,6 +35690,7 @@
     * specific language governing permissions and limitations
     * under the License.
     */
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     var AxisModelCommonMixin =
     /** @class */
     function () {
@@ -34115,7 +35718,7 @@
      */
 
     function createList(seriesModel) {
-      return createListFromArray(seriesModel.getSource(), seriesModel);
+      return createSeriesData(null, seriesModel);
     } // export function createGraph(seriesModel) {
     var dataStack$1 = {
       isDimensionStacked: isDimensionStacked,
@@ -34180,270 +35783,6 @@
         createSymbol: createSymbol,
         enableHoverEmphasis: enableHoverEmphasis
     });
-
-    var EPSILON$3 = 1e-8;
-    function isAroundEqual$1(a, b) {
-        return Math.abs(a - b) < EPSILON$3;
-    }
-    function contain$2(points, x, y) {
-        var w = 0;
-        var p = points[0];
-        if (!p) {
-            return false;
-        }
-        for (var i = 1; i < points.length; i++) {
-            var p2 = points[i];
-            w += windingLine(p[0], p[1], p2[0], p2[1], x, y);
-            p = p2;
-        }
-        var p0 = points[0];
-        if (!isAroundEqual$1(p[0], p0[0]) || !isAroundEqual$1(p[1], p0[1])) {
-            w += windingLine(p[0], p[1], p0[0], p0[1], x, y);
-        }
-        return w !== 0;
-    }
-
-    var Region =
-    /** @class */
-    function () {
-      function Region(name, geometries, cp) {
-        this.name = name;
-        this.geometries = geometries;
-
-        if (!cp) {
-          var rect = this.getBoundingRect();
-          cp = [rect.x + rect.width / 2, rect.y + rect.height / 2];
-        } else {
-          cp = [cp[0], cp[1]];
-        }
-
-        this.center = cp;
-      }
-
-      Region.prototype.getBoundingRect = function () {
-        var rect = this._rect;
-
-        if (rect) {
-          return rect;
-        }
-
-        var MAX_NUMBER = Number.MAX_VALUE;
-        var min$1 = [MAX_NUMBER, MAX_NUMBER];
-        var max$1 = [-MAX_NUMBER, -MAX_NUMBER];
-        var min2 = [];
-        var max2 = [];
-        var geometries = this.geometries;
-        var i = 0;
-
-        for (; i < geometries.length; i++) {
-          // Only support polygon
-          if (geometries[i].type !== 'polygon') {
-            continue;
-          } // Doesn't consider hole
-
-
-          var exterior = geometries[i].exterior;
-          fromPoints(exterior, min2, max2);
-          min(min$1, min$1, min2);
-          max(max$1, max$1, max2);
-        } // No data
-
-
-        if (i === 0) {
-          min$1[0] = min$1[1] = max$1[0] = max$1[1] = 0;
-        }
-
-        return this._rect = new BoundingRect(min$1[0], min$1[1], max$1[0] - min$1[0], max$1[1] - min$1[1]);
-      };
-
-      Region.prototype.contain = function (coord) {
-        var rect = this.getBoundingRect();
-        var geometries = this.geometries;
-
-        if (!rect.contain(coord[0], coord[1])) {
-          return false;
-        }
-
-        loopGeo: for (var i = 0, len = geometries.length; i < len; i++) {
-          // Only support polygon.
-          if (geometries[i].type !== 'polygon') {
-            continue;
-          }
-
-          var exterior = geometries[i].exterior;
-          var interiors = geometries[i].interiors;
-
-          if (contain$2(exterior, coord[0], coord[1])) {
-            // Not in the region if point is in the hole.
-            for (var k = 0; k < (interiors ? interiors.length : 0); k++) {
-              if (contain$2(interiors[k], coord[0], coord[1])) {
-                continue loopGeo;
-              }
-            }
-
-            return true;
-          }
-        }
-
-        return false;
-      };
-
-      Region.prototype.transformTo = function (x, y, width, height) {
-        var rect = this.getBoundingRect();
-        var aspect = rect.width / rect.height;
-
-        if (!width) {
-          width = aspect * height;
-        } else if (!height) {
-          height = width / aspect;
-        }
-
-        var target = new BoundingRect(x, y, width, height);
-        var transform = rect.calculateTransform(target);
-        var geometries = this.geometries;
-
-        for (var i = 0; i < geometries.length; i++) {
-          // Only support polygon.
-          if (geometries[i].type !== 'polygon') {
-            continue;
-          }
-
-          var exterior = geometries[i].exterior;
-          var interiors = geometries[i].interiors;
-
-          for (var p = 0; p < exterior.length; p++) {
-            applyTransform(exterior[p], exterior[p], transform);
-          }
-
-          for (var h = 0; h < (interiors ? interiors.length : 0); h++) {
-            for (var p = 0; p < interiors[h].length; p++) {
-              applyTransform(interiors[h][p], interiors[h][p], transform);
-            }
-          }
-        }
-
-        rect = this._rect;
-        rect.copy(target); // Update center
-
-        this.center = [rect.x + rect.width / 2, rect.y + rect.height / 2];
-      };
-
-      Region.prototype.cloneShallow = function (name) {
-        name == null && (name = this.name);
-        var newRegion = new Region(name, this.geometries, this.center);
-        newRegion._rect = this._rect;
-        newRegion.transformTo = null; // Simply avoid to be called.
-
-        return newRegion;
-      };
-
-      return Region;
-    }();
-
-    function decode(json) {
-      if (!json.UTF8Encoding) {
-        return json;
-      }
-
-      var jsonCompressed = json;
-      var encodeScale = jsonCompressed.UTF8Scale;
-
-      if (encodeScale == null) {
-        encodeScale = 1024;
-      }
-
-      var features = jsonCompressed.features;
-
-      for (var f = 0; f < features.length; f++) {
-        var feature = features[f];
-        var geometry = feature.geometry;
-
-        if (geometry.type === 'Polygon') {
-          var coordinates = geometry.coordinates;
-
-          for (var c = 0; c < coordinates.length; c++) {
-            coordinates[c] = decodePolygon(coordinates[c], geometry.encodeOffsets[c], encodeScale);
-          }
-        } else if (geometry.type === 'MultiPolygon') {
-          var coordinates = geometry.coordinates;
-
-          for (var c = 0; c < coordinates.length; c++) {
-            var coordinate = coordinates[c];
-
-            for (var c2 = 0; c2 < coordinate.length; c2++) {
-              coordinate[c2] = decodePolygon(coordinate[c2], geometry.encodeOffsets[c][c2], encodeScale);
-            }
-          }
-        }
-      } // Has been decoded
-
-
-      jsonCompressed.UTF8Encoding = false;
-      return jsonCompressed;
-    }
-
-    function decodePolygon(coordinate, encodeOffsets, encodeScale) {
-      var result = [];
-      var prevX = encodeOffsets[0];
-      var prevY = encodeOffsets[1];
-
-      for (var i = 0; i < coordinate.length; i += 2) {
-        var x = coordinate.charCodeAt(i) - 64;
-        var y = coordinate.charCodeAt(i + 1) - 64; // ZigZag decoding
-
-        x = x >> 1 ^ -(x & 1);
-        y = y >> 1 ^ -(y & 1); // Delta deocding
-
-        x += prevX;
-        y += prevY;
-        prevX = x;
-        prevY = y; // Dequantize
-
-        result.push([x / encodeScale, y / encodeScale]);
-      }
-
-      return result;
-    }
-
-    function parseGeoJSON(geoJson, nameProperty) {
-      geoJson = decode(geoJson);
-      return map(filter(geoJson.features, function (featureObj) {
-        // Output of mapshaper may have geometry null
-        return featureObj.geometry && featureObj.properties && featureObj.geometry.coordinates.length > 0;
-      }), function (featureObj) {
-        var properties = featureObj.properties;
-        var geo = featureObj.geometry;
-        var geometries = [];
-
-        if (geo.type === 'Polygon') {
-          var coordinates = geo.coordinates;
-          geometries.push({
-            type: 'polygon',
-            // According to the GeoJSON specification.
-            // First must be exterior, and the rest are all interior(holes).
-            exterior: coordinates[0],
-            interiors: coordinates.slice(1)
-          });
-        }
-
-        if (geo.type === 'MultiPolygon') {
-          var coordinates = geo.coordinates;
-          each(coordinates, function (item) {
-            if (item[0]) {
-              geometries.push({
-                type: 'polygon',
-                exterior: item[0],
-                interiors: item.slice(1)
-              });
-            }
-          });
-        }
-
-        var region = new Region(properties[nameProperty || 'name'], geometries, properties.cp);
-        region.properties = properties;
-        return region;
-      });
-    }
 
     var number = /*#__PURE__*/Object.freeze({
         __proto__: null,
@@ -34543,7 +35882,7 @@
         merge: merge
     });
 
-    var inner$4 = makeInner();
+    var inner$5 = makeInner();
     function createAxisLabels(axis) {
       // Only ordinal scale support tick interval
       return axis.type === 'category' ? makeCategoryLabels(axis) : makeRealNumberLabels(axis);
@@ -34647,6 +35986,7 @@
       return {
         labels: map(ticks, function (tick, idx) {
           return {
+            level: tick.level,
             formattedLabel: labelFormatter(tick, idx),
             rawLabel: axis.scale.getLabel(tick),
             tickValue: tick.value
@@ -34657,7 +35997,7 @@
 
     function getListCache(axis, prop) {
       // Because key can be funciton, and cache size always be small, we use array cache.
-      return inner$4(axis)[prop] || (inner$4(axis)[prop] = []);
+      return inner$5(axis)[prop] || (inner$5(axis)[prop] = []);
     }
 
     function listCacheGet(cache, key) {
@@ -34677,8 +36017,8 @@
     }
 
     function makeAutoCategoryInterval(axis) {
-      var result = inner$4(axis).autoInterval;
-      return result != null ? result : inner$4(axis).autoInterval = axis.calculateCategoryInterval();
+      var result = inner$5(axis).autoInterval;
+      return result != null ? result : inner$5(axis).autoInterval = axis.calculateCategoryInterval();
     }
     /**
      * Calculate interval for category axis ticks and labels.
@@ -34738,7 +36078,7 @@
       isNaN(dw) && (dw = Infinity);
       isNaN(dh) && (dh = Infinity);
       var interval = Math.max(0, Math.floor(Math.min(dw, dh)));
-      var cache = inner$4(axis.model);
+      var cache = inner$5(axis.model);
       var axisExtent = axis.getExtent();
       var lastAutoInterval = cache.lastAutoInterval;
       var lastTickCount = cache.lastTickCount; // Use cache to keep interval stable while moving zoom window,
@@ -35157,6 +36497,581 @@
       return View;
     }
 
+    function projectPointToLine(x1, y1, x2, y2, x, y, out, limitToEnds) {
+      var dx = x - x1;
+      var dy = y - y1;
+      var dx1 = x2 - x1;
+      var dy1 = y2 - y1;
+      var lineLen = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+      dx1 /= lineLen;
+      dy1 /= lineLen; // dot product
+
+      var projectedLen = dx * dx1 + dy * dy1;
+      var t = projectedLen / lineLen;
+
+      if (limitToEnds) {
+        t = Math.min(Math.max(t, 0), 1);
+      }
+
+      t *= lineLen;
+      var ox = out[0] = x1 + t * dx1;
+      var oy = out[1] = y1 + t * dy1;
+      return Math.sqrt((ox - x) * (ox - x) + (oy - y) * (oy - y));
+    }
+
+
+    var pt0 = new Point();
+    var pt1 = new Point();
+    var pt2 = new Point();
+    var dir = new Point();
+    var dir2 = new Point();
+
+    var tmpArr = [];
+    var tmpProjPoint = new Point();
+    /**
+     * Reduce the line segment attached to the label to limit the turn angle between two segments.
+     * @param linePoints
+     * @param minTurnAngle Radian of minimum turn angle. 0 - 180
+     */
+
+    function limitTurnAngle(linePoints, minTurnAngle) {
+      if (!(minTurnAngle <= 180 && minTurnAngle > 0)) {
+        return;
+      }
+
+      minTurnAngle = minTurnAngle / 180 * Math.PI; // The line points can be
+      //      /pt1----pt2 (label)
+      //     /
+      // pt0/
+
+      pt0.fromArray(linePoints[0]);
+      pt1.fromArray(linePoints[1]);
+      pt2.fromArray(linePoints[2]);
+      Point.sub(dir, pt0, pt1);
+      Point.sub(dir2, pt2, pt1);
+      var len1 = dir.len();
+      var len2 = dir2.len();
+
+      if (len1 < 1e-3 || len2 < 1e-3) {
+        return;
+      }
+
+      dir.scale(1 / len1);
+      dir2.scale(1 / len2);
+      var angleCos = dir.dot(dir2);
+      var minTurnAngleCos = Math.cos(minTurnAngle);
+
+      if (minTurnAngleCos < angleCos) {
+        // Smaller than minTurnAngle
+        // Calculate project point of pt0 on pt1-pt2
+        var d = projectPointToLine(pt1.x, pt1.y, pt2.x, pt2.y, pt0.x, pt0.y, tmpArr, false);
+        tmpProjPoint.fromArray(tmpArr); // Calculate new projected length with limited minTurnAngle and get the new connect point
+
+        tmpProjPoint.scaleAndAdd(dir2, d / Math.tan(Math.PI - minTurnAngle)); // Limit the new calculated connect point between pt1 and pt2.
+
+        var t = pt2.x !== pt1.x ? (tmpProjPoint.x - pt1.x) / (pt2.x - pt1.x) : (tmpProjPoint.y - pt1.y) / (pt2.y - pt1.y);
+
+        if (isNaN(t)) {
+          return;
+        }
+
+        if (t < 0) {
+          Point.copy(tmpProjPoint, pt1);
+        } else if (t > 1) {
+          Point.copy(tmpProjPoint, pt2);
+        }
+
+        tmpProjPoint.toArray(linePoints[1]);
+      }
+    }
+    /**
+     * Limit the angle of line and the surface
+     * @param maxSurfaceAngle Radian of minimum turn angle. 0 - 180. 0 is same direction to normal. 180 is opposite
+     */
+
+    function limitSurfaceAngle(linePoints, surfaceNormal, maxSurfaceAngle) {
+      if (!(maxSurfaceAngle <= 180 && maxSurfaceAngle > 0)) {
+        return;
+      }
+
+      maxSurfaceAngle = maxSurfaceAngle / 180 * Math.PI;
+      pt0.fromArray(linePoints[0]);
+      pt1.fromArray(linePoints[1]);
+      pt2.fromArray(linePoints[2]);
+      Point.sub(dir, pt1, pt0);
+      Point.sub(dir2, pt2, pt1);
+      var len1 = dir.len();
+      var len2 = dir2.len();
+
+      if (len1 < 1e-3 || len2 < 1e-3) {
+        return;
+      }
+
+      dir.scale(1 / len1);
+      dir2.scale(1 / len2);
+      var angleCos = dir.dot(surfaceNormal);
+      var maxSurfaceAngleCos = Math.cos(maxSurfaceAngle);
+
+      if (angleCos < maxSurfaceAngleCos) {
+        // Calculate project point of pt0 on pt1-pt2
+        var d = projectPointToLine(pt1.x, pt1.y, pt2.x, pt2.y, pt0.x, pt0.y, tmpArr, false);
+        tmpProjPoint.fromArray(tmpArr);
+        var HALF_PI = Math.PI / 2;
+        var angle2 = Math.acos(dir2.dot(surfaceNormal));
+        var newAngle = HALF_PI + angle2 - maxSurfaceAngle;
+
+        if (newAngle >= HALF_PI) {
+          // parallel
+          Point.copy(tmpProjPoint, pt2);
+        } else {
+          // Calculate new projected length with limited minTurnAngle and get the new connect point
+          tmpProjPoint.scaleAndAdd(dir2, d / Math.tan(Math.PI / 2 - newAngle)); // Limit the new calculated connect point between pt1 and pt2.
+
+          var t = pt2.x !== pt1.x ? (tmpProjPoint.x - pt1.x) / (pt2.x - pt1.x) : (tmpProjPoint.y - pt1.y) / (pt2.y - pt1.y);
+
+          if (isNaN(t)) {
+            return;
+          }
+
+          if (t < 0) {
+            Point.copy(tmpProjPoint, pt1);
+          } else if (t > 1) {
+            Point.copy(tmpProjPoint, pt2);
+          }
+        }
+
+        tmpProjPoint.toArray(linePoints[1]);
+      }
+    }
+
+    function setLabelLineState(labelLine, ignore, stateName, stateModel) {
+      var isNormal = stateName === 'normal';
+      var stateObj = isNormal ? labelLine : labelLine.ensureState(stateName); // Make sure display.
+
+      stateObj.ignore = ignore; // Set smooth
+
+      var smooth = stateModel.get('smooth');
+
+      if (smooth && smooth === true) {
+        smooth = 0.3;
+      }
+
+      stateObj.shape = stateObj.shape || {};
+
+      if (smooth > 0) {
+        stateObj.shape.smooth = smooth;
+      }
+
+      var styleObj = stateModel.getModel('lineStyle').getLineStyle();
+      isNormal ? labelLine.useStyle(styleObj) : stateObj.style = styleObj;
+    }
+
+    function buildLabelLinePath(path, shape) {
+      var smooth = shape.smooth;
+      var points = shape.points;
+
+      if (!points) {
+        return;
+      }
+
+      path.moveTo(points[0][0], points[0][1]);
+
+      if (smooth > 0 && points.length >= 3) {
+        var len1 = dist(points[0], points[1]);
+        var len2 = dist(points[1], points[2]);
+
+        if (!len1 || !len2) {
+          path.lineTo(points[1][0], points[1][1]);
+          path.lineTo(points[2][0], points[2][1]);
+          return;
+        }
+
+        var moveLen = Math.min(len1, len2) * smooth;
+        var midPoint0 = lerp([], points[1], points[0], moveLen / len1);
+        var midPoint2 = lerp([], points[1], points[2], moveLen / len2);
+        var midPoint1 = lerp([], midPoint0, midPoint2, 0.5);
+        path.bezierCurveTo(midPoint0[0], midPoint0[1], midPoint0[0], midPoint0[1], midPoint1[0], midPoint1[1]);
+        path.bezierCurveTo(midPoint2[0], midPoint2[1], midPoint2[0], midPoint2[1], points[2][0], points[2][1]);
+      } else {
+        for (var i = 1; i < points.length; i++) {
+          path.lineTo(points[i][0], points[i][1]);
+        }
+      }
+    }
+    /**
+     * Create a label line if necessary and set it's style.
+     */
+
+
+    function setLabelLineStyle(targetEl, statesModels, defaultStyle) {
+      var labelLine = targetEl.getTextGuideLine();
+      var label = targetEl.getTextContent();
+
+      if (!label) {
+        // Not show label line if there is no label.
+        if (labelLine) {
+          targetEl.removeTextGuideLine();
+        }
+
+        return;
+      }
+
+      var normalModel = statesModels.normal;
+      var showNormal = normalModel.get('show');
+      var labelIgnoreNormal = label.ignore;
+
+      for (var i = 0; i < DISPLAY_STATES.length; i++) {
+        var stateName = DISPLAY_STATES[i];
+        var stateModel = statesModels[stateName];
+        var isNormal = stateName === 'normal';
+
+        if (stateModel) {
+          var stateShow = stateModel.get('show');
+          var isLabelIgnored = isNormal ? labelIgnoreNormal : retrieve2(label.states[stateName] && label.states[stateName].ignore, labelIgnoreNormal);
+
+          if (isLabelIgnored // Not show when label is not shown in this state.
+          || !retrieve2(stateShow, showNormal) // Use normal state by default if not set.
+          ) {
+              var stateObj = isNormal ? labelLine : labelLine && labelLine.states.normal;
+
+              if (stateObj) {
+                stateObj.ignore = true;
+              }
+
+              continue;
+            } // Create labelLine if not exists
+
+
+          if (!labelLine) {
+            labelLine = new Polyline();
+            targetEl.setTextGuideLine(labelLine); // Reset state of normal because it's new created.
+            // NOTE: NORMAL should always been the first!
+
+            if (!isNormal && (labelIgnoreNormal || !showNormal)) {
+              setLabelLineState(labelLine, true, 'normal', statesModels.normal);
+            } // Use same state proxy.
+
+
+            if (targetEl.stateProxy) {
+              labelLine.stateProxy = targetEl.stateProxy;
+            }
+          }
+
+          setLabelLineState(labelLine, false, stateName, stateModel);
+        }
+      }
+
+      if (labelLine) {
+        defaults(labelLine.style, defaultStyle); // Not fill.
+
+        labelLine.style.fill = null;
+        var showAbove = normalModel.get('showAbove');
+        var labelLineConfig = targetEl.textGuideLineConfig = targetEl.textGuideLineConfig || {};
+        labelLineConfig.showAbove = showAbove || false; // Custom the buildPath.
+
+        labelLine.buildPath = buildLabelLinePath;
+      }
+    }
+    function getLabelLineStatesModels(itemModel, labelLineName) {
+      labelLineName = labelLineName || 'labelLine';
+      var statesModels = {
+        normal: itemModel.getModel(labelLineName)
+      };
+
+      for (var i = 0; i < SPECIAL_STATES.length; i++) {
+        var stateName = SPECIAL_STATES[i];
+        statesModels[stateName] = itemModel.getModel([stateName, labelLineName]);
+      }
+
+      return statesModels;
+    }
+
+    function prepareLayoutList(input) {
+      var list = [];
+
+      for (var i = 0; i < input.length; i++) {
+        var rawItem = input[i];
+
+        if (rawItem.defaultAttr.ignore) {
+          continue;
+        }
+
+        var label = rawItem.label;
+        var transform = label.getComputedTransform(); // NOTE: Get bounding rect after getComputedTransform, or label may not been updated by the host el.
+
+        var localRect = label.getBoundingRect();
+        var isAxisAligned = !transform || transform[1] < 1e-5 && transform[2] < 1e-5;
+        var minMargin = label.style.margin || 0;
+        var globalRect = localRect.clone();
+        globalRect.applyTransform(transform);
+        globalRect.x -= minMargin / 2;
+        globalRect.y -= minMargin / 2;
+        globalRect.width += minMargin;
+        globalRect.height += minMargin;
+        var obb = isAxisAligned ? new OrientedBoundingRect(localRect, transform) : null;
+        list.push({
+          label: label,
+          labelLine: rawItem.labelLine,
+          rect: globalRect,
+          localRect: localRect,
+          obb: obb,
+          priority: rawItem.priority,
+          defaultAttr: rawItem.defaultAttr,
+          layoutOption: rawItem.computedLayoutOption,
+          axisAligned: isAxisAligned,
+          transform: transform
+        });
+      }
+
+      return list;
+    }
+
+    function shiftLayout(list, xyDim, sizeDim, minBound, maxBound, balanceShift) {
+      var len = list.length;
+
+      if (len < 2) {
+        return;
+      }
+
+      list.sort(function (a, b) {
+        return a.rect[xyDim] - b.rect[xyDim];
+      });
+      var lastPos = 0;
+      var delta;
+      var adjusted = false;
+      var totalShifts = 0;
+
+      for (var i = 0; i < len; i++) {
+        var item = list[i];
+        var rect = item.rect;
+        delta = rect[xyDim] - lastPos;
+
+        if (delta < 0) {
+          // shiftForward(i, len, -delta);
+          rect[xyDim] -= delta;
+          item.label[xyDim] -= delta;
+          adjusted = true;
+        }
+
+        var shift = Math.max(-delta, 0);
+        totalShifts += shift;
+        lastPos = rect[xyDim] + rect[sizeDim];
+      }
+
+      if (totalShifts > 0 && balanceShift) {
+        // Shift back to make the distribution more equally.
+        shiftList(-totalShifts / len, 0, len);
+      } // TODO bleedMargin?
+
+
+      var first = list[0];
+      var last = list[len - 1];
+      var minGap;
+      var maxGap;
+      updateMinMaxGap(); // If ends exceed two bounds, squeeze at most 80%, then take the gap of two bounds.
+
+      minGap < 0 && squeezeGaps(-minGap, 0.8);
+      maxGap < 0 && squeezeGaps(maxGap, 0.8);
+      updateMinMaxGap();
+      takeBoundsGap(minGap, maxGap, 1);
+      takeBoundsGap(maxGap, minGap, -1); // Handle bailout when there is not enough space.
+
+      updateMinMaxGap();
+
+      if (minGap < 0) {
+        squeezeWhenBailout(-minGap);
+      }
+
+      if (maxGap < 0) {
+        squeezeWhenBailout(maxGap);
+      }
+
+      function updateMinMaxGap() {
+        minGap = first.rect[xyDim] - minBound;
+        maxGap = maxBound - last.rect[xyDim] - last.rect[sizeDim];
+      }
+
+      function takeBoundsGap(gapThisBound, gapOtherBound, moveDir) {
+        if (gapThisBound < 0) {
+          // Move from other gap if can.
+          var moveFromMaxGap = Math.min(gapOtherBound, -gapThisBound);
+
+          if (moveFromMaxGap > 0) {
+            shiftList(moveFromMaxGap * moveDir, 0, len);
+            var remained = moveFromMaxGap + gapThisBound;
+
+            if (remained < 0) {
+              squeezeGaps(-remained * moveDir, 1);
+            }
+          } else {
+            squeezeGaps(-gapThisBound * moveDir, 1);
+          }
+        }
+      }
+
+      function shiftList(delta, start, end) {
+        if (delta !== 0) {
+          adjusted = true;
+        }
+
+        for (var i = start; i < end; i++) {
+          var item = list[i];
+          var rect = item.rect;
+          rect[xyDim] += delta;
+          item.label[xyDim] += delta;
+        }
+      } // Squeeze gaps if the labels exceed margin.
+
+
+      function squeezeGaps(delta, maxSqeezePercent) {
+        var gaps = [];
+        var totalGaps = 0;
+
+        for (var i = 1; i < len; i++) {
+          var prevItemRect = list[i - 1].rect;
+          var gap = Math.max(list[i].rect[xyDim] - prevItemRect[xyDim] - prevItemRect[sizeDim], 0);
+          gaps.push(gap);
+          totalGaps += gap;
+        }
+
+        if (!totalGaps) {
+          return;
+        }
+
+        var squeezePercent = Math.min(Math.abs(delta) / totalGaps, maxSqeezePercent);
+
+        if (delta > 0) {
+          for (var i = 0; i < len - 1; i++) {
+            // Distribute the shift delta to all gaps.
+            var movement = gaps[i] * squeezePercent; // Forward
+
+            shiftList(movement, 0, i + 1);
+          }
+        } else {
+          // Backward
+          for (var i = len - 1; i > 0; i--) {
+            // Distribute the shift delta to all gaps.
+            var movement = gaps[i - 1] * squeezePercent;
+            shiftList(-movement, i, len);
+          }
+        }
+      }
+      /**
+       * Squeeze to allow overlap if there is no more space available.
+       * Let other overlapping strategy like hideOverlap do the job instead of keep exceeding the bounds.
+       */
+
+
+      function squeezeWhenBailout(delta) {
+        var dir = delta < 0 ? -1 : 1;
+        delta = Math.abs(delta);
+        var moveForEachLabel = Math.ceil(delta / (len - 1));
+
+        for (var i = 0; i < len - 1; i++) {
+          if (dir > 0) {
+            // Forward
+            shiftList(moveForEachLabel, 0, i + 1);
+          } else {
+            // Backward
+            shiftList(-moveForEachLabel, len - i - 1, len);
+          }
+
+          delta -= moveForEachLabel;
+
+          if (delta <= 0) {
+            return;
+          }
+        }
+      }
+
+      return adjusted;
+    }
+    /**
+     * Adjust labels on y direction to avoid overlap.
+     */
+
+    function shiftLayoutOnY(list, topBound, bottomBound, // If average the shifts on all labels and add them to 0
+    balanceShift) {
+      return shiftLayout(list, 'y', 'height', topBound, bottomBound, balanceShift);
+    }
+    function hideOverlap(labelList) {
+      var displayedLabels = []; // TODO, render overflow visible first, put in the displayedLabels.
+
+      labelList.sort(function (a, b) {
+        return b.priority - a.priority;
+      });
+      var globalRect = new BoundingRect(0, 0, 0, 0);
+
+      function hideEl(el) {
+        if (!el.ignore) {
+          // Show on emphasis.
+          var emphasisState = el.ensureState('emphasis');
+
+          if (emphasisState.ignore == null) {
+            emphasisState.ignore = false;
+          }
+        }
+
+        el.ignore = true;
+      }
+
+      for (var i = 0; i < labelList.length; i++) {
+        var labelItem = labelList[i];
+        var isAxisAligned = labelItem.axisAligned;
+        var localRect = labelItem.localRect;
+        var transform = labelItem.transform;
+        var label = labelItem.label;
+        var labelLine = labelItem.labelLine;
+        globalRect.copy(labelItem.rect); // Add a threshold because layout may be aligned precisely.
+
+        globalRect.width -= 0.1;
+        globalRect.height -= 0.1;
+        globalRect.x += 0.05;
+        globalRect.y += 0.05;
+        var obb = labelItem.obb;
+        var overlapped = false;
+
+        for (var j = 0; j < displayedLabels.length; j++) {
+          var existsTextCfg = displayedLabels[j]; // Fast rejection.
+
+          if (!globalRect.intersect(existsTextCfg.rect)) {
+            continue;
+          }
+
+          if (isAxisAligned && existsTextCfg.axisAligned) {
+            // Is overlapped
+            overlapped = true;
+            break;
+          }
+
+          if (!existsTextCfg.obb) {
+            // If self is not axis aligned. But other is.
+            existsTextCfg.obb = new OrientedBoundingRect(existsTextCfg.localRect, existsTextCfg.transform);
+          }
+
+          if (!obb) {
+            // If self is axis aligned. But other is not.
+            obb = new OrientedBoundingRect(localRect, transform);
+          }
+
+          if (obb.intersect(existsTextCfg.obb)) {
+            overlapped = true;
+            break;
+          }
+        } // TODO Callback to determine if this overlap should be handled?
+
+
+        if (overlapped) {
+          hideEl(label);
+          labelLine && hideEl(labelLine);
+        } else {
+          label.attr('ignore', labelItem.defaultAttr.ignore);
+          labelLine && labelLine.attr('ignore', labelItem.defaultAttr.labelGuideIgnore);
+          displayedLabels.push(labelItem);
+        }
+      }
+    }
+
     function returnFalse() {
         return false;
     }
@@ -35311,13 +37226,13 @@
                 var el = displayList[i];
                 if (el) {
                     var shouldPaint = el.shouldBePainted(viewWidth, viewHeight, true, true);
-                    var prevRect = el.__isRendered && ((el.__dirty & Element.REDARAW_BIT) || !shouldPaint)
+                    var prevRect = el.__isRendered && ((el.__dirty & REDRAW_BIT) || !shouldPaint)
                         ? el.getPrevPaintRect()
                         : null;
                     if (prevRect) {
                         addRectToMergePool(prevRect);
                     }
-                    var curRect = shouldPaint && ((el.__dirty & Element.REDARAW_BIT) || !el.__isRendered)
+                    var curRect = shouldPaint && ((el.__dirty & REDRAW_BIT) || !el.__isRendered)
                         ? el.getPaintRect()
                         : null;
                     if (curRect) {
@@ -35413,7 +37328,7 @@
                             });
                         clearColor.__canvasGradient = clearColorGradientOrPattern;
                     }
-                    else if (isPatternObject(clearColor)) {
+                    else if (isImagePatternObject(clearColor)) {
                         clearColorGradientOrPattern = createCanvasPattern(ctx, clearColor, {
                             dirty: function () {
                                 self.setUnpainted();
@@ -35666,7 +37581,6 @@
                 var ctx = layer.ctx;
                 var repaintRects = useDirtyRect
                     && layer.createRepaintRects(list, prevList, this_1._width, this_1._height);
-                ctx.save();
                 var start = paintAll ? layer.__startIndex : layer.__drawIndex;
                 var useTimer = !paintAll && layer.incremental && Date.now;
                 var startTime = useTimer && Date.now();
@@ -35926,7 +37840,7 @@
                     updatePrevLayer(i);
                     prevLayer = layer;
                 }
-                if ((el.__dirty & Element.REDARAW_BIT) && !el.__inHover) {
+                if ((el.__dirty & REDRAW_BIT) && !el.__inHover) {
                     layer.__dirty = true;
                     if (layer.incremental && layer.__drawIndex < 0) {
                         layer.__drawIndex = i;
@@ -36161,7 +38075,6 @@
 
         _this.type = LineSeriesModel.type;
         _this.hasSymbolVisual = true;
-        _this.legendSymbol = 'line';
         return _this;
       }
 
@@ -36174,9 +38087,35 @@
           }
         }
 
-        return createListFromArray(this.getSource(), this, {
+        return createSeriesData(null, this, {
           useEncodeDefaulter: true
         });
+      };
+
+      LineSeriesModel.prototype.getLegendIcon = function (opt) {
+        var group = new Group();
+        var line = createSymbol('line', 0, opt.itemHeight / 2, opt.itemWidth, 0, opt.lineStyle.stroke, false);
+        group.add(line);
+        line.setStyle(opt.lineStyle);
+        var visualType = this.getData().getVisual('symbol');
+        var visualRotate = this.getData().getVisual('symbolRotate');
+        var symbolType = visualType === 'none' ? 'circle' : visualType; // Symbol size is 80% when there is a line
+
+        var size = opt.itemHeight * 0.8;
+        var symbol = createSymbol(symbolType, (opt.itemWidth - size) / 2, (opt.itemHeight - size) / 2, size, size, opt.itemStyle.fill);
+        group.add(symbol);
+        symbol.setStyle(opt.itemStyle);
+        var symbolRotate = opt.iconRotate === 'inherit' ? visualRotate : opt.iconRotate || 0;
+        symbol.rotation = symbolRotate * Math.PI / 180;
+        symbol.setOrigin([opt.itemWidth / 2, opt.itemHeight / 2]);
+
+        if (symbolType.indexOf('empty') > -1) {
+          symbol.style.stroke = symbol.style.fill;
+          symbol.style.fill = '#fff';
+          symbol.style.lineWidth = 2;
+        }
+
+        return group;
       };
 
       LineSeriesModel.type = 'series.line';
@@ -36190,6 +38129,8 @@
         label: {
           position: 'top'
         },
+        // itemStyle: {
+        // },
         endLabel: {
           show: false,
           valueAnimation: true,
@@ -36233,7 +38174,10 @@
         animationEasing: 'linear',
         // Disable progressive
         progressive: 0,
-        hoverLayerThreshold: Infinity
+        hoverLayerThreshold: Infinity,
+        universalTransition: {
+          divideShape: 'clone'
+        }
       };
       return LineSeriesModel;
     }(SeriesModel);
@@ -36269,10 +38213,10 @@
       var vals = [];
 
       for (var i = 0; i < labelDims.length; i++) {
-        var dimInfo = data.getDimensionInfo(labelDims[i]);
+        var dimIndex = data.getDimensionIndex(labelDims[i]);
 
-        if (dimInfo) {
-          vals.push(interpolatedValue[dimInfo.index]);
+        if (dimIndex >= 0) {
+          vals.push(interpolatedValue[dimIndex]);
         }
       }
 
@@ -36321,6 +38265,10 @@
 
       Symbol.prototype.stopSymbolAnimation = function (toLastFrame) {
         this.childAt(0).stopAnimation(null, toLastFrame);
+      };
+
+      Symbol.prototype.getSymbolType = function () {
+        return this._symbolType;
       };
       /**
        * FIXME:
@@ -36394,6 +38342,7 @@
             scaleY: symbolSize[1] / 2
           };
           disableAnimation ? symbolPath.attr(target) : updateProps(symbolPath, target, seriesModel, idx);
+          saveOldStyle(symbolPath);
         }
 
         this._updateCommon(data, idx, symbolSize, seriesScope, opts);
@@ -36432,7 +38381,6 @@
         var selectItemStyle;
         var focus;
         var blurScope;
-        var symbolOffset;
         var labelStatesModels;
         var hoverScale;
         var cursorStyle;
@@ -36443,7 +38391,6 @@
           selectItemStyle = seriesScope.selectItemStyle;
           focus = seriesScope.focus;
           blurScope = seriesScope.blurScope;
-          symbolOffset = seriesScope.symbolOffset;
           labelStatesModels = seriesScope.labelStatesModels;
           hoverScale = seriesScope.hoverScale;
           cursorStyle = seriesScope.cursorStyle;
@@ -36457,7 +38404,6 @@
           blurItemStyle = itemModel.getModel(['blur', 'itemStyle']).getItemStyle();
           focus = emphasisModel.get('focus');
           blurScope = emphasisModel.get('blurScope');
-          symbolOffset = itemModel.getShallow('symbolOffset');
           labelStatesModels = getLabelStatesModels(itemModel);
           hoverScale = emphasisModel.getShallow('scale');
           cursorStyle = itemModel.getShallow('cursor');
@@ -36465,10 +38411,11 @@
 
         var symbolRotate = data.getItemVisual(idx, 'symbolRotate');
         symbolPath.attr('rotation', (symbolRotate || 0) * Math.PI / 180 || 0);
+        var symbolOffset = normalizeSymbolOffset(data.getItemVisual(idx, 'symbolOffset'), symbolSize);
 
         if (symbolOffset) {
-          symbolPath.x = parsePercent$1(symbolOffset[0], symbolSize[0]);
-          symbolPath.y = parsePercent$1(symbolOffset[1], symbolSize[1]);
+          symbolPath.x = symbolOffset[0];
+          symbolPath.y = symbolOffset[1];
         }
 
         cursorStyle && symbolPath.attr('cursor', cursorStyle);
@@ -36590,8 +38537,7 @@
       };
 
       Symbol.getSymbolSize = function (data, idx) {
-        var symbolSize = data.getItemVisual(idx, 'symbolSize');
-        return symbolSize instanceof Array ? symbolSize.slice() : [+symbolSize, +symbolSize];
+        return normalizeSymbolSize(data.getItemVisual(idx, 'symbolSize'));
       };
 
       return Symbol;
@@ -36627,8 +38573,6 @@
         selectItemStyle: seriesModel.getModel(['select', 'itemStyle']).getItemStyle(),
         focus: emphasisModel.get('focus'),
         blurScope: emphasisModel.get('blurScope'),
-        symbolRotate: seriesModel.get('symbolRotate'),
-        symbolOffset: seriesModel.get('symbolOffset'),
         hoverScale: emphasisModel.get('scale'),
         labelStatesModels: getLabelStatesModels(seriesModel),
         cursorStyle: seriesModel.get('cursor')
@@ -36687,8 +38631,13 @@
             return;
           }
 
-          if (!symbolEl) {
-            symbolEl = new SymbolCtor(data, newIdx);
+          var newSymbolType = data.getItemVisual(newIdx, 'symbol') || 'circle';
+          var oldSymbolType = symbolEl && symbolEl.getSymbolType && symbolEl.getSymbolType();
+
+          if (!symbolEl // Create a new if symbol type changed.
+          || oldSymbolType && oldSymbolType !== newSymbolType) {
+            group.remove(symbolEl);
+            symbolEl = new SymbolCtor(data, newIdx, seriesScope, symbolUpdateOpt);
             symbolEl.setPosition(point);
           } else {
             symbolEl.updateData(data, newIdx, seriesScope, symbolUpdateOpt);
@@ -36917,8 +38866,8 @@
       var status = [];
       var sortedIndices = [];
       var rawIndices = [];
-      var newDataOldCoordInfo = prepareDataCoordInfo(oldCoordSys, newData, oldValueOrigin);
-      var oldDataNewCoordInfo = prepareDataCoordInfo(newCoordSys, oldData, newValueOrigin);
+      var newDataOldCoordInfo = prepareDataCoordInfo(oldCoordSys, newData, oldValueOrigin); // const oldDataNewCoordInfo = prepareDataCoordInfo(newCoordSys, oldData, newValueOrigin);
+
       var oldPoints = oldData.getLayout('points') || [];
       var newPoints = newData.getLayout('points') || [];
 
@@ -36964,24 +38913,7 @@
             break;
 
           case '-':
-            var oldIdx = diffItem.idx;
-            var rawIndex = oldData.getRawIndex(oldIdx);
-            var oldDataDimsForPoint = oldDataNewCoordInfo.dataDimsForPoint;
-            oldIdx2 = oldIdx * 2; // Data is replaced. In the case of dynamic data queue
-            // FIXME FIXME FIXME
-
-            if (rawIndex !== oldIdx) {
-              var newPt = newCoordSys.dataToPoint([oldData.get(oldDataDimsForPoint[0], oldIdx), oldData.get(oldDataDimsForPoint[1], oldIdx)]);
-              var newStackedOnPt = getStackedOnPoint(oldDataNewCoordInfo, newCoordSys, oldData, oldIdx);
-              currPoints.push(oldPoints[oldIdx2], oldPoints[oldIdx2 + 1]);
-              nextPoints.push(newPt[0], newPt[1]);
-              currStackedPoints.push(oldStackedOnPoints[oldIdx2], oldStackedOnPoints[oldIdx2 + 1]);
-              nextStackedPoints.push(newStackedOnPt[0], newStackedOnPt[1]);
-              rawIndices.push(rawIndex);
-            } else {
-              pointAdded = false;
-            }
-
+            pointAdded = false;
         } // Original indices
 
 
@@ -37645,8 +39577,60 @@
       stepPoints.push(points[i++], points[i++]);
       return stepPoints;
     }
+    /**
+     * Clip color stops to edge. Avoid creating too large gradients.
+     * Which may lead to blurry when GPU acceleration is enabled. See #15680
+     *
+     * The stops has been sorted from small to large.
+     */
 
-    function getVisualGradient(data, coordSys) {
+
+    function clipColorStops(colorStops, maxSize) {
+      var newColorStops = [];
+      var len = colorStops.length; // coord will always < 0 in prevOutOfRangeColorStop.
+
+      var prevOutOfRangeColorStop;
+      var prevInRangeColorStop;
+
+      function lerpStop(stop0, stop1, clippedCoord) {
+        var coord0 = stop0.coord;
+        var p = (clippedCoord - coord0) / (stop1.coord - coord0);
+        var color = lerp$1(p, [stop0.color, stop1.color]);
+        return {
+          coord: clippedCoord,
+          color: color
+        };
+      }
+
+      for (var i = 0; i < len; i++) {
+        var stop_1 = colorStops[i];
+        var coord = stop_1.coord;
+
+        if (coord < 0) {
+          prevOutOfRangeColorStop = stop_1;
+        } else if (coord > maxSize) {
+          if (prevInRangeColorStop) {
+            newColorStops.push(lerpStop(prevInRangeColorStop, stop_1, maxSize));
+          } // All following stop will be out of range. So just ignore them.
+
+
+          break;
+        } else {
+          if (prevOutOfRangeColorStop) {
+            newColorStops.push(lerpStop(prevOutOfRangeColorStop, stop_1, 0)); // Reset
+
+            prevOutOfRangeColorStop = null;
+          }
+
+          newColorStops.push(stop_1);
+          prevInRangeColorStop = stop_1;
+        }
+      }
+
+      return newColorStops;
+    }
+
+    function getVisualGradient(data, coordSys, api) {
       var visualMetaList = data.getVisual('visualMeta');
 
       if (!visualMetaList || !visualMetaList.length || !data.count()) {
@@ -37666,9 +39650,7 @@
       var visualMeta;
 
       for (var i = visualMetaList.length - 1; i >= 0; i--) {
-        var dimIndex = visualMetaList[i].dimension;
-        var dimName = data.dimensions[dimIndex];
-        var dimInfo = data.getDimensionInfo(dimName);
+        var dimInfo = data.getDimensionInfo(visualMetaList[i].dimension);
         coordDim = dimInfo && dimInfo.coordDim; // Can only be x or y
 
         if (coordDim === 'x' || coordDim === 'y') {
@@ -37691,11 +39673,11 @@
       // LinearGradient to render `outerColors`.
 
 
-      var axis = coordSys.getAxis(coordDim); // dataToCoor mapping may not be linear, but must be monotonic.
+      var axis = coordSys.getAxis(coordDim); // dataToCoord mapping may not be linear, but must be monotonic.
 
       var colorStops = map(visualMeta.stops, function (stop) {
+        // offset will be calculated later.
         return {
-          offset: 0,
           coord: axis.toGlobalCoord(axis.dataToCoord(stop.value)),
           color: stop.color
         };
@@ -37708,32 +39690,37 @@
         outerColors.reverse();
       }
 
-      var tinyExtent = 10; // Arbitrary value: 10px
+      var colorStopsInRange = clipColorStops(colorStops, coordDim === 'x' ? api.getWidth() : api.getHeight());
+      var inRangeStopLen = colorStopsInRange.length;
 
-      var minCoord = colorStops[0].coord - tinyExtent;
-      var maxCoord = colorStops[stopLen - 1].coord + tinyExtent;
+      if (!inRangeStopLen && stopLen) {
+        // All stops are out of range. All will be the same color.
+        return colorStops[0].coord < 0 ? outerColors[1] ? outerColors[1] : colorStops[stopLen - 1].color : outerColors[0] ? outerColors[0] : colorStops[0].color;
+      }
+
+      var tinyExtent = 0; // Arbitrary value: 10px
+
+      var minCoord = colorStopsInRange[0].coord - tinyExtent;
+      var maxCoord = colorStopsInRange[inRangeStopLen - 1].coord + tinyExtent;
       var coordSpan = maxCoord - minCoord;
 
       if (coordSpan < 1e-3) {
         return 'transparent';
       }
 
-      each(colorStops, function (stop) {
+      each(colorStopsInRange, function (stop) {
         stop.offset = (stop.coord - minCoord) / coordSpan;
       });
-      colorStops.push({
-        offset: stopLen ? colorStops[stopLen - 1].offset : 0.5,
+      colorStopsInRange.push({
+        // NOTE: inRangeStopLen may still be 0 if stoplen is zero.
+        offset: inRangeStopLen ? colorStopsInRange[inRangeStopLen - 1].offset : 0.5,
         color: outerColors[1] || 'transparent'
       });
-      colorStops.unshift({
-        offset: stopLen ? colorStops[0].offset : 0.5,
+      colorStopsInRange.unshift({
+        offset: inRangeStopLen ? colorStopsInRange[0].offset : 0.5,
         color: outerColors[0] || 'transparent'
-      }); // zrUtil.each(colorStops, function (colorStop) {
-      //     // Make sure each offset has rounded px to avoid not sharp edge
-      //     colorStop.offset = (Math.round(colorStop.offset * (end - start) + start) - start) / (end - start);
-      // });
-
-      var gradient = new LinearGradient(0, 0, 0, 0, colorStops, true);
+      });
+      var gradient = new LinearGradient(0, 0, 0, 0, colorStopsInRange, true);
       gradient[coordDim] = minCoord;
       gradient[coordDim + '2'] = maxCoord;
       return gradient;
@@ -37852,16 +39839,29 @@
       };
     }
 
+    function anyStateShowEndLabel(seriesModel) {
+      if (seriesModel.get(['endLabel', 'show'])) {
+        return true;
+      }
+
+      for (var i = 0; i < SPECIAL_STATES.length; i++) {
+        if (seriesModel.get([SPECIAL_STATES[i], 'endLabel', 'show'])) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
     function createLineClipPath(lineView, coordSys, hasAnimation, seriesModel) {
       if (isCoordinateSystemType(coordSys, 'cartesian2d')) {
         var endLabelModel_1 = seriesModel.getModel('endLabel');
-        var showEndLabel = endLabelModel_1.get('show');
         var valueAnimation_1 = endLabelModel_1.get('valueAnimation');
         var data_1 = seriesModel.getData();
         var labelAnimationRecord_1 = {
           lastFrameIndex: 0
         };
-        var during = showEndLabel ? function (percent, clipRect) {
+        var during = anyStateShowEndLabel(seriesModel) ? function (percent, clipRect) {
           lineView._endLabelOnDuring(percent, clipRect, data_1, labelAnimationRecord_1, valueAnimation_1, endLabelModel_1, coordSys);
         } : null;
         var isHorizontal = coordSys.getBaseAxis().isHorizontal();
@@ -37995,7 +39995,7 @@
         }
 
         this._clipShapeForSymbol = clipShapeForSymbol;
-        var visualColor = getVisualGradient(data, coordSys) || data.getVisual('style')[data.getVisual('drawType')]; // Initialization animation or coordinate system changed
+        var visualColor = getVisualGradient(data, coordSys, api) || data.getVisual('style')[data.getVisual('drawType')]; // Initialization animation or coordinate system changed
 
         if (!(polyline && prevCoordSys.type === coordSys.type && step === this._step)) {
           showSymbol && symbolDraw.updateData(data, {
@@ -38045,8 +40045,18 @@
           } // Update clipPath
 
 
-          lineGroup.setClipPath(createLineClipPath(this, coordSys, false, seriesModel)); // Always update, or it is wrong in the case turning on legend
+          var oldClipPath = lineGroup.getClipPath();
+
+          if (oldClipPath) {
+            var newClipPath = createLineClipPath(this, coordSys, false, seriesModel);
+            initProps(oldClipPath, {
+              shape: newClipPath.shape
+            }, seriesModel);
+          } else {
+            lineGroup.setClipPath(createLineClipPath(this, coordSys, true, seriesModel));
+          } // Always update, or it is wrong in the case turning on legend
           // because points are not changed
+
 
           showSymbol && symbolDraw.updateData(data, {
             isIgnore: isIgnoreFunc,
@@ -38095,7 +40105,7 @@
 
         if (polyline.style.lineWidth > 0 && seriesModel.get(['emphasis', 'lineStyle', 'width']) === 'bolder') {
           var emphasisLineStyle = polyline.getState('emphasis').style;
-          emphasisLineStyle.lineWidth = polyline.style.lineWidth + 1;
+          emphasisLineStyle.lineWidth = +polyline.style.lineWidth + 1;
         } // Needs seriesIndex for focus
 
 
@@ -38181,10 +40191,21 @@
               return;
             }
 
+            var zlevel = seriesModel.get('zlevel');
+            var z = seriesModel.get('z');
             symbol = new Symbol(data, dataIndex);
             symbol.x = x;
             symbol.y = y;
-            symbol.setZ(seriesModel.get('zlevel'), seriesModel.get('z'));
+            symbol.setZ(zlevel, z); // ensure label text of the temporary symbol is in front of line and area polygon
+
+            var symbolLabel = symbol.getSymbolPath().getTextContent();
+
+            if (symbolLabel) {
+              symbolLabel.zlevel = zlevel;
+              symbolLabel.z = z;
+              symbolLabel.z2 = this._polyline.z2 + 1;
+            }
+
             symbol.__temp = true;
             data.setItemGraphicEl(dataIndex, symbol); // Stop scale animation
 
@@ -38304,30 +40325,32 @@
             var end = void 0;
             var current = void 0;
 
-            if (isCoordSysPolar) {
-              var polarClip = clipShape;
-              var coord = coordSys.pointToCoord(point);
+            if (clipShape) {
+              if (isCoordSysPolar) {
+                var polarClip = clipShape;
+                var coord = coordSys.pointToCoord(point);
 
-              if (isHorizontalOrRadial) {
-                start = polarClip.startAngle;
-                end = polarClip.endAngle;
-                current = -coord[1] / 180 * Math.PI;
+                if (isHorizontalOrRadial) {
+                  start = polarClip.startAngle;
+                  end = polarClip.endAngle;
+                  current = -coord[1] / 180 * Math.PI;
+                } else {
+                  start = polarClip.r0;
+                  end = polarClip.r;
+                  current = coord[0];
+                }
               } else {
-                start = polarClip.r0;
-                end = polarClip.r;
-                current = coord[0];
-              }
-            } else {
-              var gridClip = clipShape;
+                var gridClip = clipShape;
 
-              if (isHorizontalOrRadial) {
-                start = gridClip.x;
-                end = gridClip.x + gridClip.width;
-                current = symbol.x;
-              } else {
-                start = gridClip.y + gridClip.height;
-                end = gridClip.y;
-                current = symbol.y;
+                if (isHorizontalOrRadial) {
+                  start = gridClip.x;
+                  end = gridClip.x + gridClip.width;
+                  current = symbol.x;
+                } else {
+                  start = gridClip.y + gridClip.height;
+                  end = gridClip.y;
+                  current = symbol.y;
+                }
               }
             }
 
@@ -38349,6 +40372,7 @@
               scaleY: 1
             }, {
               duration: 200,
+              setToFinal: true,
               delay: delay
             });
 
@@ -38371,7 +40395,7 @@
       LineView.prototype._initOrUpdateEndLabel = function (seriesModel, coordSys, inheritColor) {
         var endLabelModel = seriesModel.getModel('endLabel');
 
-        if (endLabelModel.get('show')) {
+        if (anyStateShowEndLabel(seriesModel)) {
           var data_2 = seriesModel.getData();
           var polyline = this._polyline;
           var endLabel = this._endLabel;
@@ -38486,7 +40510,7 @@
         var polyline = this._polyline;
         var polygon = this._polygon;
         var seriesModel = data.hostModel;
-        var diff = lineAnimationDiff(this._data, data, this._stackedOnPoints, stackedOnPoints, this._coordSys, coordSys, this._valueOrigin, valueOrigin);
+        var diff = lineAnimationDiff(this._data, data, this._stackedOnPoints, stackedOnPoints, this._coordSys, coordSys, this._valueOrigin);
         var current = diff.current;
         var stackedOnCurrent = diff.stackedOnCurrent;
         var next = diff.next;
@@ -38504,11 +40528,13 @@
 
 
         if (getBoundingDiff(current, next) > 3000 || polygon && getBoundingDiff(stackedOnCurrent, stackedOnNext) > 3000) {
+          polyline.stopAnimation();
           polyline.setShape({
             points: next
           });
 
           if (polygon) {
+            polygon.stopAnimation();
             polygon.setShape({
               points: next,
               stackedOnPoints: stackedOnNext
@@ -38642,10 +40668,9 @@
             dims[1] = stackResultDim;
           }
 
-          var dimInfo0 = data.getDimensionInfo(dims[0]);
-          var dimInfo1 = data.getDimensionInfo(dims[1]);
-          var dimIdx0 = dimInfo0 && dimInfo0.index;
-          var dimIdx1 = dimInfo1 && dimInfo1.index;
+          var store = data.getStore();
+          var dimIdx0 = data.getDimensionIndex(dims[0]);
+          var dimIdx1 = data.getDimensionIndex(dims[1]);
           return dimLen && {
             progress: function (params, data) {
               var segCount = params.end - params.start;
@@ -38657,12 +40682,12 @@
                 var point = void 0;
 
                 if (dimLen === 1) {
-                  var x = data.getByDimIdx(dimIdx0, i); // NOTE: Make sure the second parameter is null to use default strategy.
+                  var x = store.get(dimIdx0, i); // NOTE: Make sure the second parameter is null to use default strategy.
 
                   point = coordSys.dataToPoint(x, null, tmpOut);
                 } else {
-                  tmpIn[0] = data.getByDimIdx(dimIdx0, i);
-                  tmpIn[1] = data.getByDimIdx(dimIdx1, i); // Let coordinate system to handle the NaN data.
+                  tmpIn[0] = store.get(dimIdx0, i);
+                  tmpIn[1] = store.get(dimIdx1, i); // Let coordinate system to handle the NaN data.
 
                   point = coordSys.dataToPoint(tmpIn, null, tmpOut);
                 }
@@ -38826,7 +40851,23 @@
     function install$1(registers) {
       registers.registerChartView(LineView);
       registers.registerSeriesModel(LineSeriesModel);
-      registers.registerLayout(pointsLayout('line', true)); // Down sample after filter
+      registers.registerLayout(pointsLayout('line', true));
+      registers.registerVisual({
+        seriesType: 'line',
+        reset: function (seriesModel) {
+          var data = seriesModel.getData(); // Visual coding for legend
+
+          var lineStyle = seriesModel.getModel('lineStyle').getLineStyle();
+
+          if (lineStyle && !lineStyle.stroke) {
+            // Fill in visual should be palette color if
+            // has color callback
+            lineStyle.stroke = data.getVisual('style').fill;
+          }
+
+          data.setVisual('legendLineStyle', lineStyle);
+        }
+      }); // Down sample after filter
 
       registers.registerProcessor(registers.PRIORITY.PROCESSOR.STATISTIC, dataSample('line'));
     }
@@ -38844,7 +40885,7 @@
       }
 
       BaseBarSeriesModel.prototype.getInitialData = function (option, ecModel) {
-        return createListFromArray(this.getSource(), this, {
+        return createSeriesData(null, this, {
           useEncodeDefaulter: true
         });
       };
@@ -38852,7 +40893,7 @@
       BaseBarSeriesModel.prototype.getMarkerPosition = function (value) {
         var coordSys = this.coordinateSystem;
 
-        if (coordSys) {
+        if (coordSys && coordSys.clampData) {
           // PENDING if clamp ?
           var pt = coordSys.dataToPoint(coordSys.clampData(value));
           var data = this.getData();
@@ -38902,7 +40943,7 @@
       }
 
       BarSeriesModel.prototype.getInitialData = function () {
-        return createListFromArray(this.getSource(), this, {
+        return createSeriesData(null, this, {
           useEncodeDefaulter: true,
           createInvertedIndices: !!this.get('realtimeSort', true) || null
         });
@@ -39039,8 +41080,186 @@
       return SausagePath;
     }(Path);
 
-    var BAR_BORDER_WIDTH_QUERY = ['itemStyle', 'borderWidth'];
-    var BAR_BORDER_RADIUS_QUERY = ['itemStyle', 'borderRadius'];
+    function createSectorCalculateTextPosition(positionMapping, opts) {
+      opts = opts || {};
+      var isRoundCap = opts.isRoundCap;
+      return function (out, opts, boundingRect) {
+        var textPosition = opts.position;
+
+        if (!textPosition || textPosition instanceof Array) {
+          return calculateTextPosition(out, opts, boundingRect);
+        }
+
+        var mappedSectorPosition = positionMapping(textPosition);
+        var distance = opts.distance != null ? opts.distance : 5;
+        var sector = this.shape;
+        var cx = sector.cx;
+        var cy = sector.cy;
+        var r = sector.r;
+        var r0 = sector.r0;
+        var middleR = (r + r0) / 2;
+        var startAngle = sector.startAngle;
+        var endAngle = sector.endAngle;
+        var middleAngle = (startAngle + endAngle) / 2;
+        var extraDist = isRoundCap ? Math.abs(r - r0) / 2 : 0;
+        var mathCos = Math.cos;
+        var mathSin = Math.sin; // base position: top-left
+
+        var x = cx + r * mathCos(startAngle);
+        var y = cy + r * mathSin(startAngle);
+        var textAlign = 'left';
+        var textVerticalAlign = 'top';
+
+        switch (mappedSectorPosition) {
+          case 'startArc':
+            x = cx + (r0 - distance) * mathCos(middleAngle);
+            y = cy + (r0 - distance) * mathSin(middleAngle);
+            textAlign = 'center';
+            textVerticalAlign = 'top';
+            break;
+
+          case 'insideStartArc':
+            x = cx + (r0 + distance) * mathCos(middleAngle);
+            y = cy + (r0 + distance) * mathSin(middleAngle);
+            textAlign = 'center';
+            textVerticalAlign = 'bottom';
+            break;
+
+          case 'startAngle':
+            x = cx + middleR * mathCos(startAngle) + adjustAngleDistanceX(startAngle, distance + extraDist, false);
+            y = cy + middleR * mathSin(startAngle) + adjustAngleDistanceY(startAngle, distance + extraDist, false);
+            textAlign = 'right';
+            textVerticalAlign = 'middle';
+            break;
+
+          case 'insideStartAngle':
+            x = cx + middleR * mathCos(startAngle) + adjustAngleDistanceX(startAngle, -distance + extraDist, false);
+            y = cy + middleR * mathSin(startAngle) + adjustAngleDistanceY(startAngle, -distance + extraDist, false);
+            textAlign = 'left';
+            textVerticalAlign = 'middle';
+            break;
+
+          case 'middle':
+            x = cx + middleR * mathCos(middleAngle);
+            y = cy + middleR * mathSin(middleAngle);
+            textAlign = 'center';
+            textVerticalAlign = 'middle';
+            break;
+
+          case 'endArc':
+            x = cx + (r + distance) * mathCos(middleAngle);
+            y = cy + (r + distance) * mathSin(middleAngle);
+            textAlign = 'center';
+            textVerticalAlign = 'bottom';
+            break;
+
+          case 'insideEndArc':
+            x = cx + (r - distance) * mathCos(middleAngle);
+            y = cy + (r - distance) * mathSin(middleAngle);
+            textAlign = 'center';
+            textVerticalAlign = 'top';
+            break;
+
+          case 'endAngle':
+            x = cx + middleR * mathCos(endAngle) + adjustAngleDistanceX(endAngle, distance + extraDist, true);
+            y = cy + middleR * mathSin(endAngle) + adjustAngleDistanceY(endAngle, distance + extraDist, true);
+            textAlign = 'left';
+            textVerticalAlign = 'middle';
+            break;
+
+          case 'insideEndAngle':
+            x = cx + middleR * mathCos(endAngle) + adjustAngleDistanceX(endAngle, -distance + extraDist, true);
+            y = cy + middleR * mathSin(endAngle) + adjustAngleDistanceY(endAngle, -distance + extraDist, true);
+            textAlign = 'right';
+            textVerticalAlign = 'middle';
+            break;
+
+          default:
+            return calculateTextPosition(out, opts, boundingRect);
+        }
+
+        out = out || {};
+        out.x = x;
+        out.y = y;
+        out.align = textAlign;
+        out.verticalAlign = textVerticalAlign;
+        return out;
+      };
+    }
+    function setSectorTextRotation(sector, textPosition, positionMapping, rotateType) {
+      if (typeof rotateType === 'number') {
+        // user-set rotation
+        sector.setTextConfig({
+          rotation: rotateType
+        });
+        return;
+      } else if (isArray(textPosition)) {
+        // user-set position, use 0 as auto rotation
+        sector.setTextConfig({
+          rotation: 0
+        });
+        return;
+      }
+
+      var shape = sector.shape;
+      var startAngle = shape.clockwise ? shape.startAngle : shape.endAngle;
+      var endAngle = shape.clockwise ? shape.endAngle : shape.startAngle;
+      var middleAngle = (startAngle + endAngle) / 2;
+      var anchorAngle;
+      var mappedSectorPosition = positionMapping(textPosition);
+
+      switch (mappedSectorPosition) {
+        case 'startArc':
+        case 'insideStartArc':
+        case 'middle':
+        case 'insideEndArc':
+        case 'endArc':
+          anchorAngle = middleAngle;
+          break;
+
+        case 'startAngle':
+        case 'insideStartAngle':
+          anchorAngle = startAngle;
+          break;
+
+        case 'endAngle':
+        case 'insideEndAngle':
+          anchorAngle = endAngle;
+          break;
+
+        default:
+          sector.setTextConfig({
+            rotation: 0
+          });
+          return;
+      }
+
+      var rotate = Math.PI * 1.5 - anchorAngle;
+      /**
+       * TODO: labels with rotate > Math.PI / 2 should be rotate another
+       * half round flipped to increase readability. However, only middle
+       * position supports this for now, because in other positions, the
+       * anchor point is not at the center of the text, so the positions
+       * after rotating is not as expected.
+       */
+
+      if (mappedSectorPosition === 'middle' && rotate > Math.PI / 2 && rotate < Math.PI * 1.5) {
+        rotate -= Math.PI;
+      }
+
+      sector.setTextConfig({
+        rotation: rotate
+      });
+    }
+
+    function adjustAngleDistanceX(angle, distance, isEnd) {
+      return distance * Math.sin(angle) * (isEnd ? -1 : 1);
+    }
+
+    function adjustAngleDistanceY(angle, distance, isEnd) {
+      return distance * Math.cos(angle) * (isEnd ? 1 : -1);
+    }
+
     var _eventPos = [0, 0];
     var mathMax$6 = Math.max;
     var mathMin$6 = Math.min;
@@ -39180,7 +41399,7 @@
           } // If dataZoom in filteMode: 'empty', the baseValue can be set as NaN in "axisProxy".
 
 
-          if (!data.hasValue(dataIndex)) {
+          if (!data.hasValue(dataIndex) || !isValidLayout[coord.type](layout)) {
             return;
           }
 
@@ -39239,9 +41458,8 @@
 
           var el = oldData.getItemGraphicEl(oldIndex);
 
-          if (!data.hasValue(newIndex)) {
+          if (!data.hasValue(newIndex) || !isValidLayout[coord.type](layout)) {
             group.remove(el);
-            el = null;
             return;
           }
 
@@ -39257,6 +41475,8 @@
 
           if (!el) {
             el = elementCreator[coord.type](seriesModel, data, newIndex, layout, isHorizontalOrRadial, animationModel, baseAxis.model, !!el, roundCap);
+          } else {
+            saveOldStyle(el);
           } // Not change anything if only order changed.
           // Especially not change label.
 
@@ -39451,12 +41671,7 @@
           componentType: baseAxis.dim + 'Axis',
           isInitSort: true,
           axisId: baseAxis.index,
-          sortInfo: sortResult,
-          animation: {
-            // Update the axis label from the natural initial layout to
-            // sorted layout should has no animation.
-            duration: 0
-          }
+          sortInfo: sortResult
         });
       };
 
@@ -39591,19 +41806,16 @@
         return rect;
       },
       polar: function (seriesModel, data, newIndex, layout, isRadial, animationModel, axisModel, isUpdate, roundCap) {
-        // Keep the same logic with bar in catesion: use end value to control
-        // direction. Notice that if clockwise is true (by default), the sector
-        // will always draw clockwisely, no matter whether endAngle is greater
-        // or less than startAngle.
-        var clockwise = layout.startAngle < layout.endAngle;
         var ShapeClass = !isRadial && roundCap ? SausagePath : Sector;
         var sector = new ShapeClass({
-          shape: defaults({
-            clockwise: clockwise
-          }, layout),
+          shape: layout,
           z2: 1
         });
-        sector.name = 'item'; // Animation
+        sector.name = 'item';
+        var positionMap = createPolarPositionMapping(isRadial);
+        sector.calculateTextPosition = createSectorCalculateTextPosition(positionMap, {
+          isRoundCap: ShapeClass === SausagePath
+        }); // Animation
 
         if (animationModel) {
           var sectorShape = sector.shape;
@@ -39683,6 +41895,26 @@
       }, axisAnimationModel, newIndex);
     }
 
+    function checkPropertiesNotValid(obj, props) {
+      for (var i = 0; i < props.length; i++) {
+        if (!isFinite(obj[props[i]])) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    var rectPropties = ['x', 'y', 'width', 'height'];
+    var polarPropties = ['cx', 'cy', 'r', 'startAngle', 'endAngle'];
+    var isValidLayout = {
+      cartesian2d: function (layout) {
+        return !checkPropertiesNotValid(layout, rectPropties);
+      },
+      polar: function (layout) {
+        return !checkPropertiesNotValid(layout, polarPropties);
+      }
+    };
     var getLayout = {
       // itemModel is only used to get borderWidth, which is not needed
       // when calculating bar background layout.
@@ -39707,7 +41939,8 @@
           r0: layout.r0,
           r: layout.r,
           startAngle: layout.startAngle,
-          endAngle: layout.endAngle
+          endAngle: layout.endAngle,
+          clockwise: layout.clockwise
         };
       }
     };
@@ -39716,34 +41949,55 @@
       return layout.startAngle != null && layout.endAngle != null && layout.startAngle === layout.endAngle;
     }
 
-    function updateStyle(el, data, dataIndex, itemModel, layout, seriesModel, isHorizontal, isPolar) {
+    function createPolarPositionMapping(isRadial) {
+      return function (isRadial) {
+        var arcOrAngle = isRadial ? 'Arc' : 'Angle';
+        return function (position) {
+          switch (position) {
+            case 'start':
+            case 'insideStart':
+            case 'end':
+            case 'insideEnd':
+              return position + arcOrAngle;
+
+            default:
+              return position;
+          }
+        };
+      }(isRadial);
+    }
+
+    function updateStyle(el, data, dataIndex, itemModel, layout, seriesModel, isHorizontalOrRadial, isPolar) {
       var style = data.getItemVisual(dataIndex, 'style');
 
       if (!isPolar) {
-        el.setShape('r', itemModel.get(BAR_BORDER_RADIUS_QUERY) || 0);
+        el.setShape('r', itemModel.get(['itemStyle', 'borderRadius']) || 0);
       }
 
       el.useStyle(style);
       var cursorStyle = itemModel.getShallow('cursor');
       cursorStyle && el.attr('cursor', cursorStyle);
+      var labelPositionOutside = isPolar ? isHorizontalOrRadial ? layout.r >= layout.r0 ? 'endArc' : 'startArc' : layout.endAngle >= layout.startAngle ? 'endAngle' : 'startAngle' : isHorizontalOrRadial ? layout.height >= 0 ? 'bottom' : 'top' : layout.width >= 0 ? 'right' : 'left';
+      var labelStatesModels = getLabelStatesModels(itemModel);
+      setLabelStyle(el, labelStatesModels, {
+        labelFetcher: seriesModel,
+        labelDataIndex: dataIndex,
+        defaultText: getDefaultLabel(seriesModel.getData(), dataIndex),
+        inheritColor: style.fill,
+        defaultOpacity: style.opacity,
+        defaultOutsidePosition: labelPositionOutside
+      });
+      var label = el.getTextContent();
 
-      if (!isPolar) {
-        var labelPositionOutside = isHorizontal ? layout.height > 0 ? 'bottom' : 'top' : layout.width > 0 ? 'left' : 'right';
-        var labelStatesModels = getLabelStatesModels(itemModel);
-        setLabelStyle(el, labelStatesModels, {
-          labelFetcher: seriesModel,
-          labelDataIndex: dataIndex,
-          defaultText: getDefaultLabel(seriesModel.getData(), dataIndex),
-          inheritColor: style.fill,
-          defaultOpacity: style.opacity,
-          defaultOutsidePosition: labelPositionOutside
-        });
-        var label = el.getTextContent();
-        setLabelValueAnimation(label, labelStatesModels, seriesModel.getRawValue(dataIndex), function (value) {
-          return getDefaultInterpolatedLabel(data, value);
-        });
+      if (isPolar && label) {
+        var position = itemModel.get(['label', 'position']);
+        el.textConfig.inside = position === 'middle' ? true : null;
+        setSectorTextRotation(el, position === 'outside' ? labelPositionOutside : position, createPolarPositionMapping(isHorizontalOrRadial), itemModel.get(['label', 'rotate']));
       }
 
+      setLabelValueAnimation(label, labelStatesModels, seriesModel.getRawValue(dataIndex), function (value) {
+        return getDefaultInterpolatedLabel(data, value);
+      });
       var emphasisModel = itemModel.getModel(['emphasis']);
       enableHoverEmphasis(el, emphasisModel.get('focus'), emphasisModel.get('blurScope'));
       setStatesStylesFromModel(el, itemModel);
@@ -39761,7 +42015,14 @@
 
 
     function getLineWidth(itemModel, rawLayout) {
-      var lineWidth = itemModel.get(BAR_BORDER_WIDTH_QUERY) || 0; // width or height may be NaN for empty data
+      // Has no border.
+      var borderColor = itemModel.get(['itemStyle', 'borderColor']);
+
+      if (!borderColor || borderColor === 'none') {
+        return 0;
+      }
+
+      var lineWidth = itemModel.get(['itemStyle', 'borderWidth']) || 0; // width or height may be NaN for empty data
 
       var width = isNaN(rawLayout.width) ? Number.MAX_VALUE : Math.abs(rawLayout.width);
       var height = isNaN(rawLayout.height) ? Number.MAX_VALUE : Math.abs(rawLayout.height);
@@ -39952,14 +42213,7 @@
       registers.registerLayout(registers.PRIORITY.VISUAL.LAYOUT, curry(layout, 'bar')); // Use higher prority to avoid to be blocked by other overall layout, which do not
       // only exist in this module, but probably also exist in other modules, like `barPolar`.
 
-      registers.registerLayout(registers.PRIORITY.VISUAL.PROGRESSIVE_LAYOUT, largeLayout);
-      registers.registerVisual({
-        seriesType: 'bar',
-        reset: function (seriesModel) {
-          // Visual coding for legend
-          seriesModel.getData().setVisual('legendSymbol', 'roundRect');
-        }
-      }); // Down sample after filter
+      registers.registerLayout(registers.PRIORITY.VISUAL.PROGRESSIVE_LAYOUT, largeLayout); // Down sample after filter
 
       registers.registerProcessor(registers.PRIORITY.PROCESSOR.STATISTIC, dataSample('bar'));
       /**
@@ -39989,7 +42243,7 @@
       });
     }
 
-    var PI2$7 = Math.PI * 2;
+    var PI2$6 = Math.PI * 2;
     var RADIAN = Math.PI / 180;
 
     function getViewRect(seriesModel, api) {
@@ -39999,29 +42253,45 @@
       });
     }
 
+    function getBasicPieLayout(seriesModel, api) {
+      var viewRect = getViewRect(seriesModel, api);
+      var center = seriesModel.get('center');
+      var radius = seriesModel.get('radius');
+
+      if (!isArray(radius)) {
+        radius = [0, radius];
+      }
+
+      if (!isArray(center)) {
+        center = [center, center];
+      }
+
+      var width = parsePercent$1(viewRect.width, api.getWidth());
+      var height = parsePercent$1(viewRect.height, api.getHeight());
+      var size = Math.min(width, height);
+      var cx = parsePercent$1(center[0], width) + viewRect.x;
+      var cy = parsePercent$1(center[1], height) + viewRect.y;
+      var r0 = parsePercent$1(radius[0], size / 2);
+      var r = parsePercent$1(radius[1], size / 2);
+      return {
+        cx: cx,
+        cy: cy,
+        r0: r0,
+        r: r
+      };
+    }
     function pieLayout(seriesType, ecModel, api) {
       ecModel.eachSeriesByType(seriesType, function (seriesModel) {
         var data = seriesModel.getData();
         var valueDim = data.mapDimension('value');
         var viewRect = getViewRect(seriesModel, api);
-        var center = seriesModel.get('center');
-        var radius = seriesModel.get('radius');
 
-        if (!isArray(radius)) {
-          radius = [0, radius];
-        }
+        var _a = getBasicPieLayout(seriesModel, api),
+            cx = _a.cx,
+            cy = _a.cy,
+            r = _a.r,
+            r0 = _a.r0;
 
-        if (!isArray(center)) {
-          center = [center, center];
-        }
-
-        var width = parsePercent$1(viewRect.width, api.getWidth());
-        var height = parsePercent$1(viewRect.height, api.getHeight());
-        var size = Math.min(width, height);
-        var cx = parsePercent$1(center[0], width) + viewRect.x;
-        var cy = parsePercent$1(center[1], height) + viewRect.y;
-        var r0 = parsePercent$1(radius[0], size / 2);
-        var r = parsePercent$1(radius[1], size / 2);
         var startAngle = -seriesModel.get('startAngle') * RADIAN;
         var minAngle = seriesModel.get('minAngle') * RADIAN;
         var validDataCount = 0;
@@ -40038,7 +42308,7 @@
         var extent = data.getDataExtent(valueDim);
         extent[0] = 0; // In the case some sector angle is smaller than minAngle
 
-        var restAngle = PI2$7;
+        var restAngle = PI2$6;
         var valueSumLargerThanMinAngle = 0;
         var currentAngle = startAngle;
         var dir = clockwise ? 1 : -1;
@@ -40067,7 +42337,7 @@
           if (roseType !== 'area') {
             angle = sum === 0 && stillShowZeroSum ? unitRadian : value * unitRadian;
           } else {
-            angle = PI2$7 / validDataCount;
+            angle = PI2$6 / validDataCount;
           }
 
           if (angle < minAngle) {
@@ -40092,11 +42362,11 @@
         }); // Some sector is constrained by minAngle
         // Rest sectors needs recalculate angle
 
-        if (restAngle < PI2$7 && validDataCount) {
+        if (restAngle < PI2$6 && validDataCount) {
           // Average the angle if rest angle is not enough after all angles is
           // Constrained by minAngle
           if (restAngle <= 1e-3) {
-            var angle_1 = PI2$7 / validDataCount;
+            var angle_1 = PI2$6 / validDataCount;
             data.each(valueDim, function (value, idx) {
               if (!isNaN(value)) {
                 var layout_1 = data.getItemLayout(idx);
@@ -40469,8 +42739,22 @@
 
         if (typeof rotate === 'number') {
           labelRotate = rotate * (Math.PI / 180);
+        } else if (labelPosition === 'center') {
+          labelRotate = 0;
         } else {
-          labelRotate = rotate ? nx < 0 ? -midAngle + Math.PI : -midAngle : 0;
+          var radialAngle = nx < 0 ? -midAngle + Math.PI : -midAngle;
+
+          if (rotate === 'radial' || rotate === true) {
+            labelRotate = radialAngle;
+          } else if (rotate === 'tangential' && labelPosition !== 'outside' && labelPosition !== 'outer') {
+            labelRotate = radialAngle + Math.PI / 2;
+
+            if (labelRotate > Math.PI / 2) {
+              labelRotate -= Math.PI;
+            }
+          } else {
+            labelRotate = 0;
+          }
         }
 
         hasLabelRotate = !!labelRotate;
@@ -40571,11 +42855,14 @@
       }
     }
 
-    function getSectorCornerRadius(model, shape) {
+    function getSectorCornerRadius(model, shape, zeroIfNull) {
       var cornerRadius = model.get('borderRadius');
 
       if (cornerRadius == null) {
-        return null;
+        return zeroIfNull ? {
+          innerCornerRadius: 0,
+          cornerRadius: 0
+        } : null;
       }
 
       if (!isArray(cornerRadius)) {
@@ -40601,10 +42888,7 @@
         var _this = _super.call(this) || this;
 
         _this.z2 = 2;
-        var polyline = new Polyline();
         var text = new ZRText();
-
-        _this.setTextGuideLine(polyline);
 
         _this.setTextContent(text);
 
@@ -40618,8 +42902,16 @@
         var seriesModel = data.hostModel;
         var itemModel = data.getItemModel(idx);
         var emphasisModel = itemModel.getModel('emphasis');
-        var layout = data.getItemLayout(idx);
-        var sectorShape = extend(getSectorCornerRadius(itemModel.getModel('itemStyle'), layout) || {}, layout);
+        var layout = data.getItemLayout(idx); // cornerRadius & innerCornerRadius doesn't exist in the item layout. Use `0` if null value is specified.
+        // see `setItemLayout` in `pieLayout.ts`.
+
+        var sectorShape = extend(getSectorCornerRadius(itemModel.getModel('itemStyle'), layout, true), layout); // Ignore NaN data.
+
+        if (isNaN(sectorShape.startAngle)) {
+          // Use NaN shape to avoid drawing shape.
+          sector.setShape(sectorShape);
+          return;
+        }
 
         if (firstCreate) {
           sector.setShape(sectorShape);
@@ -40655,7 +42947,8 @@
               }
             }
         } else {
-          // Transition animation from the old shape
+          saveOldStyle(sector); // Transition animation from the old shape
+
           updateProps(sector, {
             shape: sectorShape
           }, seriesModel, idx);
@@ -40698,8 +42991,6 @@
       };
 
       PiePiece.prototype._updateLabel = function (seriesModel, data, idx) {
-        var _a;
-
         var sector = this;
         var itemModel = data.getItemModel(idx);
         var labelLineModel = itemModel.getModel('labelLine');
@@ -40728,15 +43019,21 @@
         var labelPosition = seriesModel.get(['label', 'position']);
 
         if (labelPosition !== 'outside' && labelPosition !== 'outer') {
-          (_a = sector.getTextGuideLine()) === null || _a === void 0 ? void 0 : _a.hide();
-          return;
-        } // Default use item visual color
+          sector.removeTextGuideLine();
+        } else {
+          var polyline = this.getTextGuideLine();
+
+          if (!polyline) {
+            polyline = new Polyline();
+            this.setTextGuideLine(polyline);
+          } // Default use item visual color
 
 
-        setLabelLineStyle(this, getLabelLineStatesModels(itemModel), {
-          stroke: visualColor,
-          opacity: retrieve3(labelLineModel.get(['lineStyle', 'opacity']), visualOpacity, 1)
-        });
+          setLabelLineStyle(this, getLabelLineStatesModels(itemModel), {
+            stroke: visualColor,
+            opacity: retrieve3(labelLineModel.get(['lineStyle', 'opacity']), visualOpacity, 1)
+          });
+        }
       };
 
       return PiePiece;
@@ -40776,6 +43073,21 @@
           if (shape) {
             startAngle = shape.startAngle;
           }
+        } // remove empty-circle if it exists
+
+
+        if (this._emptyCircleSector) {
+          group.remove(this._emptyCircleSector);
+        } // when all data are filtered, show lightgray empty circle
+
+
+        if (data.count() === 0 && seriesModel.get('showEmptyCircle')) {
+          var sector = new Sector({
+            shape: getBasicPieLayout(seriesModel, api)
+          });
+          sector.useStyle(seriesModel.getModel('emptyCircleStyle').getItemStyle());
+          this._emptyCircleSector = sector;
+          group.add(sector);
         }
 
         data.diff(oldData).add(function (idx) {
@@ -40828,13 +43140,15 @@
      * });
      */
 
-    function createListSimply(seriesModel, opt, nameList) {
+    function createSeriesDataSimply(seriesModel, opt, nameList) {
       opt = isArray(opt) && {
         coordDimensions: opt
-      } || extend({}, opt);
+      } || extend({
+        encodeDefine: seriesModel.getEncode()
+      }, opt);
       var source = seriesModel.getSource();
-      var dimensionsInfo = createDimensions(source, opt);
-      var list = new List(dimensionsInfo, seriesModel);
+      var dimensions = prepareSeriesDataSchema(source, opt).dimensions;
+      var list = new SeriesData(dimensions, seriesModel);
       list.initData(source, nameList);
       return list;
     }
@@ -40935,10 +43249,7 @@
       __extends(PieSeriesModel, _super);
 
       function PieSeriesModel() {
-        var _this = _super !== null && _super.apply(this, arguments) || this;
-
-        _this.useColorPaletteOnData = true;
-        return _this;
+        return _super !== null && _super.apply(this, arguments) || this;
       }
       /**
        * @overwrite
@@ -40968,7 +43279,7 @@
 
 
       PieSeriesModel.prototype.getInitialData = function () {
-        return createListSimply(this, {
+        return createSeriesDataSimply(this, {
           coordDimensions: ['value'],
           encodeDefaulter: curry(makeSeriesEncodeForNameBased, this)
         });
@@ -41008,6 +43319,7 @@
         zlevel: 0,
         z: 2,
         legendHoverLink: true,
+        colorBy: 'data',
         // 默认全局居中
         center: ['50%', '50%'],
         radius: [0, '75%'],
@@ -41073,7 +43385,13 @@
           }
         },
         itemStyle: {
-          borderWidth: 1
+          borderWidth: 1,
+          borderJoin: 'round'
+        },
+        showEmptyCircle: true,
+        emptyCircleStyle: {
+          color: 'lightgray',
+          opacity: 1
         },
         labelLayout: {
           // Hide the overlapped label.
@@ -41097,12 +43415,75 @@
       return PieSeriesModel;
     }(SeriesModel);
 
+    /*
+    * Licensed to the Apache Software Foundation (ASF) under one
+    * or more contributor license agreements.  See the NOTICE file
+    * distributed with this work for additional information
+    * regarding copyright ownership.  The ASF licenses this file
+    * to you under the Apache License, Version 2.0 (the
+    * "License"); you may not use this file except in compliance
+    * with the License.  You may obtain a copy of the License at
+    *
+    *   http://www.apache.org/licenses/LICENSE-2.0
+    *
+    * Unless required by applicable law or agreed to in writing,
+    * software distributed under the License is distributed on an
+    * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    * KIND, either express or implied.  See the License for the
+    * specific language governing permissions and limitations
+    * under the License.
+    */
+
+
+    /**
+     * AUTO-GENERATED FILE. DO NOT MODIFY.
+     */
+
+    /*
+    * Licensed to the Apache Software Foundation (ASF) under one
+    * or more contributor license agreements.  See the NOTICE file
+    * distributed with this work for additional information
+    * regarding copyright ownership.  The ASF licenses this file
+    * to you under the Apache License, Version 2.0 (the
+    * "License"); you may not use this file except in compliance
+    * with the License.  You may obtain a copy of the License at
+    *
+    *   http://www.apache.org/licenses/LICENSE-2.0
+    *
+    * Unless required by applicable law or agreed to in writing,
+    * software distributed under the License is distributed on an
+    * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    * KIND, either express or implied.  See the License for the
+    * specific language governing permissions and limitations
+    * under the License.
+    */
+    function negativeDataFilter(seriesType) {
+      return {
+        seriesType: seriesType,
+        reset: function (seriesModel, ecModel) {
+          var data = seriesModel.getData();
+          data.filterSelf(function (idx) {
+            // handle negative value condition
+            var valueDim = data.mapDimension('value');
+            var curValue = data.get(valueDim, idx);
+
+            if (typeof curValue === 'number' && !isNaN(curValue) && curValue < 0) {
+              return false;
+            }
+
+            return true;
+          });
+        }
+      };
+    }
+
     function install$3(registers) {
       registers.registerChartView(PieView);
       registers.registerSeriesModel(PieSeriesModel);
       createLegacyDataSelectAction('pie', registers.registerAction);
       registers.registerLayout(curry(pieLayout, 'pie'));
       registers.registerProcessor(dataFilter('pie'));
+      registers.registerProcessor(negativeDataFilter('pie'));
     }
 
     var GridModel =
@@ -41378,13 +43759,7 @@
           __extends(AxisModel, _super);
 
           function AxisModel() {
-            var args = [];
-
-            for (var _i = 0; _i < arguments.length; _i++) {
-              args[_i] = arguments[_i];
-            }
-
-            var _this = _super.apply(this, args) || this;
+            var _this = _super !== null && _super.apply(this, arguments) || this;
 
             _this.type = axisName + 'Axis.' + axisType;
             return _this;
@@ -41556,7 +43931,7 @@
         return this.getAxis('x').containData(data[0]) && this.getAxis('y').containData(data[1]);
       };
 
-      Cartesian2D.prototype.dataToPoint = function (data, reserved, out) {
+      Cartesian2D.prototype.dataToPoint = function (data, clamp, out) {
         out = out || [];
         var xVal = data[0];
         var yVal = data[1]; // Fast path
@@ -41568,8 +43943,8 @@
 
         var xAxis = this.getAxis('x');
         var yAxis = this.getAxis('y');
-        out[0] = xAxis.toGlobalCoord(xAxis.dataToCoord(xVal));
-        out[1] = yAxis.toGlobalCoord(yAxis.dataToCoord(yVal));
+        out[0] = xAxis.toGlobalCoord(xAxis.dataToCoord(xVal, clamp));
+        out[1] = yAxis.toGlobalCoord(yAxis.dataToCoord(yVal, clamp));
         return out;
       };
 
@@ -41586,8 +43961,8 @@
         return out;
       };
 
-      Cartesian2D.prototype.pointToData = function (point, out) {
-        out = out || [];
+      Cartesian2D.prototype.pointToData = function (point, clamp) {
+        var out = [];
 
         if (this._invTransform) {
           return applyTransform(out, point, this._invTransform);
@@ -41595,8 +43970,8 @@
 
         var xAxis = this.getAxis('x');
         var yAxis = this.getAxis('y');
-        out[0] = xAxis.coordToData(xAxis.toLocalCoord(point[0]));
-        out[1] = yAxis.coordToData(yAxis.toLocalCoord(point[1]));
+        out[0] = xAxis.coordToData(xAxis.toLocalCoord(point[0]), clamp);
+        out[1] = yAxis.coordToData(yAxis.toLocalCoord(point[1]), clamp);
         return out;
       };
 
@@ -42401,14 +44776,10 @@
         line.anid = 'line';
         group.add(line);
         var arrows = axisModel.get(['axisLine', 'symbol']);
-        var arrowSize = axisModel.get(['axisLine', 'symbolSize']);
-        var arrowOffset = axisModel.get(['axisLine', 'symbolOffset']) || 0;
-
-        if (typeof arrowOffset === 'number') {
-          arrowOffset = [arrowOffset, arrowOffset];
-        }
 
         if (arrows != null) {
+          var arrowSize = axisModel.get(['axisLine', 'symbolSize']);
+
           if (typeof arrows === 'string') {
             // Use the same arrow for start and end point
             arrows = [arrows, arrows];
@@ -42419,6 +44790,7 @@
             arrowSize = [arrowSize, arrowSize];
           }
 
+          var arrowOffset = normalizeSymbolOffset(axisModel.get(['axisLine', 'symbolOffset']) || 0, arrowSize);
           var symbolWidth_1 = arrowSize[0];
           var symbolHeight_1 = arrowSize[1];
           each([{
@@ -42450,7 +44822,21 @@
         var ticksEls = buildAxisMajorTicks(group, transformGroup, axisModel, opt);
         var labelEls = buildAxisLabel(group, transformGroup, axisModel, opt);
         fixMinMaxLabelShow(axisModel, labelEls, ticksEls);
-        buildAxisMinorTicks(group, transformGroup, axisModel, opt.tickDirection);
+        buildAxisMinorTicks(group, transformGroup, axisModel, opt.tickDirection); // This bit fixes the label overlap issue for the time chart.
+        // See https://github.com/apache/echarts/issues/14266 for more.
+
+        if (axisModel.get(['axisLabel', 'hideOverlap'])) {
+          var labelList = prepareLayoutList(map(labelEls, function (label) {
+            return {
+              label: label,
+              priority: label.z2,
+              defaultAttr: {
+                ignore: label.ignore
+              }
+            };
+          }));
+          hideOverlap(labelList);
+        }
       },
       axisName: function (opt, axisModel, group, transformGroup) {
         var name = retrieve(opt.axisName, axisModel.get('name'));
@@ -42493,14 +44879,6 @@
         var truncateOpt = axisModel.get('nameTruncate', true) || {};
         var ellipsis = truncateOpt.ellipsis;
         var maxWidth = retrieve(opt.nameTruncateMaxWidth, truncateOpt.maxWidth, axisNameAvailableWidth);
-        var tooltipOpt = axisModel.get('tooltip', true);
-        var mainType = axisModel.mainType;
-        var formatterParams = {
-          componentType: mainType,
-          name: name,
-          $vars: ['name']
-        };
-        formatterParams[mainType + 'Index'] = axisModel.componentIndex;
         var textEl = new ZRText({
           x: pos[0],
           y: pos[1],
@@ -42518,13 +44896,11 @@
           }),
           z2: 1
         });
-        textEl.tooltip = tooltipOpt && tooltipOpt.show ? extend({
-          content: name,
-          formatter: function () {
-            return name;
-          },
-          formatterParams: formatterParams
-        }, tooltipOpt) : null;
+        setTooltipConfig({
+          el: textEl,
+          componentModel: axisModel,
+          itemName: name
+        });
         textEl.__fullText = name; // Id for animation
 
         textEl.anid = 'name';
@@ -42783,7 +45159,7 @@
           y: opt.labelOffset + opt.labelDirection * labelMargin,
           rotation: labelLayout.rotation,
           silent: silent,
-          z2: 10,
+          z2: 10 + (labelItem.level || 0),
           style: createTextStyle(itemLabelModel, {
             text: formattedLabel,
             align: itemLabelModel.getShallow('align', true) || labelLayout.textAlign,
@@ -42978,7 +45354,7 @@
       return AxisView;
     }(ComponentView);
 
-    var inner$5 = makeInner();
+    var inner$6 = makeInner();
     function rectCoordAxisBuildSplitArea(axisView, axisGroup, axisModel, gridModel) {
       var axis = axisModel.axis;
 
@@ -43003,7 +45379,7 @@
 
 
       var areaColorsLen = areaColors.length;
-      var lastSplitAreaColors = inner$5(axisView).splitAreaColors;
+      var lastSplitAreaColors = inner$6(axisView).splitAreaColors;
       var newSplitAreaColors = createHashMap();
       var colorIndex = 0;
 
@@ -43062,10 +45438,10 @@
         colorIndex = (colorIndex + 1) % areaColorsLen;
       }
 
-      inner$5(axisView).splitAreaColors = newSplitAreaColors;
+      inner$6(axisView).splitAreaColors = newSplitAreaColors;
     }
     function rectCoordAxisHandleRemove(axisView) {
-      inner$5(axisView).splitAreaColors = null;
+      inner$6(axisView).splitAreaColors = null;
     }
 
     var axisBuilderAttrs = ['axisLine', 'axisTickLabel', 'axisName'];
@@ -43125,8 +45501,15 @@
           if (axisModel.get([name, 'show'])) {
             axisElementBuilders[name](this, this._axisGroup, axisModel, gridModel);
           }
-        }, this);
-        groupTransition(oldAxisGroup, this._axisGroup, axisModel);
+        }, this); // THIS is a special case for bar racing chart.
+        // Update the axis label from the natural initial layout to
+        // sorted layout should has no animation.
+
+        var isInitialSortFromBarRacing = payload && payload.type === 'changeAxisOrder' && payload.isInitSort;
+
+        if (!isInitialSortFromBarRacing) {
+          groupTransition(oldAxisGroup, this._axisGroup, axisModel);
+        }
 
         _super.prototype.render.call(this, axisModel, ecModel, api, payload);
       };
@@ -43340,7 +45723,7 @@
         show: false
       }
     };
-    var inner$6 = makeInner();
+    var inner$7 = makeInner();
     var decalPaletteScope = {};
     function ariaVisual(ecModel, api) {
       var ariaModel = ecModel.getModel('aria'); // See "area enabled" detection code in `GlobalModel.ts`.
@@ -43364,7 +45747,7 @@
           // Pie and funnel are using diferrent scopes
           var paletteScopeGroupByType_1 = createHashMap();
           ecModel.eachSeries(function (seriesModel) {
-            if (!seriesModel.useColorPaletteOnData) {
+            if (seriesModel.isColorBySeries()) {
               return;
             }
 
@@ -43375,7 +45758,7 @@
               paletteScopeGroupByType_1.set(seriesModel.type, decalScope);
             }
 
-            inner$6(seriesModel).scope = decalScope;
+            inner$7(seriesModel).scope = decalScope;
           });
           ecModel.eachRawSeries(function (seriesModel) {
             if (ecModel.isSeriesFiltered(seriesModel)) {
@@ -43390,10 +45773,10 @@
 
             var data = seriesModel.getData();
 
-            if (seriesModel.useColorPaletteOnData) {
+            if (!seriesModel.isColorBySeries()) {
               var dataAll_1 = seriesModel.getRawData();
               var idxMap_1 = {};
-              var decalScope_1 = inner$6(seriesModel).scope;
+              var decalScope_1 = inner$7(seriesModel).scope;
               data.each(function (idx) {
                 var rawIdx = data.getRawIndex(idx);
                 idxMap_1[rawIdx] = idx;
@@ -43637,7 +46020,7 @@
     exports.ChartView = ChartView;
     exports.ComponentModel = ComponentModel;
     exports.ComponentView = ComponentView;
-    exports.List = List;
+    exports.List = SeriesData;
     exports.Model = Model;
     exports.PRIORITY = PRIORITY;
     exports.SeriesModel = SeriesModel;
@@ -43678,6 +46061,7 @@
     exports.registerProcessor = registerProcessor;
     exports.registerTheme = registerTheme;
     exports.registerTransform = registerTransform;
+    exports.registerUpdateLifecycle = registerUpdateLifecycle;
     exports.registerVisual = registerVisual;
     exports.setCanvasCreator = setCanvasCreator;
     exports.throttle = throttle;
