@@ -23,18 +23,18 @@ import * as componentUtil from '../util/component';
 import * as clazzUtil from '../util/clazz';
 import * as modelUtil from '../util/model';
 import { enterEmphasis, leaveEmphasis, getHighlightDigit } from '../util/states';
-import {createTask, TaskResetCallbackReturn} from '../stream/task';
+import {createTask, TaskResetCallbackReturn} from '../core/task';
 import createRenderPlanner from '../chart/helper/createRenderPlanner';
 import SeriesModel from '../model/Series';
 import GlobalModel from '../model/Global';
-import ExtensionAPI from '../ExtensionAPI';
+import ExtensionAPI from '../core/ExtensionAPI';
 import Element from 'zrender/src/Element';
 import {
-    Payload, ViewRootGroup, ECEvent, EventQueryItem,
-    StageHandlerPlanReturn, DisplayState, StageHandlerProgressParams
+    Payload, ViewRootGroup, ECActionEvent, EventQueryItem,
+    StageHandlerPlanReturn, DisplayState, StageHandlerProgressParams, ECElementEvent
 } from '../util/types';
-import { SeriesTaskContext, SeriesTask } from '../stream/Scheduler';
-import List from '../data/List';
+import { SeriesTaskContext, SeriesTask } from '../core/Scheduler';
+import SeriesData from '../data/SeriesData';
 
 const inner = modelUtil.makeInner<{
     updateMethod: keyof ChartView
@@ -90,7 +90,7 @@ interface ChartView {
      * Implement it if needed.
      */
     filterForExposedEvent(
-        eventType: string, query: EventQueryItem, targetEl: Element, packedEvent: ECEvent
+        eventType: string, query: EventQueryItem, targetEl: Element, packedEvent: ECActionEvent | ECElementEvent
     ): boolean;
 }
 class ChartView {
@@ -206,7 +206,7 @@ function elSetState(el: Element, state: DisplayState, highlightDigit: number) {
     }
 }
 
-function toggleHighlight(data: List, payload: Payload, state: DisplayState) {
+function toggleHighlight(data: SeriesData, payload: Payload, state: DisplayState) {
     const dataIndex = modelUtil.queryDataIndex(data, payload);
 
     const highlightDigit = (payload && payload.highlightKey != null)
@@ -230,7 +230,7 @@ export type ChartViewConstructor = typeof ChartView
     & clazzUtil.ClassManager;
 
 clazzUtil.enableClassExtend(ChartView as ChartViewConstructor, ['dispose']);
-clazzUtil.enableClassManagement(ChartView as ChartViewConstructor, {registerWhenExtend: true});
+clazzUtil.enableClassManagement(ChartView as ChartViewConstructor);
 
 
 function renderTaskPlan(context: SeriesTaskContext): StageHandlerPlanReturn {

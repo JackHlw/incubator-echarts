@@ -18,14 +18,14 @@
 */
 
 import MarkerModel, { MarkerOption, MarkerPositionOption } from './MarkerModel';
-import ComponentModel from '../../model/Component';
 import GlobalModel from '../../model/Global';
 import {
     SymbolOptionMixin,
     ItemStyleOption,
     SeriesLabelOption,
     CallbackDataParams,
-    StatesOptionMixin
+    StatesOptionMixin,
+    StatesMixinBase
 } from '../../util/types';
 
 // interface MarkPointCallbackDataParams extends CallbackDataParams {
@@ -38,7 +38,7 @@ interface MarkPointStateOption {
     label?: SeriesLabelOption
 }
 export interface MarkPointDataItemOption extends
-    MarkPointStateOption, StatesOptionMixin<MarkPointStateOption>,
+    MarkPointStateOption, StatesOptionMixin<MarkPointStateOption, StatesMixinBase>,
     // TODO should not support callback in data
     SymbolOptionMixin<CallbackDataParams>,
     MarkerPositionOption {
@@ -47,7 +47,8 @@ export interface MarkPointDataItemOption extends
 
 export interface MarkPointOption extends MarkerOption,
     SymbolOptionMixin<CallbackDataParams>,
-    StatesOptionMixin<MarkPointStateOption>, MarkPointStateOption {
+    StatesOptionMixin<MarkPointStateOption, StatesMixinBase>, MarkPointStateOption {
+    mainType?: 'markPoint'
 
     precision?: number
 
@@ -91,7 +92,5 @@ class MarkPointModel extends MarkerModel<MarkPointOption> {
         }
     };
 }
-
-ComponentModel.registerClass(MarkPointModel);
 
 export default MarkPointModel;

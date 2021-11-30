@@ -12,7 +12,7 @@ This pull request is in the type of:
 
 ### What does this PR do?
 
-<!-- USE ONCE SENTENCE TO DESCRIBE WHAT THIS PR DOES. -->
+<!-- USE ONE SENTENCE TO DESCRIBE WHAT THIS PR DOES. -->
 
 
 
@@ -41,19 +41,16 @@ This pull request is in the type of:
 
 
 
-## Usage
+## Misc
 
-### Are there any API changes?
+<!-- ADD RELATED ISSUE ID WHEN APPLICABLE -->
 
-- [ ] The API has been changed.
-
-<!-- LIST THE API CHANGES HERE -->
-
-
+- [ ] The API has been changed (apache/echarts-doc#xxx).
+- [ ] This PR depends on ZRender changes (ecomfe/zrender#xxx).
 
 ### Related test cases or examples to use the new APIs
 
-NA.
+N.A.
 
 
 
@@ -61,6 +58,6 @@ NA.
 
 ### Merging options
 
-- [ ] Please squash the commits into a single one when merge.
+- [ ] Please squash the commits into a single one when merging.
 
 ### Other information

@@ -19,12 +19,12 @@
 */
 
 import WeakMap from 'zrender/src/core/WeakMap';
-import { PatternObject } from 'zrender/src/graphic/Pattern';
+import { ImagePatternObject, PatternObject, SVGPatternObject } from 'zrender/src/graphic/Pattern';
 import LRU from 'zrender/src/core/LRU';
 import {defaults, createCanvas, map, isArray} from 'zrender/src/core/util';
 import {getLeastCommonMultiple} from './number';
 import {createSymbol} from './symbol';
-import ExtensionAPI from '../ExtensionAPI';
+import ExtensionAPI from '../core/ExtensionAPI';
 import type SVGPainter from 'zrender/src/svg/Painter';
 import { brushSingle } from 'zrender/src/canvas/graphic';
 import {DecalDashArrayX, DecalDashArrayY, InnerDecalObject, DecalObject} from './types';
@@ -117,8 +117,8 @@ export function createOrUpdatePatternFromDecal(
             cacheKey = keys.join(',') + (isSVG ? '-svg' : '');
             const cache = decalCache.get(cacheKey);
             if (cache) {
-                isSVG ? pattern.svgElement = cache as SVGElement
-                    : pattern.image = cache as HTMLCanvasElement;
+                isSVG ? (pattern as SVGPatternObject).svgElement = cache as SVGElement
+                    : (pattern as ImagePatternObject).image = cache as HTMLCanvasElement;
             }
         }
 
@@ -143,10 +143,10 @@ export function createOrUpdatePatternFromDecal(
             decalCache.put(cacheKey, canvas || svgRoot);
         }
 
-        pattern.image = canvas;
-        pattern.svgElement = svgRoot;
-        pattern.svgWidth = pSize.width;
-        pattern.svgHeight = pSize.height;
+        (pattern as ImagePatternObject).image = canvas;
+        (pattern as SVGPatternObject).svgElement = svgRoot;
+        (pattern as SVGPatternObject).svgWidth = pSize.width;
+        (pattern as SVGPatternObject).svgHeight = pSize.height;
 
         /**
          * Get minumum length that can make a repeatable pattern.

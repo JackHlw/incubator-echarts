@@ -30,9 +30,10 @@ import {
 import {AxisPointerOption} from '../axisPointer/AxisPointerModel';
 
 
-type TopLevelFormatterParams = CallbackDataParams | CallbackDataParams[];
+export type TopLevelFormatterParams = CallbackDataParams | CallbackDataParams[];
 
 export interface TooltipOption extends CommonTooltipOption<TopLevelFormatterParams>, ComponentOption {
+    mainType?: 'tooltip'
 
     axisPointer?: AxisPointerOption & {
         axis?: 'auto' | 'x' | 'y' | 'angle' | 'radius'
@@ -173,7 +174,5 @@ class TooltipModel extends ComponentModel<TooltipOption> {
         }
     };
 }
-
-ComponentModel.registerClass(TooltipModel);
 
 export default TooltipModel;

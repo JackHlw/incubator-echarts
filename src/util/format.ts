@@ -82,7 +82,7 @@ export function makeValueReadable(
     valueType: DimensionType,
     useUTC: boolean
 ): string {
-    const USER_READABLE_DEFUALT_TIME_PATTERN = 'yyyy-MM-dd hh:mm:ss';
+    const USER_READABLE_DEFUALT_TIME_PATTERN = '{yyyy}-{MM}-{dd} {hh}:{mm}:{ss}';
 
     function stringToUserReadable(str: string): string {
         return (str && zrUtil.trim(str)) ? str : '-';
@@ -117,6 +117,8 @@ export function makeValueReadable(
         ? addCommas(numericResult)
         : zrUtil.isStringSafe(value)
         ? stringToUserReadable(value)
+        : typeof value === 'boolean'
+        ? value + ''
         : '-';
 }
 
@@ -260,7 +262,7 @@ export function getTooltipMarker(inOpt: ColorString | GetTooltipMarkerOpt, extra
  *           and `module:echarts/util/number#parseDate`.
  * @inner
  */
-export function formatTime(tpl: string, value: unknown, isUTC: boolean) {
+export function formatTime(tpl: string, value: unknown, isUTC?: boolean) {
     if (__DEV__) {
         deprecateReplaceLog('echarts.format.formatTime', 'echarts.time.format');
     }
@@ -334,6 +336,7 @@ export {truncateText} from 'zrender/src/graphic/helper/parseText';
  * @param target blank or self
  */
 export function windowOpen(link: string, target: string): void {
+    /* global window */
     if (target === '_blank' || target === 'blank') {
         const blank = window.open();
         blank.opener = null;
