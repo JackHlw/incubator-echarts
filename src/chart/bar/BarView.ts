@@ -880,8 +880,17 @@ const getLayout: {
     cartesian2d(data, dataIndex, itemModel?): RectLayout {
         const layout = data.getItemLayout(dataIndex) as RectLayout;
         const fixedLineWidth = itemModel ? getLineWidth(itemModel, layout) : 0;
-
         // fix layout with lineWidth
+        //xsy-bi源码修改点： 偶现数据layout取值undefined
+        if (layout === undefined) {
+            return {
+                x: 0,
+                y: 0,
+                width: 0,
+                height: 0
+            }
+        }
+        //xsy-bi源码修改点：偶现数据layout取值undefined
         const signX = layout.width > 0 ? 1 : -1;
         const signY = layout.height > 0 ? 1 : -1;
         return {
