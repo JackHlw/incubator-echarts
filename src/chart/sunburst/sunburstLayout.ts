@@ -21,7 +21,7 @@ import { parsePercent } from '../../util/number';
 import * as zrUtil from 'zrender/src/core/util';
 import GlobalModel from '../../model/Global';
 import ExtensionAPI from '../../core/ExtensionAPI';
-import SunburstSeriesModel, { SunburstSeriesNodeItemOption, SunburstSeriesOption } from './SunburstSeries';
+import SunburstSeriesModel, { SunburstSeriesOption } from './SunburstSeries';
 import { TreeNode } from '../../data/Tree';
 import SeriesModel from '../../model/Series';
 
@@ -124,7 +124,7 @@ export default function sunburstLayout(
                 if (levelModel) {
                     let r0 = levelModel.get('r0', true);
                     let r = levelModel.get('r', true);
-                    let radius = levelModel.get('radius', true);
+                    const radius = levelModel.get('radius', true);
 
                     if (radius != null) {
                         r0 = radius[0];
@@ -205,7 +205,7 @@ function initChildren(node: TreeNode, sortOrder?: SunburstSeriesOption['sort']) 
  *                                   See SunburstSeries.js for details.
  */
 function sort(children: TreeNode[], sortOrder: SunburstSeriesOption['sort']) {
-    if (typeof sortOrder === 'function') {
+    if (zrUtil.isFunction(sortOrder)) {
         const sortTargets = zrUtil.map(children, (child, idx) => {
             const value = child.getValue() as number;
             return {

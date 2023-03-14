@@ -159,7 +159,7 @@ class DataZoomModel<Opts extends DataZoomOption = DataZoomOption> extends Compon
 
 
     static defaultOption: DataZoomOption = {
-        zlevel: 0,
+        // zlevel: 0,
         z: 4,                   // Higher than normal component (z: 2).
 
         filterMode: 'filter',
@@ -234,7 +234,7 @@ class DataZoomModel<Opts extends DataZoomOption = DataZoomOption> extends Compon
     mergeOption(newOption: Opts): void {
         const inputRawOption = retrieveRawOption(newOption);
 
-        //FIX #2591
+        // FIX #2591
         merge(this.option, newOption, true);
         merge(this.settledOption, inputRawOption, true);
 
@@ -243,10 +243,6 @@ class DataZoomModel<Opts extends DataZoomOption = DataZoomOption> extends Compon
 
     private _doInit(inputRawOption: Opts): void {
         const thisOption = this.option;
-
-        // if (!env.canvasSupported) {
-        //     thisOption.realtime = false;
-        // }
 
         this._setDefaultThrottle(inputRawOption);
 
@@ -295,7 +291,7 @@ class DataZoomModel<Opts extends DataZoomOption = DataZoomOption> extends Compon
             const refering = this.getReferringComponents(getAxisMainType(axisDim), MULTIPLE_REFERRING);
             // When user set axisIndex as a empty array, we think that user specify axisIndex
             // but do not want use auto mode. Because empty array may be encountered when
-            // some error occured.
+            // some error occurred.
             if (!refering.specified) {
                 return;
             }
@@ -581,8 +577,8 @@ class DataZoomModel<Opts extends DataZoomOption = DataZoomOption> extends Compon
 
 }
 /**
- * Retrieve the those raw params from option, which will be cached separately.
- * becasue they will be overwritten by normalized/calculated values in the main
+ * Retrieve those raw params from option, which will be cached separately,
+ * because they will be overwritten by normalized/calculated values in the main
  * process.
  */
 function retrieveRawOption<T extends DataZoomOption>(option: T) {

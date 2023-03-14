@@ -91,40 +91,36 @@ export function enableClassExtend(rootClz: ExtendableConstructor, mandatoryMetho
         }
 
         const superClass = this;
-        // For backward compat, we both support ts class inheritance and this
-        // "extend" approach.
-        // The constructor should keep the same behavior as ts class inheritance:
-        // If this constructor/$constructor is not declared, auto invoke the super
-        // constructor.
-        // If this constructor/$constructor is declared, it is responsible for
-        // calling the super constructor.
-        function ExtendedClass(this: any, ...args: any[]) {
-            if (!proto.$constructor) {
+        let ExtendedClass: any;
 
-                if (!isESClass(superClass)) {
-                    // Will throw error if superClass is an es6 native class.
-                    superClass.apply(this, arguments);
+        if (isESClass(superClass)) {
+            ExtendedClass = class extends superClass {
+                constructor() {
+                    super(...arguments as any);
                 }
-                else {
-                    const ins = zrUtil.createObject(
-                        // @ts-ignore
-                        ExtendedClass.prototype, new superClass(...args)
-                    );
-                    return ins;
-                }
-            }
-            else {
-                proto.$constructor.apply(this, arguments);
-            }
+            };
         }
-        ExtendedClass[IS_EXTENDED_CLASS] = true;
+        else {
+            // For backward compat, we both support ts class inheritance and this
+            // "extend" approach.
+            // The constructor should keep the same behavior as ts class inheritance:
+            // If this constructor/$constructor is not declared, auto invoke the super
+            // constructor.
+            // If this constructor/$constructor is declared, it is responsible for
+            // calling the super constructor.
+            ExtendedClass = function (this: any) {
+                (proto.$constructor || superClass).apply(this, arguments);
+            };
+
+            zrUtil.inherits(ExtendedClass, this);
+        }
 
         zrUtil.extend(ExtendedClass.prototype, proto);
+        ExtendedClass[IS_EXTENDED_CLASS] = true;
 
         ExtendedClass.extend = this.extend;
         ExtendedClass.superCall = superCall;
         ExtendedClass.superApply = superApply;
-        zrUtil.inherits(ExtendedClass, this);
         ExtendedClass.superClass = superClass;
 
         return ExtendedClass as unknown as ExtendableConstructor;
@@ -132,7 +128,7 @@ export function enableClassExtend(rootClz: ExtendableConstructor, mandatoryMetho
 }
 
 function isESClass(fn: unknown): boolean {
-    return typeof fn === 'function'
+    return zrUtil.isFunction(fn)
         && /^class\s/.test(Function.prototype.toString.call(fn));
 }
 
@@ -189,12 +185,12 @@ export function enableClassCheck(target: CheckableConstructor): void {
     };
 }
 
-// superCall should have class info, which can not be fetch from 'this'.
+// superCall should have class info, which can not be fetched from 'this'.
 // Consider this case:
 // class A has method f,
 // class B inherits class A, overrides method f, f call superApply('f'),
-// class C inherits class B, do not overrides method f,
-// then when method of class C is called, dead loop occured.
+// class C inherits class B, does not override method f,
+// then when method of class C is called, dead loop occurred.
 function superCall(this: any, context: any, methodName: string, ...args: any): any {
     return this.superClass.prototype[methodName].apply(context, args);
 }
@@ -235,8 +231,8 @@ export function enableClassManagement(
      * Component model classes
      * key: componentType,
      * value:
-     *     componentClass, when componentType is 'xxx'
-     *     or Object.<subKey, componentClass>, when componentType is 'xxx.yy'
+     *     componentClass, when componentType is 'a'
+     *     or Object.<subKey, componentClass>, when componentType is 'a.b'
      */
     const storage: {
         [componentMainType: string]: (Constructor | SubclassContainer)
@@ -246,11 +242,11 @@ export function enableClassManagement(
         clz: Constructor
     ): Constructor {
 
-        // `type` should not be a "instance memeber".
+        // `type` should not be a "instance member".
         // If using TS class, should better declared as `static type = 'series.pie'`.
         // otherwise users have to mount `type` on prototype manually.
         // For backward compat and enable instance visit type via `this.type`,
-        // we stil support fetch `type` from prototype.
+        // we still support fetch `type` from prototype.
         const componentFullType = (clz as any).type || clz.prototype.type;
 
         if (componentFullType) {

@@ -302,11 +302,13 @@ export function getLayoutRect(
  * Logic:
  *     1. Scale (against origin point in parent coord)
  *     2. Rotate (against origin point in parent coord)
- *     3. Traslate (with el.position by this method)
- * So this method only fixes the last step 'Traslate', which does not affect
+ *     3. Translate (with el.position by this method)
+ * So this method only fixes the last step 'Translate', which does not affect
  * scaling and rotating.
  *
- * If be called repeatly with the same input el, the same result will be gotten.
+ * If be called repeatedly with the same input el, the same result will be gotten.
+ *
+ * Return true if the layout happened.
  *
  * @param el Should have `getBoundingRect` method.
  * @param positionInfo
@@ -339,14 +341,19 @@ export function positionElement(
     opt?: {
         hv: [1 | 0 | boolean, 1 | 0 | boolean],
         boundingMode: 'all' | 'raw'
-    }
-) {
+    },
+    out?: { x?: number, y?: number }
+): boolean {
     const h = !opt || !opt.hv || opt.hv[0];
     const v = !opt || !opt.hv || opt.hv[1];
     const boundingMode = opt && opt.boundingMode || 'all';
+    out = out || el;
+
+    out.x = el.x;
+    out.y = el.y;
 
     if (!h && !v) {
-        return;
+        return false;
     }
 
     let rect;
@@ -383,14 +390,17 @@ export function positionElement(
     const dy = v ? layoutRect.y - rect.y : 0;
 
     if (boundingMode === 'raw') {
-        el.x = dx;
-        el.y = dy;
+        out.x = dx;
+        out.y = dy;
     }
     else {
-        el.x += dx;
-        el.y += dy;
+        out.x += dx;
+        out.y += dy;
     }
-    el.markRedraw();
+    if (out === el) {
+        el.markRedraw();
+    }
+    return true;
 }
 
 /**

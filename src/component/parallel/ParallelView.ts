@@ -25,7 +25,7 @@ import { ElementEventName } from 'zrender/src/core/types';
 import { ElementEvent } from 'zrender/src/Element';
 import { ParallelAxisExpandPayload } from '../axis/parallelAxisAction';
 import { each, bind, extend } from 'zrender/src/core/util';
-import { ThrottleController, createOrUpdate } from '../../util/throttle';
+import { ThrottleController, createOrUpdate, clear } from '../../util/throttle';
 
 const CLICK_THRESHOLD = 5; // > 4
 
@@ -50,6 +50,7 @@ class ParallelView extends ComponentView {
         createOrUpdate(this, '_throttledDispatchExpand', parallelModel.get('axisExpandRate'), 'fixRate');
     }
     dispose(ecModel: GlobalModel, api: ExtensionAPI): void {
+        clear(this, '_throttledDispatchExpand');
         each(this._handlers, function (handler: ElementEventHandler, eventName) {
             api.getZr().off(eventName, handler);
         });
@@ -57,7 +58,7 @@ class ParallelView extends ComponentView {
     }
     /**
      * @internal
-     * @param {Object} [opt] If null, cancle the last action triggering for debounce.
+     * @param {Object} [opt] If null, cancel the last action triggering for debounce.
      */
     _throttledDispatchExpand(this: ParallelView, opt: Omit<ParallelAxisExpandPayload, 'type'>): void {
         this._dispatchExpand(opt);
@@ -104,7 +105,7 @@ const handlers: Partial<Record<ElementEventName, ElementEventHandler>> = {
             && (this._throttledDispatchExpand as ParallelView['_throttledDispatchExpand'] & ThrottleController)
                 .debounceNextCall(model.get('axisExpandDebounce'));
         this._throttledDispatchExpand(behavior === 'none'
-            ? null // Cancle the last trigger, in case that mouse slide out of the area quickly.
+            ? null // Cancel the last trigger, in case that mouse slide out of the area quickly.
             : {
                 axisExpandWindow: result.axisExpandWindow,
                 // Jumping uses animation, and sliding suppresses animation.

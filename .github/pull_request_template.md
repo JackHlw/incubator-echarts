@@ -12,7 +12,7 @@ This pull request is in the type of:
 
 ### What does this PR do?
 
-<!-- USE ONCE SENTENCE TO DESCRIBE WHAT THIS PR DOES. -->
+<!-- USE ONE SENTENCE TO DESCRIBE WHAT THIS PR DOES. -->
 
 
 
@@ -33,7 +33,7 @@ This pull request is in the type of:
 
 
 
-### After: How is it fixed in this PR?
+### After: How does it behave after the fixing?
 
 <!-- THE RESULT AFTER FIXING AND A SIMPLE EXPLANATION ABOUT HOW IT IS FIXED. -->
 
@@ -41,16 +41,26 @@ This pull request is in the type of:
 
 
 
-## Misc
+## Document Info
+
+One of the following should be checked.
+
+- [ ] This PR doesn't relate to document changes
+- [ ] The document should be updated later
+- [ ] The document changes have been made in apache/echarts-doc#xxx
+
 
 <!-- ADD RELATED ISSUE ID WHEN APPLICABLE -->
 
-- [ ] The API has been changed (apache/echarts-doc#xxx).
+## Misc
+
+### ZRender Changes
+
 - [ ] This PR depends on ZRender changes (ecomfe/zrender#xxx).
 
 ### Related test cases or examples to use the new APIs
 
-NA.
+N.A.
 
 
 
@@ -58,6 +68,6 @@ NA.
 
 ### Merging options
 
-- [ ] Please squash the commits into a single one when merge.
+- [ ] Please squash the commits into a single one when merging.
 
 ### Other information

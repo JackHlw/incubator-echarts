@@ -79,8 +79,8 @@ class IntervalScale<SETTING extends Dictionary<unknown> = Dictionary<unknown>> e
 
     setInterval(interval: number): void {
         this._interval = interval;
-        // Dropped auto calculated niceExtent and use user setted extent
-        // We assume user wan't to set both interval, min, max to get a better result
+        // Dropped auto calculated niceExtent and use user-set extent.
+        // We assume user wants to set both interval, min, max to get a better result.
         this._niceExtent = this._extent.slice() as [number, number];
 
         this._intervalPrecision = helper.getIntervalPrecision(interval);
@@ -215,7 +215,7 @@ class IntervalScale<SETTING extends Dictionary<unknown> = Dictionary<unknown>> e
     /**
      * @param splitNumber By default `5`.
      */
-    niceTicks(splitNumber?: number, minInterval?: number, maxInterval?: number): void {
+    calcNiceTicks(splitNumber?: number, minInterval?: number, maxInterval?: number): void {
         splitNumber = splitNumber || 5;
         const extent = this._extent;
         let span = extent[1] - extent[0];
@@ -238,7 +238,7 @@ class IntervalScale<SETTING extends Dictionary<unknown> = Dictionary<unknown>> e
         this._niceExtent = result.niceTickExtent;
     }
 
-    niceExtent(opt: {
+    calcNiceExtent(opt: {
         splitNumber: number, // By default 5.
         fixMin?: boolean,
         fixMax?: boolean,
@@ -250,7 +250,8 @@ class IntervalScale<SETTING extends Dictionary<unknown> = Dictionary<unknown>> e
         if (extent[0] === extent[1]) {
             if (extent[0] !== 0) {
                 // Expand extent
-                const expandSize = extent[0];
+                // Note that extents can be both negative. See #13154
+                const expandSize = Math.abs(extent[0]);
                 // In the fowllowing case
                 //      Axis has been fixed max 100
                 //      Plus data are all 100 and axis extent are [100, 100].
@@ -275,8 +276,7 @@ class IntervalScale<SETTING extends Dictionary<unknown> = Dictionary<unknown>> e
             extent[1] = 1;
         }
 
-        this.niceTicks(opt.splitNumber, opt.minInterval, opt.maxInterval);
-
+        this.calcNiceTicks(opt.splitNumber, opt.minInterval, opt.maxInterval);
         // let extent = this._extent;
         const interval = this._interval;
 
@@ -288,6 +288,9 @@ class IntervalScale<SETTING extends Dictionary<unknown> = Dictionary<unknown>> e
         }
     }
 
+    setNiceExtent(min: number, max: number) {
+        this._niceExtent = [min, max];
+    }
 }
 
 Scale.registerClass(IntervalScale);

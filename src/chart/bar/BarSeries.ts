@@ -27,7 +27,7 @@ import {
     SeriesSamplingOptionMixin,
     SeriesLabelOption,
     SeriesEncodeOptionMixin,
-    DefaultStatesMixinEmpasis,
+    DefaultStatesMixinEmphasis,
     CallbackDataParams
 } from '../../util/types';
 import type Cartesian2D from '../../coord/cartesian/Cartesian2D';
@@ -49,12 +49,12 @@ export interface BarStateOption<TCbParams = never> {
 }
 
 interface BarStatesMixin {
-    emphasis?: DefaultStatesMixinEmpasis
+    emphasis?: DefaultStatesMixinEmphasis
 }
 
 export interface BarItemStyleOption<TCbParams = never> extends ItemStyleOption<TCbParams> {
-    // Border radius is not supported for bar on polar
-    borderRadius?: number | number[]
+    // for polar bars, this is used for sector's cornerRadius
+    borderRadius?: (number | string)[] | number | string
 }
 export interface BarDataItemOption extends BarStateOption,
     StatesOptionMixin<BarStateOption, BarStatesMixin>,

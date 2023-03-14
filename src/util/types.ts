@@ -87,8 +87,8 @@ export type ZRStyleProps = PathStyleProps | ImageStyleProps | TSpanStyleProps | 
 export type ZRElementEventName = ElementEventName | 'globalout';
 
 // ComponentFullType can be:
-//     'xxx.yyy': means ComponentMainType.ComponentSubType.
-//     'xxx': means ComponentMainType.
+//     'a.b': means ComponentMainType.ComponentSubType.
+//     'a': means ComponentMainType.
 // See `checkClassType` check the restict definition.
 export type ComponentFullType = string;
 export type ComponentMainType = keyof ECUnitOption & string;
@@ -96,7 +96,7 @@ export type ComponentSubType = Exclude<ComponentOption['type'], undefined>;
 /**
  * Use `parseClassType` to parse componentType declaration to componentTypeInfo.
  * For example:
- * componentType declaration: 'xxx.yyy', get componentTypeInfo {main: 'xxx', sub: 'yyy'}.
+ * componentType declaration: 'a.b', get componentTypeInfo {main: 'a', sub: 'b'}.
  * componentType declaration: '', get componentTypeInfo {main: '', sub: ''}.
  */
 export interface ComponentTypeInfo {
@@ -119,8 +119,17 @@ export interface ECElement extends Element {
 
     z2EmphasisLift?: number;
     z2SelectLift?: number;
+
     /**
-     * Force disable animation on any condition
+     * Force enable animation.
+     * This property is useful when an ignored/invisible/removed element
+     * should have label animation, like the case in the bar-racing charts.
+     * `forceLabelAnimation` has higher priority than `disableLabelAnimation`.
+     */
+    forceLabelAnimation?: boolean;
+    /**
+     * Force disable animation.
+     * `forceLabelAnimation` has higher priority than `disableLabelAnimation`.
      */
     disableLabelAnimation?: boolean
     /**
@@ -351,7 +360,7 @@ export type OrdinalNumber = number; // The number mapped from each OrdinalRawVal
  * ```js
  * { ordinalNumbers: [2, 5, 3, 4] }
  * ```
- * means that ordinal 2 should be diplayed on tick 0,
+ * means that ordinal 2 should be displayed on tick 0,
  * ordinal 5 should be displayed on tick 1, ...
  */
 export type OrdinalSortInfo = {
@@ -405,7 +414,7 @@ export interface OrdinalScaleTick extends ScaleTick {
      * const coord = dataToCoord(ordinalScale.getRawOrdinalNumber(tick.value)).
      * ```
      * Why place the tick value here rather than the raw ordinal value (like LogScale did)?
-     * Becuase ordinal scale sort is the different case from LogScale, where
+     * Because ordinal scale sort is the different case from LogScale, where
      * axis tick, splitArea should better not to be sorted, especially in
      * anid(animation id) when `boundaryGap: true`.
      * Only axis label are sorted.
@@ -511,7 +520,7 @@ export type SeriesDataType = 'main' | 'node' | 'edge';
  * ```
  */
 export type ECUnitOption = {
-    // Exclude these reserverd word for `ECOption` to avoid to infer to "any".
+    // Exclude these reserved word for `ECOption` to avoid to infer to "any".
     baseOption?: unknown
     options?: unknown
     media?: unknown
@@ -752,67 +761,14 @@ export type ComponentLayoutMode = {
     type?: 'box',
     ignoreSize?: boolean | boolean[]
 };
-/******************* Mixins for Common Option Properties   ********************** */
+
+// ------------------ Mixins for Common Option Properties ------------------
 export type PaletteOptionMixin = ColorPaletteOptionMixin;
 
 export interface ColorPaletteOptionMixin {
     color?: ZRColor | ZRColor[]
     colorLayer?: ZRColor[][]
 }
-
-export interface AriaLabelOption {
-    enabled?: boolean;
-    description?: string;
-    general?: {
-        withTitle?: string;
-        withoutTitle?: string;
-    };
-    series?: {
-        maxCount?: number;
-        single?: {
-            prefix?: string;
-            withName?: string;
-            withoutName?: string;
-        };
-        multiple?: {
-            prefix?: string;
-            withName?: string;
-            withoutName?: string;
-            separator?: {
-                middle?: string;
-                end?: string;
-            }
-        }
-    };
-    data?: {
-        maxCount?: number;
-        allData?: string;
-        partialData?: string;
-        withName?: string;
-        withoutName?: string;
-        separator?: {
-            middle?: string;
-            end?: string;
-        }
-    }
-}
-
-// Extending is for compating ECharts 4
-export interface AriaOption extends AriaLabelOption {
-    mainType?: 'aria';
-
-    enabled?: boolean;
-    label?: AriaLabelOption;
-    decal?: {
-        show?: boolean;
-        decals?: DecalObject | DecalObject[];
-    };
-}
-
-export interface AriaOptionMixin {
-    aria?: AriaOption
-}
-
 /**
  * Mixin of option set to control the box layout of each component.
  */
@@ -868,6 +824,7 @@ export interface AnimationOption {
     delay?: number
     // additive?: boolean
 }
+
 /**
  * Mixin of option set to control the animation of series.
  */
@@ -920,7 +877,7 @@ export interface RoamOptionMixin {
     /**
      * Current center position.
      */
-    center?: number[]
+    center?: (number | string)[]
     /**
      * Current zoom level. Default is 1
      */
@@ -1110,8 +1067,8 @@ export interface LabelOption extends TextCommonOption {
     rich?: Dictionary<TextCommonOption>
 }
 
-export interface SeriesLabelOption extends LabelOption {
-    formatter?: string | LabelFormatterCallback<CallbackDataParams>
+export interface SeriesLabelOption<T extends CallbackDataParams = CallbackDataParams> extends LabelOption {
+    formatter?: string | LabelFormatterCallback<T>
 }
 
 /**
@@ -1160,12 +1117,12 @@ export interface SeriesLineLabelOption extends LineLabelOption {
 export interface LabelLayoutOptionCallbackParams {
     /**
      * Index of data which the label represents.
-     * It can be null if label does't represent any data.
+     * It can be null if label doesn't represent any data.
      */
     dataIndex?: number,
     /**
      * Type of data which the label represents.
-     * It can be null if label does't represent any data.
+     * It can be null if label doesn't represent any data.
      */
     dataType?: SeriesDataType,
     seriesIndex: number,
@@ -1300,6 +1257,13 @@ export interface CommonTooltipOption<FormatterParams> {
     alwaysShowContent?: boolean
 
     formatter?: string | TooltipFormatterCallback<FormatterParams>
+
+    /**
+     * Formatter of value.
+     *
+     * Will be ignored if tooltip.formatter is specified.
+     */
+    valueFormatter?: (value: OptionDataValue | OptionDataValue[]) => string
     /**
      * Absolution pixel [x, y] array. Or relative percent string [x, y] array.
      * If trigger is 'item'. position can be set to 'inside' / 'top' / 'left' / 'right' / 'bottom',
@@ -1372,7 +1336,7 @@ export type ComponentItemTooltipOption<T> = CommonTooltipOption<T> & {
 export type ComponentItemTooltipLabelFormatterParams = {
     componentType: string
     name: string
-    // properies key array like ['name']
+    // properties key array like ['name']
     $vars: string[]
 } & {
     // Other properties
@@ -1414,7 +1378,7 @@ export interface CommonAxisPointerOption {
     triggerTooltip?: boolean
 
     /**
-     * current value. When using axisPointer.handle, value can be set to define the initail position of axisPointer.
+     * current value. When using axisPointer.handle, value can be set to define the initial position of axisPointer.
      */
     value?: ScaleDataValue
 
@@ -1511,7 +1475,7 @@ export interface DefaultStatesMixin {
 
 export type DefaultEmphasisFocus = 'none' | 'self' | 'series';
 
-export interface DefaultStatesMixinEmpasis {
+export interface DefaultStatesMixinEmphasis {
     /**
      * self: Focus self and blur all others.
      * series: Focus series and blur all other series.
@@ -1543,11 +1507,18 @@ export interface StatesOptionMixin<
          * Default to be coordinate system.
          */
         blurScope?: BlurScope
+
+        /**
+         * If emphasis state is disabled.
+         */
+        disabled?: boolean
     }
     /**
      * Select states
      */
-    select?: StateOption & StatesMixin['select']
+    select?: StateOption & StatesMixin['select'] & {
+        disabled?: boolean
+    }
     /**
      * Blur states.
      */
@@ -1656,8 +1627,8 @@ export interface SeriesOption<
      * Map of selected data
      * key is name or index of data.
      */
-    selectedMap?: Dictionary<boolean>
-    selectedMode?: 'single' | 'multiple' | boolean
+    selectedMap?: Dictionary<boolean> | 'all'
+    selectedMode?: 'single' | 'multiple' | 'series' | boolean
 }
 
 export interface SeriesOnCartesianOptionMixin {
@@ -1694,6 +1665,7 @@ export interface SeriesLargeOptionMixin {
 }
 export interface SeriesStackOptionMixin {
     stack?: string
+    stackStrategy?: 'samesign' | 'all' | 'positive' | 'negative';
 }
 
 type SamplingFunc = (frame: ArrayLike<number>) => number;
@@ -1712,3 +1684,58 @@ export interface SeriesEncodeOptionMixin {
 }
 
 export type SeriesEncodableModel = SeriesModel<SeriesOption & SeriesEncodeOptionMixin>;
+
+
+// TODO Move to aria component
+export interface AriaLabelOption {
+    enabled?: boolean;
+    description?: string;
+    general?: {
+        withTitle?: string;
+        withoutTitle?: string;
+    };
+    series?: {
+        maxCount?: number;
+        single?: {
+            prefix?: string;
+            withName?: string;
+            withoutName?: string;
+        };
+        multiple?: {
+            prefix?: string;
+            withName?: string;
+            withoutName?: string;
+            separator?: {
+                middle?: string;
+                end?: string;
+            }
+        }
+    };
+    data?: {
+        maxCount?: number;
+        allData?: string;
+        partialData?: string;
+        withName?: string;
+        withoutName?: string;
+        separator?: {
+            middle?: string;
+            end?: string;
+        }
+    }
+}
+
+// Extending is for compating ECharts 4
+export interface AriaOption extends AriaLabelOption {
+    mainType?: 'aria';
+
+    enabled?: boolean;
+    label?: AriaLabelOption;
+    decal?: {
+        show?: boolean;
+        decals?: DecalObject | DecalObject[];
+    };
+}
+
+export interface AriaOptionMixin {
+    aria?: AriaOption
+}

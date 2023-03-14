@@ -18,6 +18,7 @@ under the License.
 
 
 <html>
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -28,955 +29,1306 @@ under the License.
     <script src="lib/testHelper.js"></script>
     <link rel="stylesheet" href="lib/reset.css">
 </head>
+
 <body>
-<style>
-</style>
+    <style>
+    </style>
 
 
-<div id="main0"></div>
-<div id="main1"></div>
-<div id="main2"></div>
-<div id="main3"></div>
+    <div id="main0"></div>
+    <div id="main1"></div>
+    <div id="main2"></div>
+    <div id="main3"></div>
+    <div id="main4"></div>
 
 
-<script>
+    <script>
 
-    require([
-        'echarts'
-    ], function (echarts) {
-
-        var option = {
-            "xAxis": {
-                type: 'value'
-            },
-            "yAxis": {
-                type: 'category',
-                data: ["审批通过", "审批中", "撤回", "凑数据的审批", "凑数据的审批中", "凑数据的撤回"]
-            },
-            "legend": {
-                "tooltip": {
-                    "show": false
-                }
-            },
-            dataZoom: [],
-            "series": [{
-                "type": "bar",
-                "stack": "all",
-                groupOrder:'desc',
-                "data": [8203, 3489, 9034, 1470, 1344, 6230],
-                barMinHeight: 10,
-                label: {
-                    show: true
+        require([
+            'echarts'
+        ], function (echarts) {
+            var option = {
+                "xAxis": {
+                    type: 'value'
                 },
-                "name": "zly13"
-            }, {
-                "type": "bar",
-                "stack": "all",
-                groupOrder:'desc',
-                label: {
-                    show: true
+                "yAxis": {
+                    type: 'category',
+                    data: ["审批通过", "审批中", "撤回", "凑数据的审批", "凑数据的审批中", "凑数据的撤回"]
                 },
-                "data":  [1803, 2349, 2903, 10470, 1344, 63030],
-                "name": "zly0031"
-            },
+                "legend": {
+                    "tooltip": {
+                        "show": false
+                    }
+                },
+                dataZoom: [],
+                "series": [{
+                    "type": "bar",
+                    "stack": "all",
+                    groupOrder: 'desc',
+                    "data": [8203, 3489, 9034, 1470, 1344, 6230],
+                    barMinHeight: 10,
+                    label: {
+                        show: true
+                    },
+                    "name": "zly13"
+                }, {
+                    "type": "bar",
+                    "stack": "all",
+                    groupOrder: 'desc',
+                    label: {
+                        show: true
+                    },
+                    "data": [1803, 2349, 2903, 10470, 1344, 63030],
+                    "name": "zly0031"
+                },
                 {
                     "type": "bar",
                     "stack": "all",
-                    groupOrder:'desc',
+                    groupOrder: 'desc',
                     label: {
                         show: true
                     },
-                    "data":  [18203, 23489, 2934, 1049, 13174, 633],
+                    "data": [18203, 23489, 2934, 1049, 13174, 633],
                     "name": "zly00312"
                 }
-            ],
-            "grid": {
-                "top": "65px",
-                "bottom": "10%",
-                "normalBottom": "10%",
-                "dataZoomBottom": "90px",
-                "containLabel": true
-            }
-        };
-        var option = {"title":{"text":"","show":false,"left":16,"textStyle":{"fontSize":14}},"tooltip":{"trigger":"item","axisPointer":{"type":"shadow"},"textStyle":{"color":"#182437"},"confine":true,"extraCssText":"max-width: 300px; word-break:break-all; white-space: normal"},"xAxis":{"triggerEvent":true,"data":["PM验收门店","北京SK大厦店","便利店","导购测试店2","导购测试店5","华中店","零食角","请勿点击","育华1店"],"axisLabel":{"show":true},"nameTextStyle":{"color":"#6A7280"},"show":true,"nameLocation":"middle","nameGap":30,"axisLine":{"show":true},"splitLine":{"show":true},"name":"门店名称"},"yAxis":{"nameTextStyle":{"color":"#6A7280"},"axisLine":{"show":false},"nameLocation":"end","axisLabel":{"show":true},"splitLine":{"show":false},"name":"商品成本金额"},"legend":{"show":true,"left":"30px","right":"20px","bottom":"15px","normalBottom":"15px","dataZoomBottom":"15px","type":"scroll","itemWidth":10,"itemHeight":10,"itemGap":20,"data":["1","7","3","2","5"],"pageIconColor":"#4E80F5"},"dataZoom":[{"type":"slider","show":false,"xAxisIndex":[0],"start":0,"end":100,"bottom":"55px","bottomFixedValues":[0]},{"type":"inside","xAxisIndex":[0],"start":0,"end":100,"disabled":true}],"grid":{"top":"50px","left":"20px","bottom":"70px","right":"20px","normalBottom":"70px","dataZoomBottom":"120px","containLabel":true,"bottomFixedValues":[0]},"series":[{"type":"bar","data":[{"value":["PM验收门店",436],"id":[null,null]},{"value":["北京SK大厦店",189.4],"id":[null,null]},null,{"value":["导购测试店2",730],"id":[null,null]},{"value":["导购测试店5",900],"id":[null,null]},{"value":["华中店",133.6],"id":[null,null]},null,null,{"value":["育华1店",91],"id":[null,null]}],"barGap":"10%","barMaxWidth":"120px","label":{"position":"top","fontWeight":"bold","show":true},"labelLayout":{"hideOverlap":false},"emphasis":{"focus":"series","blurScope":"coordinateSystem"},"tooltip":{},"barMinHeight":1,"name":"1","seriesDimensionId":null},{"type":"bar","data":[null,{"value":["北京SK大厦店",76],"id":[null,null]},null,null,null,null,{"value":["零食角",43.64],"id":[null,null]},null,null],"barGap":"10%","barMaxWidth":"120px","label":{"position":"top","fontWeight":"bold","show":true},"labelLayout":{"hideOverlap":false},"emphasis":{"focus":"series","blurScope":"coordinateSystem"},"tooltip":{},"barMinHeight":1,"name":"7","seriesDimensionId":null},{"type":"bar","data":[null,null,{"value":["便利店",158.15],"id":[null,null]},null,null,null,null,null,null],"barGap":"10%","barMaxWidth":"120px","label":{"position":"top","fontWeight":"bold","show":true},"labelLayout":{"hideOverlap":false},"emphasis":{"focus":"series","blurScope":"coordinateSystem"},"tooltip":{},"barMinHeight":1,"name":"3","seriesDimensionId":null},{"type":"bar","data":[null,null,{"value":["便利店",265.24],"id":[null,null]},null,null,null,null,null,null],"barGap":"10%","barMaxWidth":"120px","label":{"position":"top","fontWeight":"bold","show":true},"labelLayout":{"hideOverlap":false},"emphasis":{"focus":"series","blurScope":"coordinateSystem"},"tooltip":{},"barMinHeight":1,"name":"2","seriesDimensionId":null},{"type":"bar","data":[null,null,null,null,null,null,null,{"value":["请勿点击",60.82],"id":[null,null]},null],"barGap":"10%","barMaxWidth":"120px","label":{"position":"top","fontWeight":"bold","show":true},"labelLayout":{"hideOverlap":false},"emphasis":{"focus":"series","blurScope":"coordinateSystem"},"tooltip":{},"barMinHeight":1,"name":"5","seriesDimensionId":null}]}
-        testHelper.create(echarts, 'main0', {
-            title: 'Sort within group of stacked histogram',
-            option: option
+                ],
+                "grid": {
+                    "top": "65px",
+                    "bottom": "10%",
+                    "normalBottom": "10%",
+                    "dataZoomBottom": "90px",
+                    "containLabel": true
+                }
+            };
+
+            testHelper.create(echarts, 'main0', {
+                title: 'Sort within group of stacked histogram',
+                option: option
+            });
         });
-    });
 
-</script>
-<script>
+    </script>
+    <script>
 
-    require([
-        'echarts'
-    ], function (echarts) {
+        require([
+            'echarts'
+        ], function (echarts) {
+            var option = {
+                "xAxis": {
+                    type: 'value'
+                },
+                "yAxis": {
+                    type: 'category',
+                    data: ["审批通过", "审批中", "撤回", "凑数据的审批", "凑数据的审批中", "凑数据的撤回"]
+                },
+                "legend": {
+                    "tooltip": {
+                        "show": false
+                    }
+                },
+                dataZoom: [],
+                "series": [{
+                    "type": "bar",
+                    groupOrder: 'desc',
+                    "data": [8203, 3489, 9034, 1470, 1344, 6230],
+                    barMinHeight: 10,
+                    label: {
+                        show: true
+                    },
+                    "name": "zly13"
+                }, {
+                    "type": "bar",
+                    groupOrder: 'desc',
+                    label: {
+                        show: true
+                    },
+                    "data": [1803, 2349, 2903, 10470, 1344, 63030],
+                    "name": "zly0031"
+                },
+                {
+                    "type": "bar",
+                    groupOrder: 'desc',
+                    label: {
+                        show: true
+                    },
+                    "data": [18203, 23489, 2934, 1049, 13174, 633],
+                    "name": "zly00312"
+                }
+                ],
+                "grid": {
+                    "top": "65px",
+                    "bottom": "10%",
+                    "normalBottom": "10%",
+                    "dataZoomBottom": "90px",
+                    "containLabel": true
+                }
+            };
+            testHelper.create(echarts, 'main1', {
+                title: 'Sort within group of histogram',
+                option: option
+            });
+        });
 
-        var option = {
-            "xAxis": {
-                type: 'value'
-            },
-            "yAxis": {
-                type: 'category',
-                data: ["审批通过", "审批中", "撤回", "凑数据的审批", "凑数据的审批中", "凑数据的撤回"]
-            },
-            "legend": {
+    </script>
+    <script>
+        require([
+            'echarts'
+        ], function (echarts) {
+            var option = {
                 "tooltip": {
-                    "show": false
-                }
-            },
-            dataZoom: [],
-            "series": [{
-                "type": "bar",
-                groupOrder:'desc',
-                "data": [8203, 3489, 9034, 1470, 1344, 6230],
-                barMinHeight: 10,
-                label: {
-                    show: true
+                    "trigger": "axis"
                 },
-                "name": "zly13"
-            }, {
-                "type": "bar",
-                groupOrder:'desc',
-                label: {
-                    show: true
+                "xAxis": {
+                    "data": [
+                        "",
+                        "Good",
+                        "Slightly polluted",
+                        "Excellent",
+                        "Medially polluted",
+                        "Severely polluted"
+                    ]
                 },
-                "data":  [1803, 2349, 2903, 10470, 1344, 63030],
-                "name": "zly0031"
-            },
-                {
-                    "type": "bar",
-                    groupOrder:'desc',
-                    label: {
-                        show: true
+                "yAxis": {
+                },
+                grid: {
+                    right: 200
+                },
+                "series": [
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Clear",
+                        "data": [
+                            [
+                                "",
+                                48
+                            ],
+                            [
+                                "Good",
+                                41.38805970149254
+                            ],
+                            [
+                                "Slightly polluted",
+                                58.78378378378378
+                            ],
+                            [
+                                "Excellent",
+                                21.5
+                            ],
+                            [
+                                "Medially polluted",
+                                64.66666666666667
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
                     },
-                    "data":  [18203, 23489, 2934, 1049, 13174, 633],
-                    "name": "zly00312"
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Cloudy",
+                        "data": [
+                            [
+                                "Good",
+                                41.49246231155779
+                            ],
+                            [
+                                "Slightly polluted",
+                                62.5
+                            ],
+                            [
+                                "Excellent",
+                                22.38888888888889
+                            ],
+                            [
+                                "Medially polluted",
+                                63.25
+                            ],
+                            [
+                                "Severely polluted",
+                                85.66666666666667
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Overcast",
+                        "data": [
+                            [
+                                "Good",
+                                39.73170731707317
+                            ],
+                            [
+                                "Excellent",
+                                22.93548387096774
+                            ],
+                            [
+                                "Slightly polluted",
+                                64.75
+                            ],
+                            [
+                                "Medially polluted",
+                                121.5
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Light rain",
+                        "data": [
+                            [
+                                "Slightly polluted",
+                                60.09090909090909
+                            ],
+                            [
+                                "Good",
+                                39.15277777777778
+                            ],
+                            [
+                                "Excellent",
+                                19.822222222222223
+                            ],
+                            [
+                                "Severely polluted",
+                                82
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Moderate to heavy rain",
+                        "data": [
+                            [
+                                "Excellent",
+                                20.2
+                            ],
+                            [
+                                "Good",
+                                33.875
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Fog",
+                        "data": [
+                            [
+                                "Medially polluted",
+                                123.5
+                            ],
+                            [
+                                "Slightly polluted",
+                                105.5
+                            ],
+                            [
+                                "Good",
+                                71
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Moderate rain",
+                        "data": [
+                            [
+                                "Excellent",
+                                19.125
+                            ],
+                            [
+                                "Good",
+                                30.071428571428573
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Shower",
+                        "data": [
+                            [
+                                "Excellent",
+                                21.571428571428573
+                            ],
+                            [
+                                "Good",
+                                37.523809523809526
+                            ],
+                            [
+                                "Slightly polluted",
+                                69.33333333333333
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Thundershower",
+                        "data": [
+                            [
+                                "Good",
+                                31.17241379310345
+                            ],
+                            [
+                                "Excellent",
+                                20.6
+                            ],
+                            [
+                                "Slightly polluted",
+                                43.75
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Heavy rain",
+                        "data": [
+                            [
+                                "Excellent",
+                                23.142857142857142
+                            ],
+                            [
+                                "Good",
+                                30.285714285714285
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Rainstorm",
+                        "data": [
+                            [
+                                "Excellent",
+                                19.142857142857142
+                            ],
+                            [
+                                "Good",
+                                31.083333333333332
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Slight to moderate rain",
+                        "data": [
+                            [
+                                "Good",
+                                33.23529411764706
+                            ],
+                            [
+                                "Excellent",
+                                18.857142857142858
+                            ],
+                            [
+                                "Slightly polluted",
+                                53
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        "stack": "WEATHER1",
+                        groupOrder: 'asc',
+                        "name": "Heavy rain to rainstorm",
+                        "data": [
+                            [
+                                "Excellent",
+                                18
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    }
+                ],
+                "legend": {
+                    orient: 'vertical',
+                    right: 10
                 }
-            ],
-            "grid": {
-                "top": "65px",
-                "bottom": "10%",
-                "normalBottom": "10%",
-                "dataZoomBottom": "90px",
-                "containLabel": true
             }
-        };
-        var option = {"title":{"text":"","show":false,"left":16,"textStyle":{"fontSize":14}},"tooltip":{"trigger":"item","axisPointer":{"type":"shadow"},"textStyle":{"color":"#182437"},"confine":true,"extraCssText":"max-width: 300px; word-break:break-all; white-space: normal"},"xAxis":{"triggerEvent":true,"data":["2022-01-04","2022-01-05","2022-01-06","2022-01-07","2022-01-08","2022-01-10","2022-01-11","2022-01-12","2022-01-13","2022-01-14","2022-01-15","2022-01-17","2022-01-18","2022-01-19","2022-01-20","2022-01-21","2022-01-22","2022-01-24","2022-01-25","2022-01-26","2022-01-27","2022-01-28","2022-01-29","2022-01-30","2022-02-07","2022-02-08","2022-02-09","2022-02-10","2022-02-11","2022-02-12","2022-02-14","2022-02-15","2022-02-16","2022-02-17","2022-02-18","2022-02-19","2022-02-21","2022-02-22","2022-02-23","2022-02-24","2022-02-25","2022-02-26","2022-02-27","2022-02-28","2022-03-01","2022-03-02","2022-03-03"],"axisLabel":{"show":true},"nameTextStyle":{"color":"#6A7280"},"show":true,"nameLocation":"middle","nameGap":30,"axisLine":{"show":true},"splitLine":{"show":true},"name":"订单生成时间"},"yAxis":{"nameTextStyle":{"color":"#6A7280"},"axisLine":{"show":true},"nameLocation":"end","axisLabel":{"show":true},"splitLine":{"show":true},"name":"商品成交数量"},"legend":{"show":true,"left":"30px","right":"20px","bottom":"15px","normalBottom":"15px","dataZoomBottom":"15px","type":"scroll","itemWidth":10,"itemHeight":10,"itemGap":20,"data":["0"],"pageIconColor":"#4E80F5"},"dataZoom":[{"type":"slider","show":false,"xAxisIndex":[0],"start":0,"end":100,"bottom":"55px","bottomFixedValues":[0]},{"type":"inside","xAxisIndex":[0],"start":0,"end":100,"disabled":true}],"grid":{"top":"50px","left":"20px","bottom":"70px","right":"20px","normalBottom":"70px","dataZoomBottom":"120px","containLabel":true,"bottomFixedValues":[0]},"series":[{"type":"bar","data":[{"value":["2022-01-04",27],"id":[null,null]},{"value":["2022-01-05",24],"id":[null,null]},{"value":["2022-01-06",214],"id":[null,null]},{"value":["2022-01-07",128],"id":[null,null]},{"value":["2022-01-08",118],"id":[null,null]},{"value":["2022-01-10",158],"id":[null,null]},{"value":["2022-01-11",160],"id":[null,null]},{"value":["2022-01-12",221],"id":[null,null]},{"value":["2022-01-13",149],"id":[null,null]},{"value":["2022-01-14",110],"id":[null,null]},{"value":["2022-01-15",43],"id":[null,null]},{"value":["2022-01-17",149],"id":[null,null]},{"value":["2022-01-18",130],"id":[null,null]},{"value":["2022-01-19",126],"id":[null,null]},{"value":["2022-01-20",106],"id":[null,null]},{"value":["2022-01-21",115],"id":[null,null]},{"value":["2022-01-22",31],"id":[null,null]},{"value":["2022-01-24",87],"id":[null,null]},{"value":["2022-01-25",91],"id":[null,null]},{"value":["2022-01-26",132],"id":[null,null]},{"value":["2022-01-27",115],"id":[null,null]},{"value":["2022-01-28",30],"id":[null,null]},{"value":["2022-01-29",10],"id":[null,null]},{"value":["2022-01-30",3],"id":[null,null]},{"value":["2022-02-07",8],"id":[null,null]},{"value":["2022-02-08",20],"id":[null,null]},{"value":["2022-02-09",54],"id":[null,null]},{"value":["2022-02-10",4],"id":[null,null]},{"value":["2022-02-11",76],"id":[null,null]},{"value":["2022-02-12",14],"id":[null,null]},{"value":["2022-02-14",82],"id":[null,null]},{"value":["2022-02-15",77],"id":[null,null]},{"value":["2022-02-16",78],"id":[null,null]},{"value":["2022-02-17",116],"id":[null,null]},{"value":["2022-02-18",36],"id":[null,null]},{"value":["2022-02-19",13],"id":[null,null]},{"value":["2022-02-21",49],"id":[null,null]},{"value":["2022-02-22",87],"id":[null,null]},{"value":["2022-02-23",61],"id":[null,null]},{"value":["2022-02-24",58],"id":[null,null]},{"value":["2022-02-25",51],"id":[null,null]},{"value":["2022-02-26",18],"id":[null,null]},{"value":["2022-02-27",6],"id":[null,null]},{"value":["2022-02-28",60],"id":[null,null]},{"value":["2022-03-01",43],"id":[null,null]},{"value":["2022-03-02",49],"id":[null,null]},{"value":["2022-03-03",52],"id":[null,null]}],"barGap":"10%","barMaxWidth":"120px","label":{"position":"top","fontWeight":"bold","show":true},"labelLayout":{"hideOverlap":true},"emphasis":{"focus":"series","blurScope":"coordinateSystem"},"tooltip":{},"barMinHeight":1,"name":"0","seriesDimensionId":null}]}
-        testHelper.create(echarts, 'main1', {
-            title: 'Sort within group of histogram',
-            option: option
+
+            testHelper.create(echarts, 'main2', {
+                title: 'Sort within group of stacked histogram',
+                option: option,
+                height: 500
+            });
         });
-    });
 
-</script>
+    </script>
+    <script>
 
+        require([
+            'echarts'
+        ], function (echarts) {
 
-
-
-
-<script>
-
-    require([
-        'echarts'
-    ], function (echarts) {
-
-        var option = {
-            "tooltip": {
-                "trigger": "axis"
-            },
-            "xAxis": {
-                "data": [
-                    "",
-                    "Good",
-                    "Slightly polluted",
-                    "Excellent",
-                    "Medially polluted",
-                    "Severely polluted"
-                ]
-            },
-            "yAxis": {
-            },
-            grid: {
-                right: 200
-            },
-            "series": [
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Clear",
-                    "data": [
-                        [
-                            "",
-                            48
-                        ],
-                        [
-                            "Good",
-                            41.38805970149254
-                        ],
-                        [
-                            "Slightly polluted",
-                            58.78378378378378
-                        ],
-                        [
-                            "Excellent",
-                            21.5
-                        ],
-                        [
-                            "Medially polluted",
-                            64.66666666666667
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
+            var option = {
+                "tooltip": {
+                    "trigger": "axis"
                 },
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Cloudy",
+                "xAxis": {
                     "data": [
-                        [
-                            "Good",
-                            41.49246231155779
-                        ],
-                        [
-                            "Slightly polluted",
-                            62.5
-                        ],
-                        [
-                            "Excellent",
-                            22.38888888888889
-                        ],
-                        [
-                            "Medially polluted",
-                            63.25
-                        ],
-                        [
-                            "Severely polluted",
-                            85.66666666666667
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
+                        "",
+                        "Good",
+                        "Slightly polluted",
+                        "Excellent",
+                        "Medially polluted",
+                        "Severely polluted"
+                    ]
                 },
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Overcast",
-                    "data": [
-                        [
-                            "Good",
-                            39.73170731707317
-                        ],
-                        [
-                            "Excellent",
-                            22.93548387096774
-                        ],
-                        [
-                            "Slightly polluted",
-                            64.75
-                        ],
-                        [
-                            "Medially polluted",
-                            121.5
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
+                "yAxis": {
                 },
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Light rain",
-                    "data": [
-                        [
-                            "Slightly polluted",
-                            60.09090909090909
-                        ],
-                        [
-                            "Good",
-                            39.15277777777778
-                        ],
-                        [
-                            "Excellent",
-                            19.822222222222223
-                        ],
-                        [
-                            "Severely polluted",
-                            82
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
+                grid: {
+                    right: 200
                 },
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Moderate to heavy rain",
-                    "data": [
-                        [
-                            "Excellent",
-                            20.2
+                "series": [
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Clear",
+                        "data": [
+                            [
+                                "",
+                                48
+                            ],
+                            [
+                                "Good",
+                                41.38805970149254
+                            ],
+                            [
+                                "Slightly polluted",
+                                58.78378378378378
+                            ],
+                            [
+                                "Excellent",
+                                21.5
+                            ],
+                            [
+                                "Medially polluted",
+                                64.66666666666667
+                            ]
                         ],
-                        [
-                            "Good",
-                            33.875
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Cloudy",
+                        "data": [
+                            [
+                                "Good",
+                                41.49246231155779
+                            ],
+                            [
+                                "Slightly polluted",
+                                62.5
+                            ],
+                            [
+                                "Excellent",
+                                22.38888888888889
+                            ],
+                            [
+                                "Medially polluted",
+                                63.25
+                            ],
+                            [
+                                "Severely polluted",
+                                85.66666666666667
+                            ]
                         ],
-                        "y": [
-                            1
-                        ]
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Overcast",
+                        "data": [
+                            [
+                                "Good",
+                                39.73170731707317
+                            ],
+                            [
+                                "Excellent",
+                                22.93548387096774
+                            ],
+                            [
+                                "Slightly polluted",
+                                64.75
+                            ],
+                            [
+                                "Medially polluted",
+                                121.5
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Light rain",
+                        "data": [
+                            [
+                                "Slightly polluted",
+                                60.09090909090909
+                            ],
+                            [
+                                "Good",
+                                39.15277777777778
+                            ],
+                            [
+                                "Excellent",
+                                19.822222222222223
+                            ],
+                            [
+                                "Severely polluted",
+                                82
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Moderate to heavy rain",
+                        "data": [
+                            [
+                                "Excellent",
+                                20.2
+                            ],
+                            [
+                                "Good",
+                                33.875
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Fog",
+                        "data": [
+                            [
+                                "Medially polluted",
+                                123.5
+                            ],
+                            [
+                                "Slightly polluted",
+                                105.5
+                            ],
+                            [
+                                "Good",
+                                71
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Moderate rain",
+                        "data": [
+                            [
+                                "Excellent",
+                                19.125
+                            ],
+                            [
+                                "Good",
+                                30.071428571428573
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Shower",
+                        "data": [
+                            [
+                                "Excellent",
+                                21.571428571428573
+                            ],
+                            [
+                                "Good",
+                                37.523809523809526
+                            ],
+                            [
+                                "Slightly polluted",
+                                69.33333333333333
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Thundershower",
+                        "data": [
+                            [
+                                "Good",
+                                31.17241379310345
+                            ],
+                            [
+                                "Excellent",
+                                20.6
+                            ],
+                            [
+                                "Slightly polluted",
+                                43.75
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Heavy rain",
+                        "data": [
+                            [
+                                "Excellent",
+                                23.142857142857142
+                            ],
+                            [
+                                "Good",
+                                30.285714285714285
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Rainstorm",
+                        "data": [
+                            [
+                                "Excellent",
+                                19.142857142857142
+                            ],
+                            [
+                                "Good",
+                                31.083333333333332
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Slight to moderate rain",
+                        "data": [
+                            [
+                                "Good",
+                                33.23529411764706
+                            ],
+                            [
+                                "Excellent",
+                                18.857142857142858
+                            ],
+                            [
+                                "Slightly polluted",
+                                53
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
+                    },
+                    {
+                        "type": "bar",
+                        groupOrder: 'asc',
+                        "name": "Heavy rain to rainstorm",
+                        "data": [
+                            [
+                                "Excellent",
+                                18
+                            ]
+                        ],
+                        "encode": {
+                            "x": [
+                                0
+                            ],
+                            "y": [
+                                1
+                            ]
+                        }
                     }
-                },
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Fog",
-                    "data": [
-                        [
-                            "Medially polluted",
-                            123.5
-                        ],
-                        [
-                            "Slightly polluted",
-                            105.5
-                        ],
-                        [
-                            "Good",
-                            71
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Moderate rain",
-                    "data": [
-                        [
-                            "Excellent",
-                            19.125
-                        ],
-                        [
-                            "Good",
-                            30.071428571428573
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Shower",
-                    "data": [
-                        [
-                            "Excellent",
-                            21.571428571428573
-                        ],
-                        [
-                            "Good",
-                            37.523809523809526
-                        ],
-                        [
-                            "Slightly polluted",
-                            69.33333333333333
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Thundershower",
-                    "data": [
-                        [
-                            "Good",
-                            31.17241379310345
-                        ],
-                        [
-                            "Excellent",
-                            20.6
-                        ],
-                        [
-                            "Slightly polluted",
-                            43.75
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Heavy rain",
-                    "data": [
-                        [
-                            "Excellent",
-                            23.142857142857142
-                        ],
-                        [
-                            "Good",
-                            30.285714285714285
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Rainstorm",
-                    "data": [
-                        [
-                            "Excellent",
-                            19.142857142857142
-                        ],
-                        [
-                            "Good",
-                            31.083333333333332
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Slight to moderate rain",
-                    "data": [
-                        [
-                            "Good",
-                            33.23529411764706
-                        ],
-                        [
-                            "Excellent",
-                            18.857142857142858
-                        ],
-                        [
-                            "Slightly polluted",
-                            53
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    "stack": "WEATHER1",
-                    groupOrder:'asc',
-                    "name": "Heavy rain to rainstorm",
-                    "data": [
-                        [
-                            "Excellent",
-                            18
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
+                ],
+                "legend": {
+                    orient: 'vertical',
+                    right: 10
                 }
-            ],
-            "legend": {
-                orient: 'vertical',
-                right: 10
             }
-        }
 
-        testHelper.create(echarts, 'main2', {
-            title: 'Sort within group of stacked histogram',
-            option: option,
-            height: 500
+            testHelper.create(echarts, 'main3', {
+                title: 'Sort within group of histogram',
+                option: option,
+                height: 500
+            });
         });
-    });
 
-</script>
-<script>
+    </script>
 
-    require([
-        'echarts'
-    ], function (echarts) {
+    <script>
 
-        var option = {
-            "tooltip": {
-                "trigger": "axis"
-            },
-            "xAxis": {
-                "data": [
-                    "",
-                    "Good",
-                    "Slightly polluted",
-                    "Excellent",
-                    "Medially polluted",
-                    "Severely polluted"
-                ]
-            },
-            "yAxis": {
-            },
-            grid: {
-                right: 200
-            },
-            "series": [
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Clear",
-                    "data": [
-                        [
-                            "",
-                            48
-                        ],
-                        [
-                            "Good",
-                            41.38805970149254
-                        ],
-                        [
-                            "Slightly polluted",
-                            58.78378378378378
-                        ],
-                        [
-                            "Excellent",
-                            21.5
-                        ],
-                        [
-                            "Medially polluted",
-                            64.66666666666667
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
+        require([
+            'echarts'
+        ], function (echarts) {
+            var option = {
+                "tooltip": {
+                    "trigger": "item",
+                    "axisPointer": {
+                        "type": "shadow"
+                    },
+                    "textStyle": {
+                        "color": "#182437"
+                    },
+                    "confine": true,
+                    "extraCssText": "max-width: 300px; word-break:break-all; white-space: normal",
+                    "formatterConfig": "gridMutiDimension"
+                },
+                label: {
+                    show: true,
+                    position: 'top'
+                },
+                "toolbox": {
+                    "show": false,
+                    "feature": {
+                        "dataZoom": {
+                            "yAxisIndex": "none"
+                        },
+                        "dataView": {
+                            "readOnly": false
+                        },
+                        "magicType": {
+                            "type": [
+                                "line",
+                                "bar",
+                                "stack",
+                                "tiled"
+                            ]
+                        },
+                        "restore": {
+
+                        },
+                        "saveAsImage": {
+
+                        }
                     }
                 },
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Cloudy",
+                "xAxis": {
+                    "triggerEvent": true,
                     "data": [
-                        [
-                            "Good",
-                            41.49246231155779
-                        ],
-                        [
-                            "Slightly polluted",
-                            62.5
-                        ],
-                        [
-                            "Excellent",
-                            22.38888888888889
-                        ],
-                        [
-                            "Medially polluted",
-                            63.25
-                        ],
-                        [
-                            "Severely polluted",
-                            85.66666666666667
-                        ]
+                        "全公司",
+                        "销售一部",
+                        "销售部"
                     ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
+                    "axisLabel": {
+
+                    },
+                    "nameTextStyle": {
+                        "color": "#6A7280"
+                    },
+                    "nameGap": 30,
+                    "nameDefault": "所属部门",
+                    "show": true,
+                    "name": "所属部门",
+                    "nameLocation": "middle"
                 },
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Overcast",
-                    "data": [
-                        [
-                            "Good",
-                            39.73170731707317
-                        ],
-                        [
-                            "Excellent",
-                            22.93548387096774
-                        ],
-                        [
-                            "Slightly polluted",
-                            64.75
-                        ],
-                        [
-                            "Medially polluted",
-                            121.5
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
+                "yAxis": {
+                    "nameTextStyle": {
+                        "color": "#6A7280"
+                    },
+                    "axisLine": {
+                        "show": false
+                    },
+                    "nameDefault": "销售机会",
+                    "axisLabel": {
+                        "formatConfig": "none"
+                    },
+                    "show": true,
+                    "name": "销售机会",
+                    "nameLocation": "end",
+                    "splitNumber": 3
                 },
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Light rain",
+                "legend": {
+                    "show": true,
                     "data": [
-                        [
-                            "Slightly polluted",
-                            60.09090909090909
-                        ],
-                        [
-                            "Good",
-                            39.15277777777778
-                        ],
-                        [
-                            "Excellent",
-                            19.822222222222223
-                        ],
-                        [
-                            "Severely polluted",
-                            82
-                        ]
+                        "--",
+                        "新兴行业",
+                        "金融",
+                        "教育",
+                        "能源",
+                        "零售"
                     ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
+                    "tooltip": {
+                        "show": false
+                    },
+                    "pageIconColor": "#4E80F5",
+                    "dataZoomBottom": "15px",
+                    "itemGap": 20,
+                    "left": "5%",
+                    "bottom": "15px",
+                    "itemHeight": 10,
+                    "normalBottom": "15px",
+                    "itemWidth": 10,
+                    "right": "5%",
+                    "type": "scroll"
                 },
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Moderate to heavy rain",
-                    "data": [
-                        [
-                            "Excellent",
-                            20.2
-                        ],
-                        [
-                            "Good",
-                            33.875
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
+                "dataZoom": [
+                    {
+                        "bottom": "55px",
+                        "xAxisIndex": [
                             0
                         ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Fog",
-                    "data": [
-                        [
-                            "Medially polluted",
-                            123.5
-                        ],
-                        [
-                            "Slightly polluted",
-                            105.5
-                        ],
-                        [
-                            "Good",
-                            71
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
+                        "show": false,
+                        "start": 0,
+                        "end": 100,
+                        "bottomFixedValues": [
                             0
                         ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Moderate rain",
-                    "data": [
-                        [
-                            "Excellent",
-                            19.125
-                        ],
-                        [
-                            "Good",
-                            30.071428571428573
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
+                        "type": "slider",
+                        "bottomFixedBaseValue": "55px"
+                    },
+                    {
+                        "disabled": true,
+                        "xAxisIndex": [
                             0
                         ],
-                        "y": [
-                            1
-                        ]
+                        "start": 0,
+                        "end": 100,
+                        "type": "inside"
                     }
-                },
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Shower",
-                    "data": [
-                        [
-                            "Excellent",
-                            21.571428571428573
+                ],
+                "series": [
+                    {
+                        "type": "bar",
+                        "data": [
+                            {
+                                "value": [
+                                    "全公司",
+                                    73
+                                ]
+                            }
                         ],
-                        [
-                            "Good",
-                            37.523809523809526
+                        "barGap": "10%",
+                        "barMaxWidth": "120px",
+                        "label": {
+                            "position": "inside",
+                            "color": "#5C6773",
+                            "fontWeight": "bold"
+                        },
+                        "labelLayout": {
+                            "hideOverlap": true
+                        },
+                        "emphasis": {
+                            "focus": "series",
+                            "blurScope": "coordinateSystem"
+                        },
+                        "tooltip": {
+
+                        },
+                        "barMinHeight": 1,
+                        "name": "--",
+                        "groupOrder": "desc"
+                    },
+                    {
+                        "type": "bar",
+                        "data": [
+                            {
+                                "value": [
+                                    "全公司",
+                                    11
+                                ]
+                            }
                         ],
-                        [
-                            "Slightly polluted",
-                            69.33333333333333
-                        ]
+                        "barGap": "10%",
+                        "barMaxWidth": "120px",
+                        "label": {
+                            "position": "inside",
+                            "color": "#5C6773",
+                            "fontWeight": "bold"
+                        },
+                        "labelLayout": {
+                            "hideOverlap": true
+                        },
+                        "emphasis": {
+                            "focus": "series",
+                            "blurScope": "coordinateSystem"
+                        },
+                        "tooltip": {
+
+                        },
+                        "barMinHeight": 1,
+                        "name": "新兴行业",
+                        "groupOrder": "desc"
+                    },
+                    {
+                        "type": "bar",
+                        "data": [
+                            {
+                                "value": [
+                                    "全公司",
+                                    6
+                                ]
+                            },
+                            {
+                                "value": [
+                                    "销售一部",
+                                    50
+                                ]
+                            },
+                            {
+                                "value": [
+                                    "销售部",
+                                    19
+                                ]
+                            }
+                        ],
+                        "barGap": "10%",
+                        "barMaxWidth": "120px",
+                        "label": {
+                            "position": "inside",
+                            "color": "#5C6773",
+                            "fontWeight": "bold"
+                        },
+                        "labelLayout": {
+                            "hideOverlap": true
+                        },
+                        "emphasis": {
+                            "focus": "series",
+                            "blurScope": "coordinateSystem"
+                        },
+                        "tooltip": {
+
+                        },
+                        "barMinHeight": 1,
+                        "name": "金融",
+                        "groupOrder": "desc"
+                    },
+                    {
+                        "type": "bar",
+                        "data": [
+                            {
+                                "value": [
+                                    "销售一部",
+                                    23
+                                ]
+                            }
+                        ],
+                        "barGap": "10%",
+                        "barMaxWidth": "120px",
+                        "label": {
+                            "position": "inside",
+                            "color": "#5C6773",
+                            "fontWeight": "bold"
+                        },
+                        "labelLayout": {
+                            "hideOverlap": true
+                        },
+                        "emphasis": {
+                            "focus": "series",
+                            "blurScope": "coordinateSystem"
+                        },
+                        "tooltip": {
+
+                        },
+                        "barMinHeight": 1,
+                        "name": "教育",
+                        "groupOrder": "desc"
+                    },
+                    {
+                        "type": "bar",
+                        "data": [
+                            {
+                                "value": [
+                                    "销售一部",
+                                    15
+                                ]
+                            },
+                            {
+                                "value": [
+                                    "销售部",
+                                    29
+                                ]
+                            }
+                        ],
+                        "barGap": "10%",
+                        "barMaxWidth": "120px",
+                        "label": {
+                            "position": "inside",
+                            "color": "#5C6773",
+                            "fontWeight": "bold"
+                        },
+                        "labelLayout": {
+                            "hideOverlap": true
+                        },
+                        "emphasis": {
+                            "focus": "series",
+                            "blurScope": "coordinateSystem"
+                        },
+                        "tooltip": {
+
+                        },
+                        "barMinHeight": 1,
+                        "name": "能源",
+                        "groupOrder": "desc"
+                    },
+                    {
+                        "type": "bar",
+                        "data": [
+                            {
+                                "value": [
+                                    "销售部",
+                                    36
+                                ]
+                            }
+                        ],
+                        "barGap": "10%",
+                        "barMaxWidth": "120px",
+                        "label": {
+                            "position": "inside",
+                            "color": "#5C6773",
+                            "fontWeight": "bold"
+                        },
+                        "labelLayout": {
+                            "hideOverlap": true
+                        },
+                        "emphasis": {
+                            "focus": "series",
+                            "blurScope": "coordinateSystem"
+                        },
+                        "tooltip": {
+
+                        },
+                        "barMinHeight": 1,
+                        "name": "零售",
+                        "groupOrder": "desc"
+                    }
+                ],
+                "grid": {
+                    "dataZoomBottom": "120px",
+                    "top": "30px",
+                    "left": "5%",
+                    "bottom": "70px",
+                    "normalBottom": "70px",
+                    "bottomFixedValues": [
+                        0
                     ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Thundershower",
-                    "data": [
-                        [
-                            "Good",
-                            31.17241379310345
-                        ],
-                        [
-                            "Excellent",
-                            20.6
-                        ],
-                        [
-                            "Slightly polluted",
-                            43.75
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Heavy rain",
-                    "data": [
-                        [
-                            "Excellent",
-                            23.142857142857142
-                        ],
-                        [
-                            "Good",
-                            30.285714285714285
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Rainstorm",
-                    "data": [
-                        [
-                            "Excellent",
-                            19.142857142857142
-                        ],
-                        [
-                            "Good",
-                            31.083333333333332
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Slight to moderate rain",
-                    "data": [
-                        [
-                            "Good",
-                            33.23529411764706
-                        ],
-                        [
-                            "Excellent",
-                            18.857142857142858
-                        ],
-                        [
-                            "Slightly polluted",
-                            53
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
-                },
-                {
-                    "type": "bar",
-                    groupOrder:'asc',
-                    "name": "Heavy rain to rainstorm",
-                    "data": [
-                        [
-                            "Excellent",
-                            18
-                        ]
-                    ],
-                    "encode": {
-                        "x": [
-                            0
-                        ],
-                        "y": [
-                            1
-                        ]
-                    }
+                    "right": "5%",
+                    "containLabel": true,
+                    "bottomFixedBaseValue": "70px"
                 }
-            ],
-            "legend": {
-                orient: 'vertical',
-                right: 10
             }
-        }
-
-        testHelper.create(echarts, 'main3', {
-            title: 'Sort within group of histogram',
-            option: option,
-            height: 500
+            testHelper.create(echarts, 'main4', {
+                title: 'Sort within group of stacked histogram',
+                option: option
+            });
         });
-    });
 
-</script>
-
+    </script>
 
 
 
 
 
 </body>
+
 </html>

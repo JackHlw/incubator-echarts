@@ -29,7 +29,8 @@ import {
     SeriesDataType,
     SeriesEncodeOptionMixin,
     OptionEncodeValue,
-    ColorBy
+    ColorBy,
+    StatesOptionMixin
 } from '../util/types';
 import ComponentModel, { ComponentModelConstructor } from './Component';
 import {PaletteMixin} from './mixin/palette';
@@ -56,6 +57,7 @@ import { defaultSeriesFormatTooltip } from '../component/tooltip/seriesFormatToo
 import {ECSymbol} from '../util/symbol';
 import {Group} from '../util/graphic';
 import {LegendIconParams} from '../component/legend/LegendModel';
+import {dimPermutations} from '../component/marker/MarkAreaView';
 
 const inner = modelUtil.makeInner<{
     data: SeriesData
@@ -71,7 +73,7 @@ export const SERIES_UNIVERSAL_TRANSITION_PROP = '__universalTransitionEnabled';
 
 interface SeriesModel {
     /**
-     * Convinient for override in extended class.
+     * Convenient for override in extended class.
      * Implement it if needed.
      */
     preventIncremental(): boolean;
@@ -98,7 +100,16 @@ interface SeriesModel {
     /**
      * Get position for marker
      */
-    getMarkerPosition(value: ScaleDataValue[]): number[];
+    getMarkerPosition(
+        value: ScaleDataValue[],
+        dims?: typeof dimPermutations[number],
+        startingAtTick?: boolean
+    ): number[];
+
+    /**
+     * Get legend icon symbol according to each series type
+     */
+    getLegendIcon(opt: LegendIconParams): ECSymbol | Group;
 
     /**
      * Get legend icon symbol according to each series type
@@ -121,7 +132,7 @@ interface SeriesModel {
 
 class SeriesModel<Opt extends SeriesOption = SeriesOption> extends ComponentModel<Opt> {
 
-    // [Caution]: Becuase this class or desecendants can be used as `XXX.extend(subProto)`,
+    // [Caution]: Because this class or desecendants can be used as `XXX.extend(subProto)`,
     // the class members must not be initialized in constructor or declaration place.
     // Otherwise there is bad case:
     //   class A {xxx = 1;}
@@ -140,7 +151,7 @@ class SeriesModel<Opt extends SeriesOption = SeriesOption> extends ComponentMode
     // @readonly
     seriesIndex: number;
 
-    // coodinateSystem will be injected in the echarts/CoordinateSystem
+    // coordinateSystem will be injected in the echarts/CoordinateSystem
     coordinateSystem: CoordinateSystem;
 
     // Injected outside
@@ -178,7 +189,6 @@ class SeriesModel<Opt extends SeriesOption = SeriesOption> extends ComponentMode
     // Props about data selection
     // ---------------------------------------
     private _selectedDataIndicesMap: Dictionary<number> = {};
-
     readonly preventUsingHoverLayer: boolean;
 
     static protoInitialize = (function () {
@@ -315,7 +325,7 @@ class SeriesModel<Opt extends SeriesOption = SeriesOption> extends ComponentMode
 
     /**
      * Init a data structure from data related option in series
-     * Must be overriden.
+     * Must be overridden.
      */
     getInitialData(option: Opt, ecModel: GlobalModel): SeriesData {
         return;
@@ -422,7 +432,7 @@ class SeriesModel<Opt extends SeriesOption = SeriesOption> extends ComponentMode
     /**
      * Get base axis if has coordinate system and has axis.
      * By default use coordSys.getBaseAxis();
-     * Can be overrided for some chart.
+     * Can be overridden for some chart.
      * @return {type} description
      */
     getBaseAxis(): Axis {
@@ -458,7 +468,10 @@ class SeriesModel<Opt extends SeriesOption = SeriesOption> extends ComponentMode
     }
 
     isAnimationEnabled(): boolean {
-        if (env.node) {
+        const ecModel = this.ecModel;
+        // Disable animation if using echarts in node but not give ssr flag.
+        // In ssr mode, renderToString will generate svg with css animation.
+        if (env.node && !(ecModel && ecModel.ssr)) {
             return false;
         }
         let animationEnabled = this.getShallow('animation');
@@ -516,7 +529,15 @@ class SeriesModel<Opt extends SeriesOption = SeriesOption> extends ComponentMode
         if (!selectedMap) {
             return;
         }
+        const selectedMode = this.option.selectedMode;
+
         const data = this.getData(dataType);
+        if (selectedMode === 'series' || selectedMap === 'all') {
+            this.option.selectedMap = {};
+            this._selectedDataIndicesMap = {};
+            return;
+        }
+
         for (let i = 0; i < innerDataIndices.length; i++) {
             const dataIndex = innerDataIndices[i];
             const nameOrId = getSelectionKey(data, dataIndex);
@@ -536,6 +557,9 @@ class SeriesModel<Opt extends SeriesOption = SeriesOption> extends ComponentMode
     }
 
     getSelectedDataIndices(): number[] {
+        if (this.option.selectedMap === 'all') {
+            return [].slice.call(this.getData().getIndices());
+        }
         const selectedDataIndicesMap = this._selectedDataIndicesMap;
         const nameOrIds = zrUtil.keys(selectedDataIndicesMap);
         const dataIndices = [];
@@ -555,8 +579,9 @@ class SeriesModel<Opt extends SeriesOption = SeriesOption> extends ComponentMode
         }
 
         const data = this.getData(dataType);
-        const nameOrId = getSelectionKey(data, dataIndex);
-        return selectedMap[nameOrId] || false;
+
+        return (selectedMap === 'all' || selectedMap[getSelectionKey(data, dataIndex)])
+            && !data.getItemModel<StatesOptionMixin<unknown, unknown>>(dataIndex).get(['select', 'disabled']);
     }
 
     isUniversalTransitionEnabled(): boolean {
@@ -579,17 +604,24 @@ class SeriesModel<Opt extends SeriesOption = SeriesOption> extends ComponentMode
     }
 
     private _innerSelect(data: SeriesData, innerDataIndices: number[]) {
-        const selectedMode = this.option.selectedMode;
+        const option = this.option;
+        const selectedMode = option.selectedMode;
         const len = innerDataIndices.length;
         if (!selectedMode || !len) {
             return;
         }
 
-        if (selectedMode === 'multiple') {
-            const selectedMap = this.option.selectedMap || (this.option.selectedMap = {});
+        if (selectedMode === 'series') {
+            option.selectedMap = 'all';
+        }
+        else if (selectedMode === 'multiple') {
+            if (!zrUtil.isObject(option.selectedMap)) {
+                option.selectedMap = {};
+            }
+            const selectedMap = option.selectedMap;
             for (let i = 0; i < len; i++) {
                 const dataIndex = innerDataIndices[i];
-                // TODO diffrent types of data share same object.
+                // TODO different types of data share same object.
                 const nameOrId = getSelectionKey(data, dataIndex);
                 selectedMap[nameOrId] = true;
                 this._selectedDataIndicesMap[nameOrId] = data.getRawIndex(dataIndex);
@@ -598,7 +630,7 @@ class SeriesModel<Opt extends SeriesOption = SeriesOption> extends ComponentMode
         else if (selectedMode === 'single' || selectedMode === true) {
             const lastDataIndex = innerDataIndices[len - 1];
             const nameOrId = getSelectionKey(data, lastDataIndex);
-            this.option.selectedMap = {
+            option.selectedMap = {
                 [nameOrId]: true
             };
             this._selectedDataIndicesMap = {
@@ -691,7 +723,7 @@ function dataTaskReset(context: SeriesTaskContext) {
 }
 
 function dataTaskProgress(param: StageHandlerProgressParams, context: SeriesTaskContext): void {
-    // Avoid repead cloneShallow when data just created in reset.
+    // Avoid repeat cloneShallow when data just created in reset.
     if (context.outputData && param.end > context.outputData.count()) {
         context.model.getRawData().cloneShallow(context.outputData);
     }

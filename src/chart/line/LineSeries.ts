@@ -48,7 +48,7 @@ type LineDataValue = OptionDataValue | OptionDataValue[];
 interface LineStateOptionMixin {
     emphasis?: {
         focus?: DefaultEmphasisFocus
-        scale?: boolean
+        scale?: boolean | number
     }
 }
 
@@ -72,8 +72,8 @@ export interface LineEndLabelOption extends SeriesLabelOption {
 
 export interface LineSeriesOption extends SeriesOption<LineStateOption<CallbackDataParams>, LineStateOptionMixin & {
     emphasis?: {
-        lineStyle?: LineStyleOption | {
-            width?: 'bolder'
+        lineStyle?: Omit<LineStyleOption, 'width'> & {
+            width?: LineStyleOption['width'] | 'bolder'
         }
         areaStyle?: AreaStyleOption
     }
@@ -101,7 +101,7 @@ export interface LineSeriesOption extends SeriesOption<LineStateOption<CallbackD
     lineStyle?: LineStyleOption
 
     areaStyle?: AreaStyleOption & {
-        origin?: 'auto' | 'start' | 'end'
+        origin?: 'auto' | 'start' | 'end' | number
     }
 
     step?: false | 'start' | 'end' | 'middle'
@@ -118,6 +118,8 @@ export interface LineSeriesOption extends SeriesOption<LineStateOption<CallbackD
     showAllSymbol?: 'auto' | boolean
 
     data?: (LineDataValue | LineDataItemOption)[]
+
+    triggerLineEvent?: boolean
 }
 
 class LineSeriesModel extends SeriesModel<LineSeriesOption> {
@@ -143,7 +145,7 @@ class LineSeriesModel extends SeriesModel<LineSeriesOption> {
     }
 
     static defaultOption: LineSeriesOption = {
-        zlevel: 0,
+        // zlevel: 0,
         z: 3,
         coordinateSystem: 'cartesian2d',
         legendHoverLink: true,
@@ -169,10 +171,7 @@ class LineSeriesModel extends SeriesModel<LineSeriesOption> {
         },
 
         emphasis: {
-            scale: true,
-            lineStyle: {
-                width: 'bolder'
-            }
+            scale: true
         },
         // areaStyle: {
             // origin of areaStyle. Valid values:
@@ -212,7 +211,9 @@ class LineSeriesModel extends SeriesModel<LineSeriesOption> {
 
         universalTransition: {
             divideShape: 'clone'
-        }
+        },
+
+        triggerLineEvent: false
     };
 
     getLegendIcon(opt: LegendIconParams): ECSymbol | Group {

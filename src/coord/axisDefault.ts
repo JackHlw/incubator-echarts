@@ -23,7 +23,7 @@ import { AxisBaseOption } from './axisCommonTypes';
 
 const defaultOption: AxisBaseOption = {
     show: true,
-    zlevel: 0,
+    // zlevel: 0,
     z: 0,
     // Inverse the axis.
     inverse: false,
@@ -151,7 +151,7 @@ const valueAxis: AxisBaseOption = zrUtil.merge({
         show: false,
         // Split number of minor ticks. The value should be in range of (0, 100)
         splitNumber: 5,
-        // Lenght of minor tick
+        // Length of minor tick
         length: 3,
 
         // Line style
@@ -171,7 +171,6 @@ const valueAxis: AxisBaseOption = zrUtil.merge({
 }, defaultOption);
 
 const timeAxis: AxisBaseOption = zrUtil.merge({
-    scale: true,
     splitNumber: 6,
     axisLabel: {
         // To eliminate labels that are not nice
@@ -189,7 +188,6 @@ const timeAxis: AxisBaseOption = zrUtil.merge({
 }, valueAxis);
 
 const logAxis: AxisBaseOption = zrUtil.defaults({
-    scale: true,
     logBase: 10
 }, valueAxis);
 

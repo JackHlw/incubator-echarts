@@ -59,7 +59,7 @@ class LogScale extends Scale {
     /**
      * @param Whether expand the ticks to niced extent.
      */
-    getTicks(expandToNicedExtent: boolean): ScaleTick[] {
+    getTicks(expandToNicedExtent?: boolean): ScaleTick[] {
         const originalScale = this._originalScale;
         const extent = this._extent;
         const originalExtent = originalScale.getExtent();
@@ -85,9 +85,10 @@ class LogScale extends Scale {
     }
 
     setExtent(start: number, end: number): void {
-        const base = this.base;
-        start = mathLog(start) / mathLog(base);
-        end = mathLog(end) / mathLog(base);
+        const base = mathLog(this.base);
+        // log(-Infinity) is NaN, so safe guard here
+        start = mathLog(Math.max(0, start)) / base;
+        end = mathLog(Math.max(0, end)) / base;
         intervalScaleProto.setExtent.call(this, start, end);
     }
 
@@ -128,7 +129,7 @@ class LogScale extends Scale {
      * Update interval and extent of intervals for nice ticks
      * @param approxTickNum default 10 Given approx tick number
      */
-    niceTicks(approxTickNum: number): void {
+    calcNiceTicks(approxTickNum: number): void {
         approxTickNum = approxTickNum || 10;
         const extent = this._extent;
         const span = extent[1] - extent[0];
@@ -158,14 +159,14 @@ class LogScale extends Scale {
         this._niceExtent = niceExtent;
     }
 
-    niceExtent(opt: {
+    calcNiceExtent(opt: {
         splitNumber: number, // By default 5.
         fixMin?: boolean,
         fixMax?: boolean,
         minInterval?: number,
         maxInterval?: number
     }): void {
-        intervalScaleProto.niceExtent.call(this, opt);
+        intervalScaleProto.calcNiceExtent.call(this, opt);
 
         this._fixMin = opt.fixMin;
         this._fixMax = opt.fixMax;
@@ -197,7 +198,6 @@ class LogScale extends Scale {
 const proto = LogScale.prototype;
 proto.getMinorTicks = intervalScaleProto.getMinorTicks;
 proto.getLabel = intervalScaleProto.getLabel;
-
 
 function fixRoundingError(val: number, originalVal: number): number {
     return roundingErrorFix(val, numberUtil.getPrecision(originalVal));

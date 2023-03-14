@@ -158,14 +158,16 @@ function createCoordSysRecord(api: ExtensionAPI, coordSysModel: CoordinateSystem
  * This action will be throttled.
  */
 function dispatchAction(api: ExtensionAPI, batch: DataZoomPayloadBatchItem[]) {
-    api.dispatchAction({
-        type: 'dataZoom',
-        animation: {
-            easing: 'cubicOut',
-            duration: 100
-        },
-        batch: batch
-    });
+    if (!api.isDisposed()) {
+        api.dispatchAction({
+            type: 'dataZoom',
+            animation: {
+                easing: 'cubicOut',
+                duration: 100
+            },
+            batch: batch
+        });
+    }
 }
 
 function containsPoint(
@@ -231,7 +233,7 @@ export function installDataZoomRoamProcessor(registers: EChartsExtensionInstallR
                 || (apiInner.coordSysRecordMap = createHashMap<CoordSysRecord, string>());
 
             coordSysRecordMap.each(function (coordSysRecord) {
-                // `coordSysRecordMap` always exists (becuase it hold the `roam controller`, which should
+                // `coordSysRecordMap` always exists (because it holds the `roam controller`, which should
                 // better not re-create each time), but clear `dataZoomInfoMap` each round of the workflow.
                 coordSysRecord.dataZoomInfoMap = null;
             });

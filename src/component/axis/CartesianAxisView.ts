@@ -28,6 +28,7 @@ import ExtensionAPI from '../../core/ExtensionAPI';
 import CartesianAxisModel from '../../coord/cartesian/AxisModel';
 import GridModel from '../../coord/cartesian/GridModel';
 import { Payload } from '../../util/types';
+import { isIntervalOrLogScale } from '../../scale/helper';
 
 const axisBuilderAttrs = [
     'axisLine', 'axisTickLabel', 'axisName'
@@ -69,8 +70,7 @@ class CartesianAxisView extends AxisView {
             handleAutoShown(elementType) {
                 const cartesians = gridModel.coordinateSystem.getCartesians();
                 for (let i = 0; i < cartesians.length; i++) {
-                    const otherAxisType = cartesians[i].getOtherAxis(axisModel.axis).type;
-                    if (otherAxisType === 'value' || otherAxisType === 'log') {
+                    if (isIntervalOrLogScale(cartesians[i].getOtherAxis(axisModel.axis).scale)) {
                         // Still show axis tick or axisLine if other axis is value / log
                         return true;
                     }
@@ -157,9 +157,8 @@ const axisElementBuilders: Record<typeof selfBuilderAttrs[number], AxisElementBu
 
             const colorIndex = (lineCount++) % lineColors.length;
             const tickValue = ticksCoords[i].tickValue;
-            axisGroup.add(new graphic.Line({
+            const line = new graphic.Line({
                 anid: tickValue != null ? 'line_' + ticksCoords[i].tickValue : null,
-                subPixelOptimize: true,
                 autoBatch: true,
                 shape: {
                     x1: p1[0],
@@ -171,7 +170,9 @@ const axisElementBuilders: Record<typeof selfBuilderAttrs[number], AxisElementBu
                     stroke: lineColors[colorIndex]
                 }, lineStyle),
                 silent: true
-            }));
+            });
+            graphic.subPixelOptimizeLine(line.shape, lineStyle.lineWidth);
+            axisGroup.add(line);
         }
     },
 
@@ -193,7 +194,6 @@ const axisElementBuilders: Record<typeof selfBuilderAttrs[number], AxisElementBu
 
         const lineStyle = lineStyleModel.getLineStyle();
 
-
         for (let i = 0; i < minorTicksCoords.length; i++) {
             for (let k = 0; k < minorTicksCoords[i].length; k++) {
                 const tickCoord = axis.toGlobalCoord(minorTicksCoords[i][k].coord);
@@ -211,9 +211,8 @@ const axisElementBuilders: Record<typeof selfBuilderAttrs[number], AxisElementBu
                     p2[1] = tickCoord;
                 }
 
-                axisGroup.add(new graphic.Line({
+                const line = new graphic.Line({
                     anid: 'minor_line_' + minorTicksCoords[i][k].tickValue,
-                    subPixelOptimize: true,
                     autoBatch: true,
                     shape: {
                         x1: p1[0],
@@ -223,7 +222,9 @@ const axisElementBuilders: Record<typeof selfBuilderAttrs[number], AxisElementBu
                     },
                     style: lineStyle,
                     silent: true
-                }));
+                });
+                graphic.subPixelOptimizeLine(line.shape, lineStyle.lineWidth);
+                axisGroup.add(line);
             }
         }
     },

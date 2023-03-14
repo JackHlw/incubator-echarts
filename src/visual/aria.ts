@@ -19,7 +19,6 @@
 
 import * as zrUtil from 'zrender/src/core/util';
 import ExtensionAPI from '../core/ExtensionAPI';
-import {retrieveRawValue} from '../data/helper/dataProvider';
 import GlobalModel from '../model/Global';
 import Model from '../model/Model';
 import SeriesModel from '../model/Series';
@@ -65,7 +64,7 @@ export default function ariaVisual(ecModel: GlobalModel, api: ExtensionAPI) {
         const useDecal = decalModel.get('show');
         if (useDecal) {
             // Each type of series use one scope.
-            // Pie and funnel are using diferrent scopes
+            // Pie and funnel are using different scopes.
             const paletteScopeGroupByType = zrUtil.createHashMap<object>();
             ecModel.eachSeries((seriesModel: SeriesModel) => {
                 if (seriesModel.isColorBySeries()) {
@@ -83,7 +82,7 @@ export default function ariaVisual(ecModel: GlobalModel, api: ExtensionAPI) {
                 if (ecModel.isSeriesFiltered(seriesModel)) {
                     return;
                 }
-                if (typeof seriesModel.enableAriaDecal === 'function') {
+                if (zrUtil.isFunction(seriesModel.enableAriaDecal)) {
                     // Let series define how to use decal palette on data
                     seriesModel.enableAriaDecal();
                     return;
@@ -242,7 +241,7 @@ export default function ariaVisual(ecModel: GlobalModel, api: ExtensionAPI) {
     }
 
     function replace(str: string, keyValues: object) {
-        if (typeof str !== 'string') {
+        if (!zrUtil.isString(str)) {
             return str;
         }
 

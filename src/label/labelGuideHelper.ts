@@ -321,7 +321,7 @@ function nearestPointOnPath(pt: Point, path: PathProxy, out: Point) {
     return minDist;
 }
 
-// Temporal varible for intermediate usage.
+// Temporal variable for intermediate usage.
 const pt0 = new Point();
 const pt1 = new Point();
 const pt2 = new Point();
@@ -618,7 +618,7 @@ export function setLabelLineStyle(
             if (isLabelIgnored  // Not show when label is not shown in this state.
                 || !retrieve2(stateShow, showNormal) // Use normal state by default if not set.
             ) {
-                const stateObj = isNormal ? labelLine : (labelLine && labelLine.states.normal);
+                const stateObj = isNormal ? labelLine : (labelLine && labelLine.states[stateName]);
                 if (stateObj) {
                     stateObj.ignore = true;
                 }

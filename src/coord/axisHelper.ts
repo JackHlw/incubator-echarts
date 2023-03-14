@@ -77,7 +77,7 @@ export function getScaleExtent(scale: Scale, model: AxisBaseModel) {
     // (4) Consider other chart types using `barGrid`?
     // See #6728, #4862, `test/bar-overflow-time-plot.html`
     const ecModel = model.ecModel;
-    if (ecModel && (scaleType === 'time' /*|| scaleType === 'interval' */)) {
+    if (ecModel && (scaleType === 'time' /* || scaleType === 'interval' */)) {
         const barSeriesModels = prepareLayoutBarSeries('bar', ecModel);
         let isBaseAxisAndHasBarSeries = false;
 
@@ -147,9 +147,12 @@ function adjustScaleForOverflow(
 }
 
 // Precondition of calling this method:
-// The scale extent has been initailized using series data extent via
+// The scale extent has been initialized using series data extent via
 // `scale.setExtent` or `scale.unionExtentFromData`;
-export function niceScaleExtent(scale: Scale, inModel: AxisBaseModel) {
+export function niceScaleExtent(
+    scale: Scale,
+    inModel: AxisBaseModel
+) {
     const model = inModel as AxisBaseModel<LogAxisBaseOption>;
     const extentInfo = getScaleExtent(scale, model);
     const extent = extentInfo.extent;
@@ -160,15 +163,16 @@ export function niceScaleExtent(scale: Scale, inModel: AxisBaseModel) {
     }
 
     const scaleType = scale.type;
+    const interval = model.get('interval');
+    const isIntervalOrTime = scaleType === 'interval' || scaleType === 'time';
+
     scale.setExtent(extent[0], extent[1]);
-    scale.niceExtent({
+    scale.calcNiceExtent({
         splitNumber: splitNumber,
         fixMin: extentInfo.fixMin,
         fixMax: extentInfo.fixMax,
-        minInterval: (scaleType === 'interval' || scaleType === 'time')
-            ? model.get('minInterval') : null,
-        maxInterval: (scaleType === 'interval' || scaleType === 'time')
-            ? model.get('maxInterval') : null
+        minInterval: isIntervalOrTime ? model.get('minInterval') : null,
+        maxInterval: isIntervalOrTime ? model.get('maxInterval') : null
     });
 
     // If some one specified the min, max. And the default calculated interval
@@ -176,7 +180,6 @@ export function niceScaleExtent(scale: Scale, inModel: AxisBaseModel) {
     // in angle axis with angle 0 - 360. Interval calculated in interval scale is hard
     // to be 60.
     // FIXME
-    const interval = model.get('interval');
     if (interval != null) {
         (scale as IntervalScale).setInterval && (scale as IntervalScale).setInterval(interval);
     }
@@ -239,7 +242,7 @@ export function makeLabelFormatter(axis: Axis): (tick: ScaleTick, idx?: number) 
             };
         })(labelFormatter as TimeAxisLabelFormatterOption);
     }
-    else if (typeof labelFormatter === 'string') {
+    else if (zrUtil.isString(labelFormatter)) {
         return (function (tpl) {
             return function (tick: ScaleTick) {
                 // For category axis, get raw value; for numeric axis,
@@ -251,7 +254,7 @@ export function makeLabelFormatter(axis: Axis): (tick: ScaleTick, idx?: number) 
             };
         })(labelFormatter);
     }
-    else if (typeof labelFormatter === 'function') {
+    else if (zrUtil.isFunction(labelFormatter)) {
         return (function (cb) {
             return function (tick: ScaleTick, idx: number) {
                 // The original intention of `idx` is "the index of the tick in all ticks".
@@ -361,7 +364,7 @@ export function getOptionCategoryInterval(model: Model<AxisBaseOption['axisLabel
 
 /**
  * Set `categoryInterval` as 0 implicitly indicates that
- * show all labels reguardless of overlap.
+ * show all labels regardless of overlap.
  * @param {Object} axis axisModel.axis
  */
 export function shouldShowAllLabels(axis: Axis): boolean {

@@ -18,6 +18,7 @@
 */
 
 import * as zrUtil from 'zrender/src/core/util';
+import { encodeHTML } from 'zrender/src/core/dom';
 import { parseDate, isNumeric, numericToNumber } from './number';
 import { TooltipRenderMode, ColorString, ZRColor, DimensionType } from './types';
 import { Dictionary } from 'zrender/src/core/types';
@@ -51,24 +52,7 @@ export function toCamelCase(str: string, upperCaseFirst?: boolean): string {
 
 export const normalizeCssArray = zrUtil.normalizeCssArray;
 
-
-const replaceReg = /([&<>"'])/g;
-const replaceMap: Dictionary<string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    '\'': '&#39;'
-};
-
-export function encodeHTML(source: string): string {
-    return source == null
-        ? ''
-        : (source + '').replace(replaceReg, function (str, c) {
-            return replaceMap[c];
-        });
-}
-
+export { encodeHTML };
 
 /**
  * Make value user readable for tooltip and label.
@@ -82,7 +66,7 @@ export function makeValueReadable(
     valueType: DimensionType,
     useUTC: boolean
 ): string {
-    const USER_READABLE_DEFUALT_TIME_PATTERN = '{yyyy}-{MM}-{dd} {hh}:{mm}:{ss}';
+    const USER_READABLE_DEFUALT_TIME_PATTERN = '{yyyy}-{MM}-{dd} {HH}:{mm}:{ss}';
 
     function stringToUserReadable(str: string): string {
         return (str && zrUtil.trim(str)) ? str : '-';
@@ -117,6 +101,8 @@ export function makeValueReadable(
         ? addCommas(numericResult)
         : zrUtil.isStringSafe(value)
         ? stringToUserReadable(value)
+        : typeof value === 'boolean'
+        ? value + ''
         : '-';
 }
 
@@ -226,7 +212,7 @@ export function getTooltipMarker(inOpt: ColorString | GetTooltipMarkerOpt, extra
     else {
         // Should better not to auto generate style name by auto-increment number here.
         // Because this util is usually called in tooltip formatter, which is probably
-        // called repeatly when mouse move and the auto-increment number increases fast.
+        // called repeatedly when mouse move and the auto-increment number increases fast.
         // Users can make their own style name by theirselves, make it unique and readable.
         const markerId = opt.markerId || 'markerX';
         return {
@@ -275,19 +261,19 @@ export function formatTime(tpl: string, value: unknown, isUTC?: boolean) {
     }
 
     const date = parseDate(value);
-    const utc = isUTC ? 'UTC' : '';
-    const y = (date as any)['get' + utc + 'FullYear']();
-    const M = (date as any)['get' + utc + 'Month']() + 1;
-    const d = (date as any)['get' + utc + 'Date']();
-    const h = (date as any)['get' + utc + 'Hours']();
-    const m = (date as any)['get' + utc + 'Minutes']();
-    const s = (date as any)['get' + utc + 'Seconds']();
-    const S = (date as any)['get' + utc + 'Milliseconds']();
+    const getUTC = isUTC ? 'getUTC' : 'get';
+    const y = (date as any)[getUTC + 'FullYear']();
+    const M = (date as any)[getUTC + 'Month']() + 1;
+    const d = (date as any)[getUTC + 'Date']();
+    const h = (date as any)[getUTC + 'Hours']();
+    const m = (date as any)[getUTC + 'Minutes']();
+    const s = (date as any)[getUTC + 'Seconds']();
+    const S = (date as any)[getUTC + 'Milliseconds']();
 
     tpl = tpl.replace('MM', pad(M, 2))
         .replace('M', M)
         .replace('yyyy', y)
-        .replace('yy', y % 100 + '')
+        .replace('yy', pad(y % 100 + '', 2))
         .replace('dd', pad(d, 2))
         .replace('d', d)
         .replace('hh', pad(h, 2))

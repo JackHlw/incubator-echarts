@@ -19,7 +19,7 @@
 
 import {ECPolygon} from '../line/poly';
 import * as graphic from '../../util/graphic';
-import { setStatesStylesFromModel, enableHoverEmphasis } from '../../util/states';
+import { setStatesStylesFromModel, toggleHoverEmphasis } from '../../util/states';
 import {setLabelStyle, getLabelStatesModels} from '../../label/labelStyle';
 import {bind} from 'zrender/src/core/util';
 import DataDiffer from '../../data/DataDiffer';
@@ -29,7 +29,7 @@ import GlobalModel from '../../model/Global';
 import ExtensionAPI from '../../core/ExtensionAPI';
 import { RectLike } from 'zrender/src/core/BoundingRect';
 import { ColorString } from '../../util/types';
-import { saveOldStyle } from '../../animation/basicTrasition';
+import { saveOldStyle } from '../../animation/basicTransition';
 
 type LayerSeries = ReturnType<ThemeRiverSeriesModel['getLayerSeries']>;
 
@@ -166,7 +166,9 @@ class ThemeRiverView extends ChartView {
             data.setItemGraphicEl(idx, polygon);
 
             setStatesStylesFromModel(polygon, seriesModel);
-            enableHoverEmphasis(polygon, emphasisModel.get('focus'), emphasisModel.get('blurScope'));
+            toggleHoverEmphasis(
+                polygon, emphasisModel.get('focus'), emphasisModel.get('blurScope'), emphasisModel.get('disabled')
+            );
         }
 
         this._layersSeries = layersSeries;

@@ -37,6 +37,8 @@ class TooltipRichContent {
 
     private _hideTimeout: number;
 
+    private _alwaysShowContent: boolean = false;
+
     private _enterable = true;
 
     private _inContent: boolean;
@@ -56,6 +58,9 @@ class TooltipRichContent {
     update(tooltipModel: Model<TooltipOption>) {
         const alwaysShowContent = tooltipModel.get('alwaysShowContent');
         alwaysShowContent && this._moveIfResized();
+
+        // update alwaysShowContent
+        this._alwaysShowContent = alwaysShowContent;
     }
 
     show() {
@@ -91,18 +96,9 @@ class TooltipRichContent {
                 rich: markupStyleCreator.richTextStyles,
                 text: content as string,
                 lineHeight: 22,
-                backgroundColor: tooltipModel.get('backgroundColor'),
-                borderRadius: tooltipModel.get('borderRadius'),
                 borderWidth: 1,
                 borderColor: borderColor as string,
-                shadowColor: tooltipModel.get('shadowColor'),
-                shadowBlur: tooltipModel.get('shadowBlur'),
-                shadowOffsetX: tooltipModel.get('shadowOffsetX'),
-                shadowOffsetY: tooltipModel.get('shadowOffsetY'),
                 textShadowColor: textStyleModel.get('textShadowColor'),
-                textShadowBlur: textStyleModel.get('textShadowBlur') || 0,
-                textShadowOffsetX: textStyleModel.get('textShadowOffsetX') || 0,
-                textShadowOffsetY: textStyleModel.get('textShadowOffsetY') || 0,
                 fill: tooltipModel.get(['textStyle', 'color']),
                 padding: getPaddingFromTooltipModel(tooltipModel, 'richText'),
                 verticalAlign: 'top',
@@ -110,6 +106,17 @@ class TooltipRichContent {
             },
             z: tooltipModel.get('z')
         });
+        zrUtil.each([
+            'backgroundColor', 'borderRadius', 'shadowColor', 'shadowBlur', 'shadowOffsetX', 'shadowOffsetY'
+        ] as const, propName => {
+            (this.el.style as any)[propName] = tooltipModel.get(propName);
+        });
+        zrUtil.each([
+            'textShadowBlur', 'textShadowOffsetX', 'textShadowOffsetY'
+        ] as const, propName => {
+            this.el.style[propName] = textStyleModel.get(propName) || 0;
+        });
+
         this._zr.add(this.el);
 
         const self = this;
@@ -188,7 +195,7 @@ class TooltipRichContent {
     }
 
     hideLater(time?: number) {
-        if (this._show && !(this._inContent && this._enterable)) {
+        if (this._show && !(this._inContent && this._enterable) && !this._alwaysShowContent) {
             if (time) {
                 this._hideDelay = time;
                 // Set show false to avoid invoke hideLater multiple times

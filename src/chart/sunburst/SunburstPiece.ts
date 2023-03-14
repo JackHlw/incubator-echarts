@@ -19,7 +19,7 @@
 
 import * as zrUtil from 'zrender/src/core/util';
 import * as graphic from '../../util/graphic';
-import { enableHoverEmphasis, SPECIAL_STATES, DISPLAY_STATES } from '../../util/states';
+import { toggleHoverEmphasis, SPECIAL_STATES, DISPLAY_STATES } from '../../util/states';
 import {createTextStyle} from '../../label/labelStyle';
 import { TreeNode } from '../../data/Tree';
 import SunburstSeriesModel, { SunburstSeriesNodeItemOption, SunburstSeriesOption } from './SunburstSeries';
@@ -28,10 +28,11 @@ import { PathStyleProps } from 'zrender/src/graphic/Path';
 import { ColorString } from '../../util/types';
 import Model from '../../model/Model';
 import { getECData } from '../../util/innerStore';
-import { getSectorCornerRadius } from '../helper/pieHelper';
+import { getSectorCornerRadius } from '../helper/sectorHelper';
 import {createOrUpdatePatternFromDecal} from '../../util/decal';
 import ExtensionAPI from '../../core/ExtensionAPI';
-import { saveOldStyle } from '../../animation/basicTrasition';
+import { saveOldStyle } from '../../animation/basicTransition';
+import { normalizeRadian } from 'zrender/src/contain/util';
 
 const DEFAULT_SECTOR_Z = 2;
 const DEFAULT_TEXT_Z = 4;
@@ -116,7 +117,7 @@ class SunburstPiece extends graphic.Sector {
         if (firstCreate) {
             sector.setShape(sectorShape);
             sector.shape.r = layout.r0;
-            graphic.updateProps(
+            graphic.initProps(
                 sector,
                 {
                     shape: {
@@ -154,7 +155,7 @@ class SunburstPiece extends graphic.Sector {
             : focus === 'descendant' ? node.getDescendantIndices()
             : focus;
 
-        enableHoverEmphasis(this, focusOrIndices, emphasisModel.get('blurScope'));
+        toggleHoverEmphasis(this, focusOrIndices, emphasisModel.get('blurScope'), emphasisModel.get('disabled'));
     }
 
     _updateLabel(
@@ -219,7 +220,13 @@ class SunburstPiece extends graphic.Sector {
             }
             else {
                 if (!textAlign || textAlign === 'center') {
-                    r = (layout.r + layout.r0) / 2;
+                    // Put label in the center if it's a circle
+                    if (angle === 2 * Math.PI && layout.r0 === 0) {
+                        r = 0;
+                    }
+                    else {
+                        r = (layout.r + layout.r0) / 2;
+                    }
                     textAlign = 'center';
                 }
                 else if (textAlign === 'left') {
@@ -245,8 +252,8 @@ class SunburstPiece extends graphic.Sector {
             const rotateType = getLabelAttr(labelStateModel, 'rotate');
             let rotate = 0;
             if (rotateType === 'radial') {
-                rotate = -midAngle;
-                if (rotate < -Math.PI / 2) {
+                rotate = normalizeRadian(-midAngle);
+                if (((rotate > Math.PI / 2 && rotate <= Math.PI * 1.5))) {
                     rotate += Math.PI;
                 }
             }
@@ -259,7 +266,7 @@ class SunburstPiece extends graphic.Sector {
                     rotate += Math.PI;
                 }
             }
-            else if (typeof rotateType === 'number') {
+            else if (zrUtil.isNumber(rotateType)) {
                 rotate = rotateType * Math.PI / 180;
             }
 

@@ -18,7 +18,6 @@
 */
 
 import { isString, indexOf, each, bind, isArray, isDom } from 'zrender/src/core/util';
-import { toHex } from 'zrender/src/tool/color';
 import { normalizeEvent } from 'zrender/src/core/event';
 import { transformLocalCoord } from 'zrender/src/core/dom';
 import env from 'zrender/src/core/env';
@@ -94,7 +93,7 @@ function assembleArrow(
 
     const borderStyle = `${borderColor} solid ${borderWidth}px;`;
     const styleCss = [
-        `position:absolute;width:${arrowSize}px;height:${arrowSize}px;`,
+        `position:absolute;width:${arrowSize}px;height:${arrowSize}px;z-index:-1;`,
         `${positionStyle};${transformStyle};`,
         `border-bottom:${borderStyle}`,
         `border-right:${borderStyle}`,
@@ -189,16 +188,7 @@ function assembleCssText(tooltipModel: Model<TooltipOption>, enableTransition?: 
     enableTransition && transitionDuration && cssText.push(assembleTransition(transitionDuration, onlyFade));
 
     if (backgroundColor) {
-        if (env.canvasSupported) {
-            cssText.push('background-color:' + backgroundColor);
-        }
-        else {
-            // for ie
-            cssText.push(
-                'background-color:#' + toHex(backgroundColor)
-            );
-            cssText.push('filter:alpha(opacity=70)');
-        }
+        cssText.push('background-color:' + backgroundColor);
     }
 
     // Border style
@@ -272,6 +262,7 @@ class TooltipHTMLContent {
     private _enterable = true;
     private _zr: ZRenderType;
 
+    private _alwaysShowContent: boolean = false;
     private _hideTimeout: number;
     /**
      * Hide delay time
@@ -369,6 +360,9 @@ class TooltipHTMLContent {
         // move tooltip if chart resized
         const alwaysShowContent = tooltipModel.get('alwaysShowContent');
         alwaysShowContent && this._moveIfResized();
+
+        // update alwaysShowContent
+        this._alwaysShowContent = alwaysShowContent;
 
         // update className
         this.el.className = tooltipModel.get('className') || '';
@@ -498,7 +492,7 @@ class TooltipHTMLContent {
     }
 
     hideLater(time?: number) {
-        if (this._show && !(this._inContent && this._enterable)) {
+        if (this._show && !(this._inContent && this._enterable) && !this._alwaysShowContent) {
             if (time) {
                 this._hideDelay = time;
                 // Set show false to avoid invoke hideLater multiple times

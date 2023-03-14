@@ -38,7 +38,18 @@ import {
     DownplayPayload,
     ComponentMainType
 } from './types';
-import { extend, indexOf, isArrayLike, isObject, keys, isArray, each } from 'zrender/src/core/util';
+import {
+    extend,
+    indexOf,
+    isArrayLike,
+    isObject,
+    keys,
+    isArray,
+    each,
+    isString,
+    isGradientObject,
+    map
+} from 'zrender/src/core/util';
 import { getECData } from './innerStore';
 import * as colorTool from 'zrender/src/tool/color';
 import SeriesData from '../data/SeriesData';
@@ -50,7 +61,7 @@ import GlobalModel from '../model/Global';
 import ExtensionAPI from '../core/ExtensionAPI';
 import ComponentModel from '../model/Component';
 import { error } from './log';
-
+import type ComponentView from '../view/Component';
 
 // Reserve 0 as default.
 let _highlightNextDigit = 1;
@@ -63,6 +74,10 @@ const getSavedStates = makeInner<{
     selectFill?: ZRColor
     selectStroke?: ZRColor
 }, Path>();
+
+const getComponentStates = makeInner<{
+    isBlured: boolean
+}, SeriesModel | ComponentModel>();
 
 export const HOVER_STATE_NORMAL: 0 = 0;
 export const HOVER_STATE_BLUR: 1 = 1;
@@ -96,16 +111,27 @@ function hasFillOrStroke(fillOrStroke: string | PatternObject | GradientObject) 
 }
 // Most lifted color are duplicated.
 const liftedColorCache = new LRU<string>(100);
-function liftColor(color: string): string {
-    if (typeof color !== 'string') {
-        return color;
+function liftColor(color: GradientObject): GradientObject;
+function liftColor(color: string): string;
+function liftColor(color: string | GradientObject): string | GradientObject {
+    if (isString(color)) {
+        let liftedColor = liftedColorCache.get(color);
+        if (!liftedColor) {
+            liftedColor = colorTool.lift(color, -0.1);
+            liftedColorCache.put(color, liftedColor);
+        }
+        return liftedColor;
     }
-    let liftedColor = liftedColorCache.get(color);
-    if (!liftedColor) {
-        liftedColor = colorTool.lift(color, -0.1);
-        liftedColorCache.put(color, liftedColor);
+    else if (isGradientObject(color)) {
+        const ret = extend({}, color) as GradientObject;
+        ret.colorStops = map(color.colorStops, stop => ({
+            offset: stop.offset,
+            color: colorTool.lift(stop.color, -0.1)
+        }));
+        return ret;
     }
-    return liftedColor;
+    // Change nothing.
+    return color;
 }
 
 function doChangeHoverState(el: ECElement, stateName: DisplayState, hoverStateEnum: 0 | 1 | 2) {
@@ -183,7 +209,7 @@ export function setStatesFlag(el: ECElement, stateName: DisplayState) {
 
 /**
  * If we reuse elements when rerender.
- * DONT forget to clearStates before we update the style and shape.
+ * DON'T forget to clearStates before we update the style and shape.
  * Or we may update on the wrong state instead of normal state.
  */
 export function clearStates(el: Element) {
@@ -213,10 +239,10 @@ function getFromStateStyle(
     for (let i = 0; i < el.animators.length; i++) {
         const animator = el.animators[i];
         if (animator.__fromStateTransition
-            // Dont consider the animation to emphasis state.
+            // Don't consider the animation to emphasis state.
             && animator.__fromStateTransition.indexOf(toStateName) < 0
             && animator.targetName === 'style') {
-            animator.saveFinalToTarget(fromState, props);
+            animator.saveTo(fromState, props);
         }
     }
     return fromState;
@@ -339,7 +365,8 @@ function elementStateProxy(this: Displayable, stateName: string, targetStates?: 
     }
     return state;
 }
-/**FI
+
+/**
  * Set hover style (namely "emphasis style") of element.
  * @param el Should not be `zrender/graphic/Group`.
  * @param focus 'self' | 'selfInSeries' | 'series'
@@ -402,14 +429,27 @@ function shouldSilent(el: Element, e: ElementEvent) {
 
 export function allLeaveBlur(api: ExtensionAPI) {
     const model = api.getModel();
+    const leaveBlurredSeries: SeriesModel[] = [];
+    const allComponentViews: ComponentView[] = [];
     model.eachComponent(function (componentType, componentModel) {
-        const view = componentType === 'series'
-            ? api.getViewOfSeriesModel(componentModel as SeriesModel)
+        const componentStates = getComponentStates(componentModel);
+        const isSeries = componentType === 'series';
+        const view = isSeries ? api.getViewOfSeriesModel(componentModel as SeriesModel)
             : api.getViewOfComponentModel(componentModel);
-        // Leave blur anyway
-        view.group.traverse(function (child) {
-            singleLeaveBlur(child);
-        });
+        !isSeries && allComponentViews.push(view as ComponentView);
+        if (componentStates.isBlured) {
+            // Leave blur anyway
+            view.group.traverse(function (child) {
+                singleLeaveBlur(child);
+            });
+            isSeries && leaveBlurredSeries.push(componentModel as SeriesModel);
+        }
+        componentStates.isBlured = false;
+    });
+    each(allComponentViews, function (view) {
+        if (view && view.toggleBlurSeries) {
+            view.toggleBlurSeries(leaveBlurredSeries, false, model);
+        }
     });
 }
 
@@ -480,6 +520,8 @@ export function blurSeries(
             }
 
             blurredSeries.push(seriesModel);
+
+            getComponentStates(seriesModel).isBlured = true;
         }
     });
 
@@ -488,8 +530,8 @@ export function blurSeries(
             return;
         }
         const view = api.getViewOfComponentModel(componentModel);
-        if (view && view.blurSeries) {
-            view.blurSeries(blurredSeries, ecModel);
+        if (view && view.toggleBlurSeries) {
+            view.toggleBlurSeries(blurredSeries, true, ecModel);
         }
     });
 }
@@ -508,6 +550,8 @@ export function blurComponent(
         return;
     }
 
+    getComponentStates(componentModel).isBlured = true;
+
     const view = api.getViewOfComponentModel(componentModel);
     if (!view || !view.focusBlurEnabled) {
         return;
@@ -525,6 +569,12 @@ export function blurSeriesFromHighlightPayload(
 ) {
     const seriesIndex = seriesModel.seriesIndex;
     const data = seriesModel.getData(payload.dataType);
+    if (!data) {
+        if (__DEV__) {
+            error(`Unknown dataType ${payload.dataType}`);
+        }
+        return;
+    }
     let dataIndex = queryDataIndex(data, payload);
     // Pick the first one if there is multiple/none exists.
     dataIndex = (isArray(dataIndex) ? dataIndex[0] : dataIndex) || 0;
@@ -641,7 +691,7 @@ export function handleGlobalMouseOverForHighDown(
     }
 }
 
-export function handleGlboalMouseOutForHighDown(
+export function handleGlobalMouseOutForHighDown(
     dispatcher: Element,
     e: ElementEvent,
     api: ExtensionAPI
@@ -736,6 +786,15 @@ export function enableHoverEmphasis(el: Element, focus?: InnerFocus, blurScope?:
     enableHoverFocus(el, focus, blurScope);
 }
 
+export function disableHoverEmphasis(el: Element) {
+    setAsHighDownDispatcher(el, false);
+}
+
+export function toggleHoverEmphasis(el: Element, focus: InnerFocus, blurScope: BlurScope, isDisabled: boolean) {
+    isDisabled ? disableHoverEmphasis(el)
+        : enableHoverEmphasis(el, focus, blurScope);
+}
+
 export function enableHoverFocus(el: Element, focus: InnerFocus, blurScope: BlurScope) {
     const ecData = getECData(el);
     if (focus != null) {
@@ -782,7 +841,12 @@ export function setStatesStylesFromModel(
 
 
 /**
- * @parame el
+ *
+ * Set element as highlight / downplay dispatcher.
+ * It will be checked when element received mouseover event or from highlight action.
+ * It's in change of all highlight/downplay behavior of it's children.
+ *
+ * @param el
  * @param el.highDownSilentOnTouch
  *        In touch device, mouseover event will be trigger on touchstart event
  *        (see module:zrender/dom/HandlerProxy). By this mechanism, we can
@@ -835,9 +899,9 @@ export function enableComponentHighDownFeatures(
 }
 
 /**
- * Support hightlight/downplay record on each elements.
+ * Support highlight/downplay record on each elements.
  * For the case: hover highlight/downplay (legend, visualMap, ...) and
- * user triggerred hightlight/downplay should not conflict.
+ * user triggered highlight/downplay should not conflict.
  * Only all of the highlightDigit cleared, return to normal.
  * @param {string} highlightKey
  * @return {number} highlightDigit

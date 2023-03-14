@@ -19,18 +19,21 @@
 
 import Path, {PathProps} from 'zrender/src/graphic/Path';
 import Group from 'zrender/src/graphic/Group';
-import {extend, defaults, each, map} from 'zrender/src/core/util';
+import {extend, each, map} from 'zrender/src/core/util';
 import {BuiltinTextPosition} from 'zrender/src/core/types';
+import {SectorProps} from 'zrender/src/graphic/shape/Sector';
+import {RectProps} from 'zrender/src/graphic/shape/Rect';
 import {
     Rect,
     Sector,
     updateProps,
     initProps,
-    removeElementWithFadeOut
+    removeElementWithFadeOut,
+    traverseElements
 } from '../../util/graphic';
 import { getECData } from '../../util/innerStore';
-import { enableHoverEmphasis, setStatesStylesFromModel } from '../../util/states';
-import { setLabelStyle, getLabelStatesModels, setLabelValueAnimation } from '../../label/labelStyle';
+import { setStatesStylesFromModel, toggleHoverEmphasis } from '../../util/states';
+import { setLabelStyle, getLabelStatesModels, setLabelValueAnimation, labelInner } from '../../label/labelStyle';
 import {throttle} from '../../util/throttle';
 import {createClipPath} from '../helper/createClipPathFromCoordSys';
 import Sausage from '../../util/shape/sausage';
@@ -45,9 +48,10 @@ import {
     OrdinalSortInfo,
     Payload,
     OrdinalNumber,
-    ParsedValue
+    ParsedValue,
+    ECElement
 } from '../../util/types';
-import BarSeriesModel, {BarSeriesOption, BarDataItemOption, PolarBarLabelPosition} from './BarSeries';
+import BarSeriesModel, {BarDataItemOption, PolarBarLabelPosition} from './BarSeries';
 import type Axis2D from '../../coord/cartesian/Axis2D';
 import type Cartesian2D from '../../coord/cartesian/Cartesian2D';
 import type Polar from '../../coord/polar/Polar';
@@ -62,9 +66,9 @@ import {LayoutRect} from '../../util/layout';
 import {EventCallback} from 'zrender/src/core/Eventful';
 import { warn } from '../../util/log';
 import {createSectorCalculateTextPosition, SectorTextPosition, setSectorTextRotation} from '../../label/sectorLabel';
-import { saveOldStyle } from '../../animation/basicTrasition';
-
-const _eventPos = [0, 0];
+import { saveOldStyle } from '../../animation/basicTransition';
+import Element from 'zrender/src/Element';
+import { getSectorCornerRadius } from '../helper/sectorHelper';
 
 const mathMax = Math.max;
 const mathMin = Math.min;
@@ -128,6 +132,8 @@ class BarView extends ChartView {
 
     private _model: BarSeriesModel;
 
+    private _progressiveEls: Element[];
+
     constructor() {
         super();
         this._isFirstFrame = true;
@@ -145,6 +151,9 @@ class BarView extends ChartView {
         if (coordinateSystemType === 'cartesian2d'
             || coordinateSystemType === 'polar'
         ) {
+            // Clear previously rendered progressive elements.
+            this._progressiveEls = null;
+
             this._isLargeDraw
                 ? this._renderLarge(seriesModel, ecModel, api)
                 : this._renderNormal(seriesModel, ecModel, api, payload);
@@ -163,8 +172,14 @@ class BarView extends ChartView {
     }
 
     incrementalRender(params: StageHandlerProgressParams, seriesModel: BarSeriesModel): void {
+        // Reset
+        this._progressiveEls = [];
         // Do not support progressive in normal mode.
         this._incrementalRenderLarge(params, seriesModel);
+    }
+
+    eachRendered(cb: (el: Element) => boolean | void) {
+        traverseElements(this._progressiveEls || this.group, cb);
     }
 
     private _updateDrawMode(seriesModel: BarSeriesModel): void {
@@ -231,6 +246,9 @@ class BarView extends ChartView {
             if (coord.type === 'cartesian2d') {
                 (bgEl as Rect).setShape('r', barBorderRadius);
             }
+            else {
+                (bgEl as Sector).setShape('cornerRadius', barBorderRadius);
+            }
             bgEls[dataIndex] = bgEl;
             return bgEl;
         };
@@ -266,6 +284,17 @@ class BarView extends ChartView {
                     false,
                     roundCap
                 );
+                if (realtimeSortCfg) {
+                    /**
+                     * Force label animation because even if the element is
+                     * ignored because it's clipped, it may not be clipped after
+                     * changing order. Then, if not using forceLabelAnimation,
+                     * the label animation was never started, in which case,
+                     * the label will be the final value and doesn't have label
+                     * animation.
+                     */
+                    (el as ECElement).forceLabelAnimation = true;
+                }
 
                 updateStyle(
                     el, data, dataIndex, itemModel, layout,
@@ -311,11 +340,14 @@ class BarView extends ChartView {
                         if (coord.type === 'cartesian2d') {
                             (bgEl as Rect).setShape('r', barBorderRadius);
                         }
+                        else {
+                            (bgEl as Sector).setShape('cornerRadius', barBorderRadius);
+                        }
                         bgEls[newIndex] = bgEl;
                     }
                     const bgLayout = getLayout[coord.type](data, newIndex);
                     const shape = createBackgroundShape(isHorizontalOrRadial, bgLayout, coord);
-                    updateProps(bgEl, { shape }, animationModel, newIndex);
+                    updateProps<RectProps | SectorProps>(bgEl, { shape }, animationModel, newIndex);
                 }
 
                 let el = oldData.getItemGraphicEl(oldIndex) as BarPossiblePath;
@@ -349,9 +381,28 @@ class BarView extends ChartView {
                     saveOldStyle(el);
                 }
 
+                if (realtimeSortCfg) {
+                    (el as ECElement).forceLabelAnimation = true;
+                }
+
+                if (isChangeOrder) {
+                    const textEl = el.getTextContent();
+                    if (textEl) {
+                        const labelInnerStore = labelInner(textEl);
+                        if (labelInnerStore.prevValue != null) {
+                            /**
+                             * Set preValue to be value so that no new label
+                             * should be started, otherwise, it will take a full
+                             * `animationDurationUpdate` time to finish the
+                             * animation, which is not expected.
+                             */
+                            labelInnerStore.prevValue = labelInnerStore.value;
+                        }
+                    }
+                }
                 // Not change anything if only order changed.
                 // Especially not change label.
-                if (!isChangeOrder) {
+                else {
                     updateStyle(
                         el, data, newIndex, itemModel, layout,
                         seriesModel, isHorizontalOrRadial, coord.type === 'polar'
@@ -409,19 +460,19 @@ class BarView extends ChartView {
 
     private _incrementalRenderLarge(params: StageHandlerProgressParams, seriesModel: BarSeriesModel): void {
         this._removeBackground();
-        createLarge(seriesModel, this.group, true);
+        createLarge(seriesModel, this.group, this._progressiveEls, true);
     }
 
     private _updateLargeClip(seriesModel: BarSeriesModel): void {
         // Use clipPath in large mode.
         const clipPath = seriesModel.get('clip', true)
-            ? createClipPath(seriesModel.coordinateSystem, false, seriesModel)
-            : null;
+            && createClipPath(seriesModel.coordinateSystem, false, seriesModel);
+        const group = this.group;
         if (clipPath) {
-            this.group.setClipPath(clipPath);
+            group.setClipPath(clipPath);
         }
         else {
-            this.group.removeClipPath();
+            group.removeClipPath();
         }
     }
 
@@ -444,20 +495,17 @@ class BarView extends ChartView {
         else {
             const orderMapping = (idx: number) => {
                 const el = (data.getItemGraphicEl(idx) as Rect);
-                if (el) {
-                    const shape = el.shape;
-                    // If data is NaN, shape.xxx may be NaN, so use || 0 here in case
-                    return (
+                const shape = el && el.shape;
+                return (shape && (
+                    // The result should be consistent with the initial sort by data value.
+                    // Do not support the case that both positive and negative exist.
+                    Math.abs(
                         baseAxis.isHorizontal()
-                            // The result should be consistent with the initial sort by data value.
-                            // Do not support the case that both positive and negative exist.
-                            ? Math.abs(shape.height)
-                            : Math.abs(shape.width)
-                    ) || 0;
-                }
-                else {
-                    return 0;
-                }
+                            ? shape.height
+                            : shape.width
+                    )
+                // If data is NaN, shape.xxx may be NaN, so use || 0 here in case
+                )) || 0;
             };
             this._onRendered = () => {
                 this._updateSortWithinSameData(data, orderMapping, baseAxis, api);
@@ -482,8 +530,8 @@ class BarView extends ChartView {
             mappedValue = mappedValue == null ? NaN : mappedValue;
             info.push({
                 dataIndex: dataIdx,
-                mappedValue: mappedValue,
-                ordinalNumber: ordinalNumber
+                mappedValue,
+                ordinalNumber
             });
         });
 
@@ -659,7 +707,7 @@ const clip: {
 
         // When xClipped or yClipped, the element will be marked as `ignore`.
         // But we should also place the element at the edge of the coord sys bounding rect.
-        // Beause if data changed and the bar show again, its transition animaiton
+        // Because if data changed and the bar shows again, its transition animation
         // will begin at this place.
         layout.x = (xClipped && x > coordSysX2) ? x2 : x;
         layout.y = (yClipped && y > coordSysY2) ? y2 : y;
@@ -764,7 +812,7 @@ const elementCreator: {
             const sectorShape = sector.shape;
             const animateProperty = isRadial ? 'r' : 'endAngle' as 'r' | 'endAngle';
             const animateTarget = {} as SectorShape;
-            sectorShape[animateProperty] = isRadial ? 0 : layout.startAngle;
+            sectorShape[animateProperty] = isRadial ? layout.r0 : layout.startAngle;
             animateTarget[animateProperty] = layout[animateProperty];
             (isUpdate ? updateProps : initProps)(sector, {
                 shape: animateTarget
@@ -941,7 +989,8 @@ function createPolarPositionMapping(isRadial: boolean)
 
 function updateStyle(
     el: BarPossiblePath,
-    data: SeriesData, dataIndex: number,
+    data: SeriesData,
+    dataIndex: number,
     itemModel: Model<BarDataItemOption>,
     layout: RectLayout | SectorLayout,
     seriesModel: BarSeriesModel,
@@ -951,7 +1000,19 @@ function updateStyle(
     const style = data.getItemVisual(dataIndex, 'style');
 
     if (!isPolar) {
-        (el as Rect).setShape('r', itemModel.get(['itemStyle', 'borderRadius']) || 0);
+        const borderRadius = itemModel
+            .get(['itemStyle', 'borderRadius']) as number | number[] || 0;
+        (el as Rect).setShape('r', borderRadius);
+    }
+    else if (!seriesModel.get('roundCap')) {
+        const sectorShape = (el as Sector).shape;
+        const cornerRadius = getSectorCornerRadius(
+            itemModel.getModel('itemStyle'),
+            sectorShape,
+            true
+        );
+        extend(sectorShape, cornerRadius);
+        (el as Sector).setShape(sectorShape);
     }
 
     el.useStyle(style);
@@ -961,15 +1022,15 @@ function updateStyle(
 
     const labelPositionOutside = isPolar
         ? (isHorizontalOrRadial
-            ? ((layout as SectorLayout).r >= (layout as SectorLayout).r0 ? 'endArc' as const : 'startArc' as const)
+            ? ((layout as SectorLayout).r >= (layout as SectorLayout).r0 ? 'endArc' : 'startArc')
             : ((layout as SectorLayout).endAngle >= (layout as SectorLayout).startAngle
-                ? 'endAngle' as const
-                : 'startAngle' as const
+                ? 'endAngle'
+                : 'startAngle'
             )
         )
         : (isHorizontalOrRadial
-            ? ((layout as RectLayout).height >= 0 ? 'bottom' as const : 'top' as const)
-            : ((layout as RectLayout).width >= 0 ? 'right' as const : 'left' as const));
+            ? ((layout as RectLayout).height >= 0 ? 'bottom' : 'top')
+            : ((layout as RectLayout).width >= 0 ? 'right' : 'left'));
 
     const labelStatesModels = getLabelStatesModels(itemModel);
 
@@ -1005,7 +1066,7 @@ function updateStyle(
     );
 
     const emphasisModel = itemModel.getModel(['emphasis']);
-    enableHoverEmphasis(el, emphasisModel.get('focus'), emphasisModel.get('blurScope'));
+    toggleHoverEmphasis(el, emphasisModel.get('focus'), emphasisModel.get('blurScope'), emphasisModel.get('disabled'));
     setStatesStylesFromModel(el, itemModel);
 
     if (isZeroOnPolar(layout as SectorLayout)) {
@@ -1046,11 +1107,10 @@ class LargePath extends Path<LargePathProps> {
     type = 'largeBar';
 
     shape: LagePathShape;
-;
-    __startPoint: number[];
-    __baseDimIdx: number;
-    __largeDataIndices: ArrayLike<number>;
-    __barWidth: number;
+
+    baseDimIdx: number;
+    largeDataIndices: ArrayLike<number>;
+    barWidth: number;
 
     constructor(opts?: LargePathProps) {
         super(opts);
@@ -1064,13 +1124,18 @@ class LargePath extends Path<LargePathProps> {
         // Drawing lines is more efficient than drawing
         // a whole line or drawing rects.
         const points = shape.points;
-        const startPoint = this.__startPoint;
-        const baseDimIdx = this.__baseDimIdx;
+        const baseDimIdx = this.baseDimIdx;
+        const valueDimIdx = 1 - this.baseDimIdx;
+        const startPoint = [];
+        const size = [];
+        const barWidth = this.barWidth;
 
-        for (let i = 0; i < points.length; i += 2) {
+        for (let i = 0; i < points.length; i += 3) {
+            size[baseDimIdx] = barWidth;
+            size[valueDimIdx] = points[i + 2];
             startPoint[baseDimIdx] = points[i + baseDimIdx];
-            ctx.moveTo(startPoint[0], startPoint[1]);
-            ctx.lineTo(points[i], points[i + 1]);
+            startPoint[valueDimIdx] = points[i + valueDimIdx];
+            ctx.rect(startPoint[0], startPoint[1], size[0], size[1]);
         }
     }
 }
@@ -1078,49 +1143,48 @@ class LargePath extends Path<LargePathProps> {
 function createLarge(
     seriesModel: BarSeriesModel,
     group: Group,
+    progressiveEls?: Element[],
     incremental?: boolean
 ) {
     // TODO support polar
     const data = seriesModel.getData();
-    const startPoint = [];
     const baseDimIdx = data.getLayout('valueAxisHorizontal') ? 1 : 0;
-    startPoint[1 - baseDimIdx] = data.getLayout('valueAxisStart');
 
     const largeDataIndices = data.getLayout('largeDataIndices');
-    const barWidth = data.getLayout('barWidth');
+    const barWidth = data.getLayout('size');
 
     const backgroundModel = seriesModel.getModel('backgroundStyle');
-    const drawBackground = seriesModel.get('showBackground', true);
+    const bgPoints = data.getLayout('largeBackgroundPoints');
 
-    if (drawBackground) {
-        const points = data.getLayout('largeBackgroundPoints');
-        const backgroundStartPoint: number[] = [];
-        backgroundStartPoint[1 - baseDimIdx] = data.getLayout('backgroundStart');
-
+    if (bgPoints) {
         const bgEl = new LargePath({
-            shape: {points: points},
+            shape: {
+                points: bgPoints
+            },
             incremental: !!incremental,
             silent: true,
             z2: 0
         });
-        bgEl.__startPoint = backgroundStartPoint;
-        bgEl.__baseDimIdx = baseDimIdx;
-        bgEl.__largeDataIndices = largeDataIndices;
-        bgEl.__barWidth = barWidth;
-        setLargeBackgroundStyle(bgEl, backgroundModel, data);
+        bgEl.baseDimIdx = baseDimIdx;
+        bgEl.largeDataIndices = largeDataIndices;
+        bgEl.barWidth = barWidth;
+        bgEl.useStyle(backgroundModel.getItemStyle());
         group.add(bgEl);
+
+        progressiveEls && progressiveEls.push(bgEl);
     }
 
     const el = new LargePath({
         shape: {points: data.getLayout('largePoints')},
-        incremental: !!incremental
+        incremental: !!incremental,
+        ignoreCoarsePointer: true,
+        z2: 1
     });
-    el.__startPoint = startPoint;
-    el.__baseDimIdx = baseDimIdx;
-    el.__largeDataIndices = largeDataIndices;
-    el.__barWidth = barWidth;
+    el.baseDimIdx = baseDimIdx;
+    el.largeDataIndices = largeDataIndices;
+    el.barWidth = barWidth;
     group.add(el);
-    setLargeStyle(el, seriesModel, data);
+    el.useStyle(data.getVisual('style'));
 
     // Enable tooltip and user mouse/touch event handlers.
     getECData(el).seriesIndex = seriesModel.seriesIndex;
@@ -1129,6 +1193,7 @@ function createLarge(
         el.on('mousedown', largePathUpdateDataIndex);
         el.on('mousemove', largePathUpdateDataIndex);
     }
+    progressiveEls && progressiveEls.push(el);
 }
 
 // Use throttle to avoid frequently traverse to find dataIndex.
@@ -1139,65 +1204,33 @@ const largePathUpdateDataIndex = throttle(function (this: LargePath, event: ZREl
 }, 30, false);
 
 function largePathFindDataIndex(largePath: LargePath, x: number, y: number) {
-    const baseDimIdx = largePath.__baseDimIdx;
+    const baseDimIdx = largePath.baseDimIdx;
     const valueDimIdx = 1 - baseDimIdx;
     const points = largePath.shape.points;
-    const largeDataIndices = largePath.__largeDataIndices;
-    const barWidthHalf = Math.abs(largePath.__barWidth / 2);
-    const startValueVal = largePath.__startPoint[valueDimIdx];
+    const largeDataIndices = largePath.largeDataIndices;
+    const startPoint = [];
+    const size = [];
+    const barWidth = largePath.barWidth;
 
-    _eventPos[0] = x;
-    _eventPos[1] = y;
-    const pointerBaseVal = _eventPos[baseDimIdx];
-    const pointerValueVal = _eventPos[1 - baseDimIdx];
-    const baseLowerBound = pointerBaseVal - barWidthHalf;
-    const baseUpperBound = pointerBaseVal + barWidthHalf;
+    for (let i = 0, len = points.length / 3; i < len; i++) {
+        const ii = i * 3;
+        size[baseDimIdx] = barWidth;
+        size[valueDimIdx] = points[ii + 2];
+        startPoint[baseDimIdx] = points[ii + baseDimIdx];
+        startPoint[valueDimIdx] = points[ii + valueDimIdx];
+        if (size[valueDimIdx] < 0) {
+            startPoint[valueDimIdx] += size[valueDimIdx];
+            size[valueDimIdx] = -size[valueDimIdx];
+        }
 
-    for (let i = 0, len = points.length / 2; i < len; i++) {
-        const ii = i * 2;
-        const barBaseVal = points[ii + baseDimIdx];
-        const barValueVal = points[ii + valueDimIdx];
-        if (
-            barBaseVal >= baseLowerBound && barBaseVal <= baseUpperBound
-            && (
-                startValueVal <= barValueVal
-                    ? (pointerValueVal >= startValueVal && pointerValueVal <= barValueVal)
-                    : (pointerValueVal >= barValueVal && pointerValueVal <= startValueVal)
-            )
+        if (x >= startPoint[0] && x <= startPoint[0] + size[0]
+            && y >= startPoint[1] && y <= startPoint[1] + size[1]
         ) {
             return largeDataIndices[i];
         }
     }
 
     return -1;
-}
-
-function setLargeStyle(
-    el: LargePath,
-    seriesModel: BarSeriesModel,
-    data: SeriesData
-) {
-    const globalStyle = data.getVisual('style');
-
-    el.useStyle(extend({}, globalStyle));
-    // Use stroke instead of fill.
-    el.style.fill = null;
-    el.style.stroke = globalStyle.fill;
-    el.style.lineWidth = data.getLayout('barWidth');
-}
-
-function setLargeBackgroundStyle(
-    el: LargePath,
-    backgroundModel: Model<BarSeriesOption['backgroundStyle']>,
-    data: SeriesData
-) {
-    const borderColor = backgroundModel.get('borderColor') || backgroundModel.get('color');
-    const itemStyle = backgroundModel.getItemStyle();
-
-    el.useStyle(itemStyle);
-    el.style.fill = null;
-    el.style.stroke = borderColor;
-    el.style.lineWidth = data.getLayout('barWidth') as number;
 }
 
 function createBackgroundShape(

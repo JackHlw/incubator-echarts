@@ -23,7 +23,7 @@ import * as roamHelper from '../../component/helper/roamHelper';
 import {onIrrelevantElement} from '../../component/helper/cursorHelper';
 import * as graphic from '../../util/graphic';
 import {
-    enableHoverEmphasis,
+    toggleHoverEmphasis,
     enableComponentHighDownFeatures,
     setDefaultStateProxy
 } from '../../util/states';
@@ -50,6 +50,7 @@ import SeriesData from '../../data/SeriesData';
 import { GeoJSONRegion } from '../../coord/geo/Region';
 import { SVGNodeTagLower } from 'zrender/src/tool/parseSVG';
 import { makeInner } from '../../util/model';
+import { GeoProjection, ProjectionStream } from '../../coord/geo/geoTypes';
 
 interface RegionsGroup extends graphic.Group {
 }
@@ -108,6 +109,17 @@ function getFixedItemStyle(model: Model<GeoItemStyleOption>) {
 
     return itemStyle;
 }
+// Only stroke can be used for line.
+// Using fill in style if stroke not exits.
+// TODO Not sure yet. Perhaps a separate `lineStyle`?
+function fixLineStyle(styleHost: { style: graphic.Path['style'] }) {
+    const style = styleHost.style;
+    if (style) {
+        style.stroke = (style.stroke || style.fill);
+        style.fill = null;
+    }
+}
+
 class MapDraw {
 
     private uid: string;
@@ -234,13 +246,38 @@ class MapDraw {
         const transformInfoRaw = viewBuildCtx.transformInfoRaw;
         const mapOrGeoModel = viewBuildCtx.mapOrGeoModel;
         const data = viewBuildCtx.data;
+        const projection = viewBuildCtx.geo.projection;
+        const projectionStream = projection && projection.stream;
 
-        const transformPoint = function (point: number[]): number[] {
-            return [
+        function transformPoint(point: number[], project: GeoProjection['project']): number[] {
+            if (project) {
+                // projection may return null point.
+                point = project(point);
+            }
+            return point && [
                 point[0] * transformInfoRaw.scaleX + transformInfoRaw.x,
                 point[1] * transformInfoRaw.scaleY + transformInfoRaw.y
             ];
         };
+
+        function transformPolygonPoints(inPoints: number[][]): number[][] {
+            const outPoints = [];
+            // If projectionStream is provided. Use it instead of single point project.
+            const project = !projectionStream && projection && projection.project;
+            for (let i = 0; i < inPoints.length; ++i) {
+                const newPt = transformPoint(inPoints[i], project);
+                newPt && outPoints.push(newPt);
+            }
+            return outPoints;
+        }
+
+        function getPolyShape(points: number[][]) {
+            return {
+                shape: {
+                    points: transformPolygonPoints(points)
+                }
+            };
+        }
 
         regionsGroup.removeAll();
 
@@ -268,56 +305,61 @@ class MapDraw {
                 regionsInfoByName.set(regionName, { dataIdx, regionModel });
             }
 
-            const compoundPath = new graphic.CompoundPath({
-                segmentIgnoreThreshold: 1,
-                shape: {
-                    paths: []
-                }
-            });
-            regionGroup.add(compoundPath);
+            const polygonSubpaths: graphic.Polygon[] = [];
+            const polylineSubpaths: graphic.Polyline[] = [];
 
             zrUtil.each(region.geometries, function (geometry) {
-                if (geometry.type !== 'polygon') {
-                    return;
-                }
-                const points = [];
-                for (let i = 0; i < geometry.exterior.length; ++i) {
-                    points.push(transformPoint(geometry.exterior[i]));
-                }
-                compoundPath.shape.paths.push(new graphic.Polygon({
-                    segmentIgnoreThreshold: 1,
-                    shape: {
-                        points: points
+                // Polygon and MultiPolygon
+                if (geometry.type === 'polygon') {
+                    let polys = [geometry.exterior].concat(geometry.interiors || []);
+                    if (projectionStream) {
+                        polys = projectPolys(polys, projectionStream);
                     }
-                }));
-
-                for (let i = 0; i < (geometry.interiors ? geometry.interiors.length : 0); ++i) {
-                    const interior = geometry.interiors[i];
-                    const points = [];
-                    for (let j = 0; j < interior.length; ++j) {
-                        points.push(transformPoint(interior[j]));
+                    zrUtil.each(polys, (poly) => {
+                        polygonSubpaths.push(new graphic.Polygon(getPolyShape(poly)));
+                    });
+                }
+                // LineString and MultiLineString
+                else {
+                    let points = geometry.points;
+                    if (projectionStream) {
+                        points = projectPolys(points, projectionStream, true);
                     }
-                    compoundPath.shape.paths.push(new graphic.Polygon({
-                        segmentIgnoreThreshold: 1,
-                        shape: {
-                            points: points
-                        }
-                    }));
+                    zrUtil.each(points, points => {
+                        polylineSubpaths.push(new graphic.Polyline(getPolyShape(points)));
+                    });
                 }
             });
 
-            applyOptionStyleForRegion(
-                viewBuildCtx, compoundPath, dataIdx, regionModel
-            );
+            const centerPt = transformPoint(region.getCenter(), projection && projection.project);
 
-            if (compoundPath instanceof Displayable) {
-                compoundPath.culling = true;
+            function createCompoundPath(subpaths: graphic.Path[], isLine?: boolean) {
+                if (!subpaths.length) {
+                    return;
+                }
+                const compoundPath = new graphic.CompoundPath({
+                    culling: true,
+                    segmentIgnoreThreshold: 1,
+                    shape: {
+                        paths: subpaths
+                    }
+                });
+                regionGroup.add(compoundPath);
+                applyOptionStyleForRegion(
+                    viewBuildCtx, compoundPath, dataIdx, regionModel
+                );
+                resetLabelForRegion(
+                    viewBuildCtx, compoundPath, regionName, regionModel, mapOrGeoModel, dataIdx, centerPt
+                );
+
+                if (isLine) {
+                    fixLineStyle(compoundPath);
+                    zrUtil.each(compoundPath.states, fixLineStyle);
+                }
             }
 
-            const centerPt = transformPoint(region.getCenter());
-            resetLabelForRegion(
-                viewBuildCtx, compoundPath, regionName, regionModel, mapOrGeoModel, dataIdx, centerPt
-            );
+            createCompoundPath(polygonSubpaths);
+            createCompoundPath(polylineSubpaths, true);
         });
 
         // Ensure children have been added to `regionGroup` before calling them.
@@ -424,11 +466,11 @@ class MapDraw {
         viewBuildCtx: ViewBuildContext
     ): void {
         // It's a little complicated to support blurring the entire geoSVG in series-map.
-        // So do not suport it until some requirements come.
+        // So do not support it until some requirements come.
         // At present, in series-map, only regions can be blurred.
         if (focusSelf && viewBuildCtx.isGeo) {
             const blurStyle = (viewBuildCtx.mapOrGeoModel as GeoModel).getModel(['blur', 'itemStyle']).getItemStyle();
-            // Only suport `opacity` here. Because not sure that other props are suitable for
+            // Only support `opacity` here. Because not sure that other props are suitable for
             // all of the elements generated by SVG (especially for Text/TSpan/Image/... ).
             const opacity = blurStyle.opacity;
             this._svgGraphicRecord.root.traverse(el => {
@@ -540,7 +582,10 @@ class MapDraw {
 
             api.dispatchAction(zrUtil.extend(makeActionBase(), {
                 dx: e.dx,
-                dy: e.dy
+                dy: e.dy,
+                animation: {
+                    duration: 0
+                }
             }));
         }, this);
 
@@ -552,7 +597,10 @@ class MapDraw {
             api.dispatchAction(zrUtil.extend(makeActionBase(), {
                 zoom: e.scale,
                 originX: e.originX,
-                originY: e.originY
+                originY: e.originY,
+                animation: {
+                    duration: 0
+                }
             }));
 
         }, this);
@@ -569,7 +617,7 @@ class MapDraw {
      * `ignore` might have been modified by `LabelManager`, and `LabelManager#addLabelsOfSeries`
      * will subsequently cache `defaultAttr` like `ignore`. If do not do this reset, the modified
      * props will have no chance to be restored.
-     * Note: this reset should be after `clearStates` in `renderSeries` becuase `useStates` in
+     * Note: This reset should be after `clearStates` in `renderSeries` because `useStates` in
      * `renderSeries` will cache the modified `ignore` to `el._normalState`.
      * TODO:
      * Use clone/immutable in `LabelManager`?
@@ -624,12 +672,12 @@ function applyOptionStyleForRegion(
         }
     >
 ): void {
-    // All of the path are using `itemStyle`, becuase
+    // All of the path are using `itemStyle`, because
     // (1) Some SVG also use fill on polyline (The different between
     // polyline and polygon is "open" or "close" but not fill or not).
     // (2) For the common props like opacity, if some use itemStyle
     // and some use `lineStyle`, it might confuse users.
-    // (3) Most SVG use <path>, where can not detect wether draw a "line"
+    // (3) Most SVG use <path>, where can not detect whether to draw a "line"
     // or a filled shape, so use `itemStyle` for <path>.
 
     const normalStyleModel = regionModel.getModel('itemStyle');
@@ -637,7 +685,7 @@ function applyOptionStyleForRegion(
     const blurStyleModel = regionModel.getModel(['blur', 'itemStyle']);
     const selectStyleModel = regionModel.getModel(['select', 'itemStyle']);
 
-    // NOTE: DONT use 'style' in visual when drawing map.
+    // NOTE: DON'T use 'style' in visual when drawing map.
     // This component is used for drawing underlying map for both geo component and map series.
     const normalStyle = getFixedItemStyle(normalStyleModel);
     const emphasisStyle = getFixedItemStyle(emphasisStyleModel);
@@ -720,7 +768,7 @@ function resetLabelForRegion(
             el,
             getLabelStatesModels(regionModel),
             {
-                labelFetcher: labelFetcher,
+                labelFetcher,
                 labelDataIndex: query,
                 defaultText: regionName
             },
@@ -772,7 +820,7 @@ function resetEventTriggerForRegion(
     dataIdx: number
 ): void {
     // setItemGraphicEl, setHoverStyle after all polygons and labels
-    // are added to the rigionGroup
+    // are added to the regionGroup
     if (viewBuildCtx.data) {
         // FIXME: when series-map use a SVG map, and there are duplicated name specified
         // on different SVG elements, after `data.setItemGraphicEl(...)`:
@@ -784,7 +832,7 @@ function resetEventTriggerForRegion(
         viewBuildCtx.data.setItemGraphicEl(dataIdx, eventTrigger);
     }
     // series-map will not trigger "geoselectchange" no matter it is
-    // based on a declared geo component. Becuause series-map will
+    // based on a declared geo component. Because series-map will
     // trigger "selectchange". If it trigger both the two events,
     // If users call `chart.dispatchAction({type: 'toggleSelect'})`,
     // it not easy to also fire event "geoselectchanged".
@@ -830,14 +878,54 @@ function resetStateTriggerForRegion(
     // @ts-ignore FIXME:TS fix the "compatible with each other"?
     const emphasisModel = regionModel.getModel('emphasis');
     const focus = emphasisModel.get('focus');
-    enableHoverEmphasis(
-        el, focus, emphasisModel.get('blurScope')
-    );
+    toggleHoverEmphasis(el, focus, emphasisModel.get('blurScope'), emphasisModel.get('disabled'));
     if (viewBuildCtx.isGeo) {
         enableComponentHighDownFeatures(el, mapOrGeoModel as GeoModel, regionName);
     }
 
     return focus;
+}
+
+function projectPolys(
+    rings: number[][][], // Polygons include exterior and interiors. Or polylines.
+    createStream: (outStream: ProjectionStream) => ProjectionStream,
+    isLine?: boolean
+) {
+    const polygons: number[][][] = [];
+    let curPoly: number[][];
+
+    function startPolygon() {
+        curPoly = [];
+    }
+    function endPolygon() {
+        if (curPoly.length) {
+            polygons.push(curPoly);
+            curPoly = [];
+        }
+    }
+    const stream = createStream({
+        polygonStart: startPolygon,
+        polygonEnd: endPolygon,
+        lineStart: startPolygon,
+        lineEnd: endPolygon,
+        point(x, y) {
+            // May have NaN values from stream.
+            if (isFinite(x) && isFinite(y)) {
+                curPoly.push([x, y]);
+            }
+        },
+        sphere() {}
+    });
+    !isLine && stream.polygonStart();
+    zrUtil.each(rings, ring => {
+        stream.lineStart();
+        for (let i = 0; i < ring.length; i++) {
+            stream.point(ring[i][0], ring[i][1]);
+        }
+        stream.lineEnd();
+    });
+    !isLine && stream.polygonEnd();
+    return polygons;
 }
 
 export default MapDraw;

@@ -37,7 +37,9 @@ import { parsePercent } from 'zrender/src/contain/text';
 import { setAsHighDownDispatcher } from '../../util/states';
 import { createSymbol } from '../../util/symbol';
 import ZRImage from 'zrender/src/graphic/Image';
-import { getECData } from '../../util/innerStore';
+import { ECData, getECData } from '../../util/innerStore';
+import { createTextStyle } from '../../label/labelStyle';
+import { findEventDispatcher } from '../../util/event';
 
 const linearMap = numberUtil.linearMap;
 const each = zrUtil.each;
@@ -184,15 +186,13 @@ class ContinuousView extends VisualMapView {
         const textStyleModel = this.visualMapModel.textStyleModel;
 
         this.group.add(new graphic.Text({
-            style: {
+            style: createTextStyle(textStyleModel, {
                 x: position[0],
                 y: position[1],
                 verticalAlign: orient === 'horizontal' ? 'middle' : align as TextVerticalAlign,
                 align: orient === 'horizontal' ? align as TextAlign : 'center',
-                text: text,
-                font: textStyleModel.getFont(),
-                fill: textStyleModel.getTextColor()
-            }
+                text
+            })
         }));
     }
 
@@ -296,15 +296,15 @@ class ContinuousView extends VisualMapView {
             draggable: true,
             drift: onDrift,
             onmousemove(e) {
-                // Fot mobile devicem, prevent screen slider on the button.
+                // For mobile device, prevent screen slider on the button.
                 eventTool.stop(e.event);
             },
             ondragend: onDragEnd,
-            style: {
-                x: 0, y: 0, text: '',
-                font: textStyleModel.getFont(),
-                fill: textStyleModel.getTextColor()
-            }
+            style: createTextStyle(textStyleModel, {
+                x: 0,
+                y: 0,
+                text: ''
+            })
         });
         handleLabel.ensureState('blur').style = {
             opacity: 0.1
@@ -360,11 +360,11 @@ class ContinuousView extends VisualMapView {
         const indicatorLabel = new graphic.Text({
             silent: true,
             invisible: true,
-            style: {
-                x: 0, y: 0, text: '',
-                font: textStyleModel.getFont(),
-                fill: textStyleModel.getTextColor()
-            }
+            style: createTextStyle(textStyleModel, {
+                x: 0,
+                y: 0,
+                text: ''
+            })
         });
         this.group.add(indicatorLabel);
 
@@ -453,7 +453,7 @@ class ContinuousView extends VisualMapView {
             handleEnds,
             sizeExtent,
             handleIndex,
-            // cross is forbiden
+            // cross is forbidden
             0
         );
 
@@ -532,7 +532,7 @@ class ContinuousView extends VisualMapView {
         }
     ) {
         // Considering colorHue, which is not linear, so we have to sample
-        // to calculate gradient color stops, but not only caculate head
+        // to calculate gradient color stops, but not only calculate head
         // and tail.
         const sampleNumber = 100; // Arbitrary value.
         const colorStops: LinearGradientObject['colorStops'] = [];
@@ -817,16 +817,23 @@ class ContinuousView extends VisualMapView {
     }
 
     private _hoverLinkFromSeriesMouseOver(e: ElementEvent) {
-        const el = e.target;
-        const visualMapModel = this.visualMapModel;
+        let ecData: ECData;
 
-        if (!el || getECData(el).dataIndex == null) {
+        findEventDispatcher(e.target, target => {
+            const currECData = getECData(target);
+            if (currECData.dataIndex != null) {
+                ecData = currECData;
+                return true;
+            }
+        }, true);
+
+        if (!ecData) {
             return;
         }
-        const ecData = getECData(el);
 
         const dataModel = this.ecModel.getSeriesByIndex(ecData.seriesIndex);
 
+        const visualMapModel = this.visualMapModel;
         if (!visualMapModel.isTargetSeries(dataModel)) {
             return;
         }
@@ -923,7 +930,7 @@ function createPolygon(
         cursor: cursor,
         drift: onDrift,
         onmousemove(e) {
-            // Fot mobile devicem, prevent screen slider on the button.
+            // For mobile device, prevent screen slider on the button.
             eventTool.stop(e.event);
         },
         ondragend: onDragEnd

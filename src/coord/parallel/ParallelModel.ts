@@ -70,14 +70,14 @@ class ParallelModel extends ComponentModel<ParallelCoordinateSystemOption> {
     dimensions: DimensionName[];
 
     /**
-     * Coresponding to dimensions.
+     * Corresponding to dimensions.
      */
     parallelAxisIndex: number[];
 
     static layoutMode = 'box' as const;
 
     static defaultOption: ParallelCoordinateSystemOption = {
-        zlevel: 0,
+        // zlevel: 0,
         z: 0,
         left: 80,
         top: 60,
