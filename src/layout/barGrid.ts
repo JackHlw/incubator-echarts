@@ -602,7 +602,7 @@ function doGetLayoutRenderItemInfo(
                 columnOffset: columnOffsetList[i]
             };
         }
-        if (value * dataItem.value > 0) {
+        if (value * dataItem.value >= 0) {
             startValue += dataItem.value;
         }
     }
