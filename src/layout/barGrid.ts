@@ -478,7 +478,7 @@ export function layout(seriesType: string, ecModel: GlobalModel) {
         noOrderLayoutDataList: [],
         columnOffsetList: []
     };
-    each(seriesModels, function (seriesModel) {
+    each(seriesModels, function (seriesModel, index) {
 
         const data = seriesModel.getData();
         const cartesian = seriesModel.coordinateSystem as Cartesian2D;
@@ -492,7 +492,7 @@ export function layout(seriesType: string, ecModel: GlobalModel) {
             offset: columnLayoutInfo.offset,
             size: columnLayoutInfo.width
         });
-        collectingLayoutData(layoutInfo, seriesModel);
+        collectingLayoutData(layoutInfo, seriesModel, index);
     });
     if (layoutInfo.groupOrder !== undefined) {
         orderLayoutData(layoutInfo);
@@ -508,7 +508,8 @@ function getSeriesGroupOrder(seriesModels: BarSeriesModel[]) {
 }
 function collectingLayoutData(
     layoutInfo: layoutInfo,
-    seriesModel: BarSeriesModel
+    seriesModel: BarSeriesModel,
+    index: number
 ) {
 
     const data = seriesModel.getData();
@@ -523,7 +524,7 @@ function collectingLayoutData(
     const noOrderLayoutDataList = layoutInfo.noOrderLayoutDataList;
     const columnOffsetList = layoutInfo.columnOffsetList;
     let layoutDataListItem: layoutItemInfo;
-    columnOffsetList[seriesIndex] = columnOffset;
+    columnOffsetList[index] = columnOffset;//index取值为for循环索引，用于图例点击时，获取对应位置的偏移量 实现柱子靠近的情况
     let value;
     let baseValue;
     const store = data.getStore();
