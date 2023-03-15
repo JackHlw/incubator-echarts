@@ -520,6 +520,7 @@ function collectingLayoutData(
     const valueDimIdx = data.getDimensionIndex(data.mapDimension(valueAxis.dim));
     const baseDimIdx = data.getDimensionIndex(data.mapDimension(baseAxis.dim));
     const columnOffset = data.getLayout('offset');
+    const stackId = getSeriesStackId(seriesModel);
     const orderLayoutDataList = layoutInfo.orderLayoutDataList;
     const noOrderLayoutDataList = layoutInfo.noOrderLayoutDataList;
     const columnOffsetList = layoutInfo.columnOffsetList;
@@ -537,6 +538,7 @@ function collectingLayoutData(
         layoutDataListItem = {
             dataIndex: idx,
             value: value,
+            stackId: stackId,
             baseValue: baseValue,
             seriesIndex: seriesIndex
         };
@@ -569,7 +571,7 @@ function orderLayoutData(layoutInfo: layoutInfo) {
         });
     });
 }
-function getLayoutRenderItemInfo(seriesIndex: number, dataIndex: number, value: number): layoutRenderItemInfo {
+function getLayoutRenderItemInfo(seriesIndex: number, dataIndex: number, value: number, stackId: string): layoutRenderItemInfo {
     const layoutDataList = [].concat(layoutInfo.orderLayoutDataList, layoutInfo.noOrderLayoutDataList);
     const columnOffsetList = layoutInfo.columnOffsetList;
     let layoutRenderItemInfo: layoutRenderItemInfo = {};
@@ -577,7 +579,7 @@ function getLayoutRenderItemInfo(seriesIndex: number, dataIndex: number, value: 
         if (layoutDataList[i] === undefined) {
             continue;
         }
-        layoutRenderItemInfo = doGetLayoutRenderItemInfo(seriesIndex, dataIndex, value, layoutDataList[i], columnOffsetList);
+        layoutRenderItemInfo = doGetLayoutRenderItemInfo(seriesIndex, dataIndex, value, layoutDataList[i], columnOffsetList, stackId);
         if (layoutRenderItemInfo.columnOffset === undefined) {
             continue;
         }
@@ -590,12 +592,16 @@ function doGetLayoutRenderItemInfo(
     dataIndex: number,
     value: number,
     layoutDataSingleList: layoutItemInfo[],
-    columnOffsetList: Array<number>
+    columnOffsetList: Array<number>,
+    stackId: string
 ): layoutRenderItemInfo {
     let startValue = 0;
     for (let i = 0; i < layoutDataSingleList.length; i++) {
         const dataItem = layoutDataSingleList[i];
-        if (dataItem.seriesIndex === seriesIndex && dataItem.dataIndex === dataIndex) {
+        if (
+            dataItem.dataIndex === dataIndex &&
+            dataItem.seriesIndex === seriesIndex
+        ) {
             return {
                 value: dataItem.value,
                 baseValue: dataItem.baseValue,
@@ -603,7 +609,8 @@ function doGetLayoutRenderItemInfo(
                 columnOffset: columnOffsetList[i]
             };
         }
-        if (value * dataItem.value >= 0) {
+        if (value * dataItem.value >= 0 && dataItem.stackId === stackId) {
+            //相同类型的堆叠才进行数据叠加，防止普通bar和堆叠共同存在的情况
             startValue += dataItem.value;
         }
     }
@@ -633,6 +640,7 @@ export function createProgressiveLayout(seriesType: string): StageHandler {
             const drawBackground = seriesModel.get('showBackground', true);
             const valueDim = data.mapDimension(valueAxis.dim);
             const stacked = isDimensionStacked(data, valueDim);
+            const stackId = getSeriesStackId(seriesModel);
             const isValueAxisH = valueAxis.isHorizontal();
             const valueAxisStart = getValueAxisStart(baseAxis, valueAxis);
             const isLarge = isInLargeMode(seriesModel);
@@ -656,7 +664,7 @@ export function createProgressiveLayout(seriesType: string): StageHandler {
 
                     while ((dataIndex = params.next()) != null) {
                         const value = store.get(valueDimIdx, dataIndex) as number;
-                        const layoutRenderItemInfo = getLayoutRenderItemInfo(seriesIndex, dataIndex, value);
+                        const layoutRenderItemInfo = getLayoutRenderItemInfo(seriesIndex, dataIndex, value, stackId);
                         const columnOffset = layoutRenderItemInfo.columnOffset;
                         if (columnOffset === undefined) {
                             return;
