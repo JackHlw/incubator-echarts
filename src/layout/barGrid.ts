@@ -17,7 +17,7 @@
 * under the License.
 */
 
-import { each, defaults, keys, isNumber } from 'zrender/src/core/util';
+import { each, defaults, keys, isNumber, clone } from 'zrender/src/core/util';
 import { parsePercent } from '../util/number';
 import { isDimensionStacked } from '../data/helper/dataStackHelper';
 import createRenderPlanner from '../chart/helper/createRenderPlanner';
@@ -529,6 +529,8 @@ function collectingLayoutData(
     let value;
     let baseValue;
     const store = data.getStore();
+    const seriesOrder = seriesModel.get('groupOrder');
+
     for (let idx = 0, len = store.count(); idx < len; idx++) {
         baseValue = store.get(baseDimIdx, idx) as number;
         if (!isNumber(baseValue)) {
@@ -542,13 +544,14 @@ function collectingLayoutData(
             baseValue: baseValue,
             seriesIndex: seriesIndex
         };
-        if (['asc', 'desc'].includes(layoutInfo.groupOrder)) {
+        if (['asc', 'desc'].includes(seriesOrder)) {
             if (orderLayoutDataList[baseValue] === undefined) {
                 orderLayoutDataList[baseValue] = [];
             }
-            orderLayoutDataList[baseValue].push(layoutDataListItem);
-            continue;
+            orderLayoutDataList[baseValue].push(clone(layoutDataListItem));
+            layoutDataListItem.isOrderData = true;
         }
+        //当前堆叠的情况下，如果排序和不排序混合的情况下，需要将排序数据添加到非排序数据中，用于堆叠数据的计算，单数数据项不能在绘制
         if (noOrderLayoutDataList[baseValue] === undefined) {
             noOrderLayoutDataList[baseValue] = [];
         }
@@ -598,6 +601,10 @@ function doGetLayoutRenderItemInfo(
     let startValue = 0;
     for (let i = 0; i < layoutDataSingleList.length; i++) {
         const dataItem = layoutDataSingleList[i];
+        if(dataItem.isOrderData) {
+            //当前数据为非排序堆叠专用数据，无需绘制，用于非排序堆叠计算
+            continue
+        }
         if (
             dataItem.dataIndex === dataIndex &&
             dataItem.seriesIndex === seriesIndex
