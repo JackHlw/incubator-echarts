@@ -601,11 +601,9 @@ function doGetLayoutRenderItemInfo(
     let startValue = 0;
     for (let i = 0; i < layoutDataSingleList.length; i++) {
         const dataItem = layoutDataSingleList[i];
-        if(dataItem.isOrderData) {
-            //当前数据为非排序堆叠专用数据，无需绘制，用于非排序堆叠计算
-            continue
-        }
+        //isOrderData 当前数据为非排序堆叠专用数据，无需绘制，用于非排序堆叠计算
         if (
+            !dataItem.isOrderData && 
             dataItem.dataIndex === dataIndex &&
             dataItem.seriesIndex === seriesIndex
         ) {
