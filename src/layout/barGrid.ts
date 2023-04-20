@@ -672,7 +672,7 @@ export function createProgressiveLayout(seriesType: string): StageHandler {
                         const layoutRenderItemInfo = getLayoutRenderItemInfo(seriesIndex, dataIndex, value, stackId);
                         const columnOffset = layoutRenderItemInfo.columnOffset;
                         if (columnOffset === undefined) {
-                            return;
+                            continue;
                         }
                         const baseValue = layoutRenderItemInfo.baseValue;
                         let baseCoord = valueAxisStart;
