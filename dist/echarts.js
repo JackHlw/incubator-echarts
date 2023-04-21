@@ -31488,7 +31488,7 @@
         noOrderLayoutDataList: [],
         columnOffsetList: []
       };
-      each(seriesModels, function (seriesModel) {
+      each(seriesModels, function (seriesModel, index) {
         var data = seriesModel.getData();
         var cartesian = seriesModel.coordinateSystem;
         var baseAxis = cartesian.getBaseAxis();
@@ -31499,7 +31499,7 @@
           offset: columnLayoutInfo.offset,
           size: columnLayoutInfo.width
         });
-        collectingLayoutData(layoutInfo, seriesModel);
+        collectingLayoutData(layoutInfo, seriesModel, index);
       });
       if (layoutInfo.groupOrder !== undefined) {
         orderLayoutData(layoutInfo);
@@ -31513,7 +31513,7 @@
         }
       }
     }
-    function collectingLayoutData(layoutInfo, seriesModel) {
+    function collectingLayoutData(layoutInfo, seriesModel, index) {
       var data = seriesModel.getData();
       var seriesIndex = seriesModel.seriesIndex;
       var cartesian = seriesModel.coordinateSystem;
@@ -31522,14 +31522,16 @@
       var valueDimIdx = data.getDimensionIndex(data.mapDimension(valueAxis.dim));
       var baseDimIdx = data.getDimensionIndex(data.mapDimension(baseAxis.dim));
       var columnOffset = data.getLayout('offset');
+      var stackId = getSeriesStackId(seriesModel);
       var orderLayoutDataList = layoutInfo.orderLayoutDataList;
       var noOrderLayoutDataList = layoutInfo.noOrderLayoutDataList;
       var columnOffsetList = layoutInfo.columnOffsetList;
       var layoutDataListItem;
-      columnOffsetList[seriesIndex] = columnOffset;
+      columnOffsetList[index] = columnOffset; //index取值为for循环索引，用于图例点击时，获取对应位置的偏移量 实现柱子靠近的情况
       var value;
       var baseValue;
       var store = data.getStore();
+      var seriesOrder = seriesModel.get('groupOrder');
       for (var idx = 0, len = store.count(); idx < len; idx++) {
         baseValue = store.get(baseDimIdx, idx);
         if (!isNumber(baseValue)) {
@@ -31539,16 +31541,18 @@
         layoutDataListItem = {
           dataIndex: idx,
           value: value,
+          stackId: stackId,
           baseValue: baseValue,
           seriesIndex: seriesIndex
         };
-        if (['asc', 'desc'].includes(layoutInfo.groupOrder)) {
+        if (['asc', 'desc'].includes(seriesOrder)) {
           if (orderLayoutDataList[baseValue] === undefined) {
             orderLayoutDataList[baseValue] = [];
           }
-          orderLayoutDataList[baseValue].push(layoutDataListItem);
-          continue;
+          orderLayoutDataList[baseValue].push(clone(layoutDataListItem));
+          layoutDataListItem.isOrderData = true;
         }
+        //当前堆叠的情况下，如果排序和不排序混合的情况下，需要将排序数据添加到非排序数据中，用于堆叠数据的计算，单数数据项不能在绘制
         if (noOrderLayoutDataList[baseValue] === undefined) {
           noOrderLayoutDataList[baseValue] = [];
         }
@@ -31573,7 +31577,7 @@
         });
       });
     }
-    function getLayoutRenderItemInfo(seriesIndex, dataIndex, value) {
+    function getLayoutRenderItemInfo(seriesIndex, dataIndex, value, stackId) {
       var layoutDataList = [].concat(layoutInfo.orderLayoutDataList, layoutInfo.noOrderLayoutDataList);
       var columnOffsetList = layoutInfo.columnOffsetList;
       var layoutRenderItemInfo = {};
@@ -31581,7 +31585,7 @@
         if (layoutDataList[i] === undefined) {
           continue;
         }
-        layoutRenderItemInfo = doGetLayoutRenderItemInfo(seriesIndex, dataIndex, value, layoutDataList[i], columnOffsetList);
+        layoutRenderItemInfo = doGetLayoutRenderItemInfo(seriesIndex, dataIndex, value, layoutDataList[i], columnOffsetList, stackId);
         if (layoutRenderItemInfo.columnOffset === undefined) {
           continue;
         }
@@ -31589,11 +31593,12 @@
       }
       return layoutRenderItemInfo;
     }
-    function doGetLayoutRenderItemInfo(seriesIndex, dataIndex, value, layoutDataSingleList, columnOffsetList) {
+    function doGetLayoutRenderItemInfo(seriesIndex, dataIndex, value, layoutDataSingleList, columnOffsetList, stackId) {
       var startValue = 0;
       for (var i = 0; i < layoutDataSingleList.length; i++) {
         var dataItem = layoutDataSingleList[i];
-        if (dataItem.seriesIndex === seriesIndex && dataItem.dataIndex === dataIndex) {
+        //isOrderData 当前数据为非排序堆叠专用数据，无需绘制，用于非排序堆叠计算
+        if (!dataItem.isOrderData && dataItem.dataIndex === dataIndex && dataItem.seriesIndex === seriesIndex) {
           return {
             value: dataItem.value,
             baseValue: dataItem.baseValue,
@@ -31601,7 +31606,8 @@
             columnOffset: columnOffsetList[i]
           };
         }
-        if (value * dataItem.value > 0) {
+        if (value * dataItem.value >= 0 && dataItem.stackId === stackId) {
+          //相同类型的堆叠才进行数据叠加，防止普通bar和堆叠共同存在的情况
           startValue += dataItem.value;
         }
       }
@@ -31625,6 +31631,7 @@
           var drawBackground = seriesModel.get('showBackground', true);
           var valueDim = data.mapDimension(valueAxis.dim);
           var stacked = isDimensionStacked(data, valueDim);
+          var stackId = getSeriesStackId(seriesModel);
           var isValueAxisH = valueAxis.isHorizontal();
           var valueAxisStart = getValueAxisStart(baseAxis, valueAxis);
           var isLarge = isInLargeMode(seriesModel);
@@ -31645,10 +31652,10 @@
               var idxOffset = 0;
               while ((dataIndex = params.next()) != null) {
                 var value = store.get(valueDimIdx, dataIndex);
-                var layoutRenderItemInfo = getLayoutRenderItemInfo(seriesIndex, dataIndex, value);
+                var layoutRenderItemInfo = getLayoutRenderItemInfo(seriesIndex, dataIndex, value, stackId);
                 var columnOffset = layoutRenderItemInfo.columnOffset;
                 if (columnOffset === undefined) {
-                  return;
+                  continue;
                 }
                 var baseValue = layoutRenderItemInfo.baseValue;
                 var baseCoord = valueAxisStart;
