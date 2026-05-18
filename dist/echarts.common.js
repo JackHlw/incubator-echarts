@@ -32753,10 +32753,27 @@
         return result;
       }
     }
+    var layoutInfo = {
+      orderLayoutDataList: [],
+      noOrderLayoutDataList: [],
+      columnOffsetList: []
+    };
+    /**
+     * Intra group sorting interface-end
+     */
     function layout(seriesType, ecModel) {
       var seriesModels = prepareLayoutBarSeries(seriesType, ecModel);
       var barWidthAndOffset = makeColumnLayout(seriesModels);
-      each(seriesModels, function (seriesModel) {
+      if (seriesModels.length === 0) {
+        return;
+      }
+      layoutInfo = {
+        groupOrder: getSeriesGroupOrder(seriesModels),
+        orderLayoutDataList: [],
+        noOrderLayoutDataList: [],
+        columnOffsetList: []
+      };
+      each(seriesModels, function (seriesModel, index) {
         var data = seriesModel.getData();
         var cartesian = seriesModel.coordinateSystem;
         var baseAxis = cartesian.getBaseAxis();
@@ -32769,7 +32786,116 @@
           offset: columnOffset,
           size: columnWidth
         });
+        collectingLayoutData(layoutInfo, seriesModel, index);
       });
+      if (layoutInfo.groupOrder !== undefined) {
+        orderLayoutData(layoutInfo);
+      }
+    }
+    function getSeriesGroupOrder(seriesModels) {
+      for (var i = 0; i < seriesModels.length; i++) {
+        var seriesOrder = seriesModels[i].get('groupOrder');
+        if (seriesOrder !== undefined) {
+          return seriesOrder;
+        }
+      }
+    }
+    function collectingLayoutData(layoutInfo, seriesModel, index) {
+      var data = seriesModel.getData();
+      var seriesIndex = seriesModel.seriesIndex;
+      var cartesian = seriesModel.coordinateSystem;
+      var baseAxis = cartesian.getBaseAxis();
+      var valueAxis = cartesian.getOtherAxis(baseAxis);
+      var valueDimIdx = data.getDimensionIndex(data.mapDimension(valueAxis.dim));
+      var baseDimIdx = data.getDimensionIndex(data.mapDimension(baseAxis.dim));
+      var columnOffset = data.getLayout('offset');
+      var stackId = getSeriesStackId(seriesModel);
+      var orderLayoutDataList = layoutInfo.orderLayoutDataList;
+      var noOrderLayoutDataList = layoutInfo.noOrderLayoutDataList;
+      var columnOffsetList = layoutInfo.columnOffsetList;
+      var layoutDataListItem;
+      columnOffsetList[index] = columnOffset;
+      var value;
+      var baseValue;
+      var store = data.getStore();
+      var seriesOrder = seriesModel.get('groupOrder');
+      for (var idx = 0, len = store.count(); idx < len; idx++) {
+        baseValue = store.get(baseDimIdx, idx);
+        if (!isNumber(baseValue)) {
+          continue;
+        }
+        value = store.get(valueDimIdx, idx);
+        layoutDataListItem = {
+          dataIndex: idx,
+          value: value,
+          stackId: stackId,
+          baseValue: baseValue,
+          seriesIndex: seriesIndex
+        };
+        if (['asc', 'desc'].includes(seriesOrder)) {
+          if (orderLayoutDataList[baseValue] === undefined) {
+            orderLayoutDataList[baseValue] = [];
+          }
+          orderLayoutDataList[baseValue].push(clone(layoutDataListItem));
+          layoutDataListItem.isOrderData = true;
+        }
+        if (noOrderLayoutDataList[baseValue] === undefined) {
+          noOrderLayoutDataList[baseValue] = [];
+        }
+        noOrderLayoutDataList[baseValue].push(layoutDataListItem);
+      }
+    }
+    function orderLayoutData(layoutInfo) {
+      var groupOrder = layoutInfo.groupOrder;
+      var orderLayoutDataList = layoutInfo.orderLayoutDataList;
+      var columnOffsetList = layoutInfo.columnOffsetList;
+      columnOffsetList.sort(function (a, b) {
+        return a - b;
+      });
+      each(orderLayoutDataList, function (layoutDataListItem) {
+        layoutDataListItem.sort(function (a, b) {
+          if (groupOrder === 'desc') {
+            return b.value - a.value;
+          }
+          if (groupOrder === 'asc') {
+            return a.value - b.value;
+          }
+        });
+      });
+    }
+    function getLayoutRenderItemInfo(seriesIndex, dataIndex, value, stackId) {
+      var layoutDataList = [].concat(layoutInfo.orderLayoutDataList, layoutInfo.noOrderLayoutDataList);
+      var columnOffsetList = layoutInfo.columnOffsetList;
+      var layoutRenderItemInfo = {};
+      for (var i = 0; i < layoutDataList.length; i++) {
+        if (layoutDataList[i] === undefined) {
+          continue;
+        }
+        layoutRenderItemInfo = doGetLayoutRenderItemInfo(seriesIndex, dataIndex, value, layoutDataList[i], columnOffsetList, stackId);
+        if (layoutRenderItemInfo.columnOffset === undefined) {
+          continue;
+        }
+        return layoutRenderItemInfo;
+      }
+      return layoutRenderItemInfo;
+    }
+    function doGetLayoutRenderItemInfo(seriesIndex, dataIndex, value, layoutDataSingleList, columnOffsetList, stackId) {
+      var startValue = 0;
+      for (var i = 0; i < layoutDataSingleList.length; i++) {
+        var dataItem = layoutDataSingleList[i];
+        if (!dataItem.isOrderData && dataItem.dataIndex === dataIndex && dataItem.seriesIndex === seriesIndex) {
+          return {
+            value: dataItem.value,
+            baseValue: dataItem.baseValue,
+            startValue: startValue,
+            columnOffset: columnOffsetList[i]
+          };
+        }
+        if (value * dataItem.value >= 0 && dataItem.stackId === stackId) {
+          startValue += dataItem.value;
+        }
+      }
+      return {};
     }
     // TODO: Do not support stack in large mode yet.
     function createProgressiveLayout(seriesType) {
@@ -32781,6 +32907,7 @@
             return;
           }
           var data = seriesModel.getData();
+          var seriesIndex = seriesModel.seriesIndex;
           var cartesian = seriesModel.coordinateSystem;
           var baseAxis = cartesian.getBaseAxis();
           var valueAxis = cartesian.getOtherAxis(baseAxis);
@@ -32789,15 +32916,16 @@
           var drawBackground = seriesModel.get('showBackground', true);
           var valueDim = data.mapDimension(valueAxis.dim);
           var stackResultDim = data.getCalculationInfo('stackResultDimension');
-          var stacked = isDimensionStacked(data, valueDim) && !!data.getCalculationInfo('stackedOnSeries');
+          var stacked = isDimensionStacked(data, valueDim);
           var isValueAxisH = valueAxis.isHorizontal();
           var valueAxisStart = getValueAxisStart(baseAxis, valueAxis);
           var isLarge = isInLargeMode(seriesModel);
           var barMinHeight = seriesModel.get('barMinHeight') || 0;
           var stackedDimIdx = stackResultDim && data.getDimensionIndex(stackResultDim);
+          var stackId = getSeriesStackId(seriesModel);
           // Layout info.
           var columnWidth = data.getLayout('size');
-          var columnOffset = data.getLayout('offset');
+          // const columnOffset = data.getLayout('offset');
           return {
             progress: function (params, data) {
               var count = params.count;
@@ -32810,23 +32938,28 @@
               var store = data.getStore();
               var idxOffset = 0;
               while ((dataIndex = params.next()) != null) {
-                var value = store.get(stacked ? stackedDimIdx : valueDimIdx, dataIndex);
-                var baseValue = store.get(baseDimIdx, dataIndex);
+                var value = store.get(valueDimIdx, dataIndex);
+                var layoutRenderItemInfoResult = getLayoutRenderItemInfo(seriesIndex, dataIndex, value, stackId);
+                var columnOffset = layoutRenderItemInfoResult.columnOffset;
+                if (columnOffset === undefined) {
+                  continue;
+                }
+                var baseValue = layoutRenderItemInfoResult.baseValue;
                 var baseCoord = valueAxisStart;
-                var stackStartValue = void 0;
+                var startValue = 0;
                 // Because of the barMinHeight, we can not use the value in
                 // stackResultDimension directly.
                 if (stacked) {
-                  stackStartValue = +value - store.get(valueDimIdx, dataIndex);
+                  startValue = layoutRenderItemInfoResult.startValue;
                 }
                 var x = void 0;
                 var y = void 0;
                 var width = void 0;
                 var height = void 0;
                 if (isValueAxisH) {
-                  var coord = cartesian.dataToPoint([value, baseValue]);
+                  var coord = cartesian.dataToPoint([value + startValue, baseValue]);
                   if (stacked) {
-                    var startCoord = cartesian.dataToPoint([stackStartValue, baseValue]);
+                    var startCoord = cartesian.dataToPoint([startValue, baseValue]);
                     baseCoord = startCoord[0];
                   }
                   x = baseCoord;
@@ -32837,9 +32970,9 @@
                     width = (width < 0 ? -1 : 1) * barMinHeight;
                   }
                 } else {
-                  var coord = cartesian.dataToPoint([baseValue, value]);
+                  var coord = cartesian.dataToPoint([baseValue, value + startValue]);
                   if (stacked) {
-                    var startCoord = cartesian.dataToPoint([baseValue, stackStartValue]);
+                    var startCoord = cartesian.dataToPoint([baseValue, startValue]);
                     baseCoord = startCoord[1];
                   }
                   x = coord[0] + columnOffset;
@@ -41926,6 +42059,19 @@
       },
       polar: function (data, dataIndex, itemModel) {
         var layout = data.getItemLayout(dataIndex);
+        //xsy-bi源码修改点： 偶现数据layout取值undefined
+        if (layout === undefined) {
+          return {
+            cx: 0,
+            cy: 0,
+            r0: 0,
+            r: 0,
+            startAngle: 0,
+            endAngle: 0,
+            clockwise: true
+          };
+        }
+        //xsy-bi源码修改点：偶现数据layout取值undefined
         return {
           cx: layout.cx,
           cy: layout.cy,
@@ -53844,6 +53990,15 @@
           return;
         }
         var params = dataModel.getDataParams(dataIndex, dataType);
+        //xsy-bi 源码修改点-开始 添加雷达图tip 数据 index
+        if (params.seriesType === 'radar') {
+          if (dispatcher && dispatcher.__dimIdx !== undefined) {
+            params.dimensionIndex = dispatcher.__dimIdx;
+          } else {
+            params.dimensionIndex = -1;
+          }
+        }
+        //xsy-bi 源码修改点-结束
         var markupStyleCreator = new TooltipMarkupStyleCreator();
         // Pre-create marker style for makers. Users can assemble richText
         // text in `formatter` callback and use those markers style.

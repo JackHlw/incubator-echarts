@@ -33211,10 +33211,27 @@
         return result;
       }
     }
+    var layoutInfo = {
+      orderLayoutDataList: [],
+      noOrderLayoutDataList: [],
+      columnOffsetList: []
+    };
+    /**
+     * Intra group sorting interface-end
+     */
     function layout(seriesType, ecModel) {
       var seriesModels = prepareLayoutBarSeries(seriesType, ecModel);
       var barWidthAndOffset = makeColumnLayout(seriesModels);
-      each(seriesModels, function (seriesModel) {
+      if (seriesModels.length === 0) {
+        return;
+      }
+      layoutInfo = {
+        groupOrder: getSeriesGroupOrder(seriesModels),
+        orderLayoutDataList: [],
+        noOrderLayoutDataList: [],
+        columnOffsetList: []
+      };
+      each(seriesModels, function (seriesModel, index) {
         var data = seriesModel.getData();
         var cartesian = seriesModel.coordinateSystem;
         var baseAxis = cartesian.getBaseAxis();
@@ -33227,7 +33244,116 @@
           offset: columnOffset,
           size: columnWidth
         });
+        collectingLayoutData(layoutInfo, seriesModel, index);
       });
+      if (layoutInfo.groupOrder !== undefined) {
+        orderLayoutData(layoutInfo);
+      }
+    }
+    function getSeriesGroupOrder(seriesModels) {
+      for (var i = 0; i < seriesModels.length; i++) {
+        var seriesOrder = seriesModels[i].get('groupOrder');
+        if (seriesOrder !== undefined) {
+          return seriesOrder;
+        }
+      }
+    }
+    function collectingLayoutData(layoutInfo, seriesModel, index) {
+      var data = seriesModel.getData();
+      var seriesIndex = seriesModel.seriesIndex;
+      var cartesian = seriesModel.coordinateSystem;
+      var baseAxis = cartesian.getBaseAxis();
+      var valueAxis = cartesian.getOtherAxis(baseAxis);
+      var valueDimIdx = data.getDimensionIndex(data.mapDimension(valueAxis.dim));
+      var baseDimIdx = data.getDimensionIndex(data.mapDimension(baseAxis.dim));
+      var columnOffset = data.getLayout('offset');
+      var stackId = getSeriesStackId(seriesModel);
+      var orderLayoutDataList = layoutInfo.orderLayoutDataList;
+      var noOrderLayoutDataList = layoutInfo.noOrderLayoutDataList;
+      var columnOffsetList = layoutInfo.columnOffsetList;
+      var layoutDataListItem;
+      columnOffsetList[index] = columnOffset;
+      var value;
+      var baseValue;
+      var store = data.getStore();
+      var seriesOrder = seriesModel.get('groupOrder');
+      for (var idx = 0, len = store.count(); idx < len; idx++) {
+        baseValue = store.get(baseDimIdx, idx);
+        if (!isNumber(baseValue)) {
+          continue;
+        }
+        value = store.get(valueDimIdx, idx);
+        layoutDataListItem = {
+          dataIndex: idx,
+          value: value,
+          stackId: stackId,
+          baseValue: baseValue,
+          seriesIndex: seriesIndex
+        };
+        if (['asc', 'desc'].includes(seriesOrder)) {
+          if (orderLayoutDataList[baseValue] === undefined) {
+            orderLayoutDataList[baseValue] = [];
+          }
+          orderLayoutDataList[baseValue].push(clone(layoutDataListItem));
+          layoutDataListItem.isOrderData = true;
+        }
+        if (noOrderLayoutDataList[baseValue] === undefined) {
+          noOrderLayoutDataList[baseValue] = [];
+        }
+        noOrderLayoutDataList[baseValue].push(layoutDataListItem);
+      }
+    }
+    function orderLayoutData(layoutInfo) {
+      var groupOrder = layoutInfo.groupOrder;
+      var orderLayoutDataList = layoutInfo.orderLayoutDataList;
+      var columnOffsetList = layoutInfo.columnOffsetList;
+      columnOffsetList.sort(function (a, b) {
+        return a - b;
+      });
+      each(orderLayoutDataList, function (layoutDataListItem) {
+        layoutDataListItem.sort(function (a, b) {
+          if (groupOrder === 'desc') {
+            return b.value - a.value;
+          }
+          if (groupOrder === 'asc') {
+            return a.value - b.value;
+          }
+        });
+      });
+    }
+    function getLayoutRenderItemInfo(seriesIndex, dataIndex, value, stackId) {
+      var layoutDataList = [].concat(layoutInfo.orderLayoutDataList, layoutInfo.noOrderLayoutDataList);
+      var columnOffsetList = layoutInfo.columnOffsetList;
+      var layoutRenderItemInfo = {};
+      for (var i = 0; i < layoutDataList.length; i++) {
+        if (layoutDataList[i] === undefined) {
+          continue;
+        }
+        layoutRenderItemInfo = doGetLayoutRenderItemInfo(seriesIndex, dataIndex, value, layoutDataList[i], columnOffsetList, stackId);
+        if (layoutRenderItemInfo.columnOffset === undefined) {
+          continue;
+        }
+        return layoutRenderItemInfo;
+      }
+      return layoutRenderItemInfo;
+    }
+    function doGetLayoutRenderItemInfo(seriesIndex, dataIndex, value, layoutDataSingleList, columnOffsetList, stackId) {
+      var startValue = 0;
+      for (var i = 0; i < layoutDataSingleList.length; i++) {
+        var dataItem = layoutDataSingleList[i];
+        if (!dataItem.isOrderData && dataItem.dataIndex === dataIndex && dataItem.seriesIndex === seriesIndex) {
+          return {
+            value: dataItem.value,
+            baseValue: dataItem.baseValue,
+            startValue: startValue,
+            columnOffset: columnOffsetList[i]
+          };
+        }
+        if (value * dataItem.value >= 0 && dataItem.stackId === stackId) {
+          startValue += dataItem.value;
+        }
+      }
+      return {};
     }
     // TODO: Do not support stack in large mode yet.
     function createProgressiveLayout(seriesType) {
@@ -33239,6 +33365,7 @@
             return;
           }
           var data = seriesModel.getData();
+          var seriesIndex = seriesModel.seriesIndex;
           var cartesian = seriesModel.coordinateSystem;
           var baseAxis = cartesian.getBaseAxis();
           var valueAxis = cartesian.getOtherAxis(baseAxis);
@@ -33247,15 +33374,16 @@
           var drawBackground = seriesModel.get('showBackground', true);
           var valueDim = data.mapDimension(valueAxis.dim);
           var stackResultDim = data.getCalculationInfo('stackResultDimension');
-          var stacked = isDimensionStacked(data, valueDim) && !!data.getCalculationInfo('stackedOnSeries');
+          var stacked = isDimensionStacked(data, valueDim);
           var isValueAxisH = valueAxis.isHorizontal();
           var valueAxisStart = getValueAxisStart(baseAxis, valueAxis);
           var isLarge = isInLargeMode(seriesModel);
           var barMinHeight = seriesModel.get('barMinHeight') || 0;
           var stackedDimIdx = stackResultDim && data.getDimensionIndex(stackResultDim);
+          var stackId = getSeriesStackId(seriesModel);
           // Layout info.
           var columnWidth = data.getLayout('size');
-          var columnOffset = data.getLayout('offset');
+          // const columnOffset = data.getLayout('offset');
           return {
             progress: function (params, data) {
               var count = params.count;
@@ -33268,23 +33396,28 @@
               var store = data.getStore();
               var idxOffset = 0;
               while ((dataIndex = params.next()) != null) {
-                var value = store.get(stacked ? stackedDimIdx : valueDimIdx, dataIndex);
-                var baseValue = store.get(baseDimIdx, dataIndex);
+                var value = store.get(valueDimIdx, dataIndex);
+                var layoutRenderItemInfoResult = getLayoutRenderItemInfo(seriesIndex, dataIndex, value, stackId);
+                var columnOffset = layoutRenderItemInfoResult.columnOffset;
+                if (columnOffset === undefined) {
+                  continue;
+                }
+                var baseValue = layoutRenderItemInfoResult.baseValue;
                 var baseCoord = valueAxisStart;
-                var stackStartValue = void 0;
+                var startValue = 0;
                 // Because of the barMinHeight, we can not use the value in
                 // stackResultDimension directly.
                 if (stacked) {
-                  stackStartValue = +value - store.get(valueDimIdx, dataIndex);
+                  startValue = layoutRenderItemInfoResult.startValue;
                 }
                 var x = void 0;
                 var y = void 0;
                 var width = void 0;
                 var height = void 0;
                 if (isValueAxisH) {
-                  var coord = cartesian.dataToPoint([value, baseValue]);
+                  var coord = cartesian.dataToPoint([value + startValue, baseValue]);
                   if (stacked) {
-                    var startCoord = cartesian.dataToPoint([stackStartValue, baseValue]);
+                    var startCoord = cartesian.dataToPoint([startValue, baseValue]);
                     baseCoord = startCoord[0];
                   }
                   x = baseCoord;
@@ -33295,9 +33428,9 @@
                     width = (width < 0 ? -1 : 1) * barMinHeight;
                   }
                 } else {
-                  var coord = cartesian.dataToPoint([baseValue, value]);
+                  var coord = cartesian.dataToPoint([baseValue, value + startValue]);
                   if (stacked) {
-                    var startCoord = cartesian.dataToPoint([baseValue, stackStartValue]);
+                    var startCoord = cartesian.dataToPoint([baseValue, startValue]);
                     baseCoord = startCoord[1];
                   }
                   x = coord[0] + columnOffset;
@@ -43050,6 +43183,19 @@
       },
       polar: function (data, dataIndex, itemModel) {
         var layout = data.getItemLayout(dataIndex);
+        //xsy-bi源码修改点： 偶现数据layout取值undefined
+        if (layout === undefined) {
+          return {
+            cx: 0,
+            cy: 0,
+            r0: 0,
+            r: 0,
+            startAngle: 0,
+            endAngle: 0,
+            clockwise: true
+          };
+        }
+        //xsy-bi源码修改点：偶现数据layout取值undefined
         return {
           cx: layout.cx,
           cy: layout.cy,
@@ -61167,11 +61313,92 @@
     function labelLayout(data) {
       var seriesModel = data.hostModel;
       var orient = seriesModel.get('orient');
+      //xsy-bi源码修改点-开始:漏斗图增加参数verticalAlignment，为true的时候，漏斗图每个文字垂直对齐，根据原有数据生成新的points点
+      var points0 = [[0, 0], [0, 0], [0, 0], [0, 0]];
+      data.each(function (idx) {
+        var itemModel = data.getItemModel(idx);
+        var labelModel = itemModel.getModel('label');
+        var layout = data.getItemLayout(idx);
+        var points = layout.points;
+        var labelPosition = labelModel.get('position');
+        if (labelPosition === 'left') {
+          if (points0[3][0] === 0 || points[3][0] < points0[3][0]) {
+            points0[3][0] = points[3][0];
+          }
+          if (points0[0][0] === 0 || points[0][0] < points0[0][0]) {
+            points0[0][0] = points[0][0];
+          }
+        } else if (labelPosition === 'right') {
+          if (points0[1][0] === 0 || points[1][0] > points0[1][0]) {
+            points0[1][0] = points[1][0];
+          }
+          if (points0[2][0] === 0 || points[2][0] > points0[2][0]) {
+            points0[2][0] = points[2][0];
+          }
+        } else if (labelPosition === 'top') {
+          if (points0[3][1] === 0 || points[3][1] < points0[3][1]) {
+            points0[3][1] = points[3][1];
+          }
+          if (points0[0][1] === 0 || points[0][1] < points0[0][1]) {
+            points0[0][1] = points[0][1];
+          }
+        } else if (labelPosition === 'bottom') {
+          if (points0[1][1] === 0 || points[1][1] > points0[1][1]) {
+            points0[1][1] = points[1][1];
+          }
+          if (points0[2][1] === 0 || points[2][1] > points0[2][1]) {
+            points0[2][1] = points[2][1];
+          }
+        } else if (labelPosition === 'leftTop') {
+          if (orient === 'horizontal') {
+            if (points0[0][1] === 0 || points[0][1] < points0[0][1]) {
+              points0[0][1] = points[0][1];
+            }
+          } else {
+            if (points0[0][0] === 0 || points[0][0] < points0[0][0]) {
+              points0[0][0] = points[0][0];
+            }
+          }
+        } else if (labelPosition === 'rightTop') {
+          if (orient === 'horizontal') {
+            if (points0[3][1] === 0 || points[3][1] > points0[3][1]) {
+              points0[3][1] = points[3][1];
+            }
+          } else {
+            if (points0[1][0] === 0 || points[1][0] > points0[1][0]) {
+              points0[1][0] = points[1][0];
+            }
+          }
+        } else if (labelPosition === 'rightBottom') {
+          if (orient === 'horizontal') {
+            if (points0[2][1] === 0 || points[2][1] > points0[2][1]) {
+              points0[2][1] = points[2][1];
+            }
+          } else {
+            if (points0[2][0] === 0 || points[2][0] > points0[2][0]) {
+              points0[2][0] = points[2][0];
+            }
+          }
+        } else if (labelPosition === 'leftBottom') {
+          if (orient === 'horizontal') {
+            if (points0[1][1] === 0 || points[1][1] > points0[1][1]) {
+              points0[1][1] = points[1][1];
+            }
+          } else {
+            if (points0[3][0] === 0 || points[3][0] < points0[3][0]) {
+              points0[3][0] = points[3][0];
+            }
+          }
+        }
+      });
+      //xsy-bi源码修改点-结束:漏斗图增加参数verticalAlignment，为true的时候，漏斗图每个文字垂直对齐，根据原有数据生成新的points点
       data.each(function (idx) {
         var itemModel = data.getItemModel(idx);
         var labelModel = itemModel.getModel('label');
         var labelPosition = labelModel.get('position');
         var labelLineModel = itemModel.getModel('labelLine');
+        //xsy-bi源码修改点
+        var verticalAlignment = labelModel.get('verticalAlignment');
         var layout = data.getItemLayout(idx);
         var points = layout.points;
         var isLabelInside = labelPosition === 'inner' || labelPosition === 'inside' || labelPosition === 'center' || labelPosition === 'insideLeft' || labelPosition === 'insideRight';
@@ -61215,6 +61442,11 @@
             x1 = (points[3][0] + points[0][0]) / 2;
             y1 = (points[3][1] + points[0][1]) / 2;
             x2 = x1 - labelLineLen;
+            //xsy-bi源码修改点-开始
+            if (verticalAlignment === true) {
+              x2 = (points0[3][0] + points0[0][0]) / 2 - labelLineLen;
+            }
+            //xsy-bi源码修改点-结束
             textX = x2 - 5;
             textAlign = 'right';
           } else if (labelPosition === 'right') {
@@ -61222,6 +61454,11 @@
             x1 = (points[1][0] + points[2][0]) / 2;
             y1 = (points[1][1] + points[2][1]) / 2;
             x2 = x1 + labelLineLen;
+            //xsy-bi源码修改点-开始
+            if (verticalAlignment === true) {
+              x2 = (points0[1][0] + points0[2][0]) / 2 + labelLineLen;
+            }
+            //xsy-bi源码修改点-结束
             textX = x2 + 5;
             textAlign = 'left';
           } else if (labelPosition === 'top') {
@@ -61229,6 +61466,11 @@
             x1 = (points[3][0] + points[0][0]) / 2;
             y1 = (points[3][1] + points[0][1]) / 2;
             y2 = y1 - labelLineLen;
+            //xsy-bi源码修改点-开始
+            if (verticalAlignment === true) {
+              y2 = (points0[3][1] + points0[0][1]) / 2 - labelLineLen;
+            }
+            //xsy-bi源码修改点-结束
             textY = y2 - 5;
             textAlign = 'center';
           } else if (labelPosition === 'bottom') {
@@ -61236,6 +61478,11 @@
             x1 = (points[1][0] + points[2][0]) / 2;
             y1 = (points[1][1] + points[2][1]) / 2;
             y2 = y1 + labelLineLen;
+            //xsy-bi源码修改点-开始
+            if (verticalAlignment === true) {
+              y2 = (points0[1][1] + points0[2][1]) / 2 + labelLineLen;
+            }
+            //xsy-bi源码修改点-结束
             textY = y2 + 5;
             textAlign = 'center';
           } else if (labelPosition === 'rightTop') {
@@ -61244,10 +61491,20 @@
             y1 = orient === 'horizontal' ? points[3][1] : points[1][1];
             if (orient === 'horizontal') {
               y2 = y1 - labelLineLen;
+              //xsy-bi源码修改点-开始
+              if (verticalAlignment === true) {
+                y2 = points0[3][1] - labelLineLen;
+              }
+              //xsy-bi源码修改点-结束
               textY = y2 - 5;
               textAlign = 'center';
             } else {
               x2 = x1 + labelLineLen;
+              //xsy-bi源码修改点-开始
+              if (verticalAlignment === true) {
+                x2 = points0[1][0] + labelLineLen;
+              }
+              //xsy-bi源码修改点-结束
               textX = x2 + 5;
               textAlign = 'top';
             }
@@ -61257,10 +61514,20 @@
             y1 = points[2][1];
             if (orient === 'horizontal') {
               y2 = y1 + labelLineLen;
+              //xsy-bi源码修改点-开始
+              if (verticalAlignment === true) {
+                y2 = points0[2][1] + labelLineLen;
+              }
+              //xsy-bi源码修改点-结束
               textY = y2 + 5;
               textAlign = 'center';
             } else {
               x2 = x1 + labelLineLen;
+              //xsy-bi源码修改点-开始
+              if (verticalAlignment === true) {
+                x2 = points0[2][0] + labelLineLen;
+              }
+              //xsy-bi源码修改点-结束
               textX = x2 + 5;
               textAlign = 'bottom';
             }
@@ -61270,10 +61537,20 @@
             y1 = orient === 'horizontal' ? points[0][1] : points[1][1];
             if (orient === 'horizontal') {
               y2 = y1 - labelLineLen;
+              //xsy-bi源码修改点-开始
+              if (verticalAlignment === true) {
+                y2 = points0[0][1] - labelLineLen;
+              }
+              //xsy-bi源码修改点-结束
               textY = y2 - 5;
               textAlign = 'center';
             } else {
               x2 = x1 - labelLineLen;
+              //xsy-bi源码修改点-开始
+              if (verticalAlignment === true) {
+                x2 = points0[0][0] - labelLineLen;
+              }
+              //xsy-bi源码修改点-结束
               textX = x2 - 5;
               textAlign = 'right';
             }
@@ -61283,10 +61560,20 @@
             y1 = orient === 'horizontal' ? points[1][1] : points[2][1];
             if (orient === 'horizontal') {
               y2 = y1 + labelLineLen;
+              //xsy-bi源码修改点-开始
+              if (verticalAlignment === true) {
+                y2 = points0[1][1] + labelLineLen;
+              }
+              //xsy-bi源码修改点-结束
               textY = y2 + 5;
               textAlign = 'center';
             } else {
               x2 = x1 - labelLineLen;
+              //xsy-bi源码修改点-开始
+              if (verticalAlignment === true) {
+                x2 = points0[3][0] - labelLineLen;
+              }
+              //xsy-bi源码修改点-结束
               textX = x2 - 5;
               textAlign = 'right';
             }
@@ -61355,6 +61642,8 @@
           if (orient === 'horizontal') {
             var val_1 = data.get(valueDim, idx) || 0;
             var itemHeight = linearMap(val_1, [min, max], sizeExtent, true);
+            //xsy-bi源码修改点:添加漏斗图最小宽度，优先级高于顶层
+            itemHeight = getItemMinSizeBySizeKey('minHeight', idx, itemHeight);
             var y0 = void 0;
             switch (funnelAlign) {
               case 'top':
@@ -61371,6 +61660,8 @@
           }
           var val = data.get(valueDim, idx) || 0;
           var itemWidth = linearMap(val, [min, max], sizeExtent, true);
+          //xsy-bi源码修改点:添加漏斗图最小宽度，优先级高于顶层
+          itemWidth = getItemMinSizeBySizeKey('minWidth', idx, itemWidth);
           var x0;
           switch (funnelAlign) {
             case 'left':
@@ -61404,8 +61695,12 @@
             var width = itemModel.get(['itemStyle', 'width']);
             if (width == null) {
               width = itemSize;
+              //xsy-bi源码修改点:添加漏斗图最小宽度，优先级高于顶层
+              width = getItemMinSizeBySizeKey('minWidth', idx, width);
             } else {
               width = parsePercent$1(width, viewWidth);
+              //xsy-bi源码修改点:添加漏斗图最小宽度，优先级高于顶层
+              width = getItemMinSizeBySizeKey('minWidth', idx, width);
               if (sort === 'ascending') {
                 width = -width;
               }
@@ -61420,8 +61715,12 @@
             var height = itemModel.get(['itemStyle', 'height']);
             if (height == null) {
               height = itemSize;
+              //xsy-bi源码修改点:添加漏斗图最小高度，优先级高于顶层
+              height = getItemMinSizeBySizeKey('minHeight', idx, height);
             } else {
               height = parsePercent$1(height, viewHeight);
+              //xsy-bi源码修改点:添加漏斗图最小高度，优先级高于顶层
+              height = getItemMinSizeBySizeKey('minHeight', idx, height);
               if (sort === 'ascending') {
                 height = -height;
               }
@@ -61434,6 +61733,18 @@
             });
           }
         }
+        //xsy-bi 源码修改点-开始：添加漏斗图最小宽度，最小高度，优先级高于顶层
+        function getItemMinSizeBySizeKey(sizeKey, idx, baseItemSize) {
+          var minSize = seriesModel.get([sizeKey]);
+          var itemModel = data.getItemModel(idx);
+          var itemMinSize = itemModel.get(['itemStyle', sizeKey]);
+          var currentMinSize = itemMinSize !== undefined ? itemMinSize : minSize;
+          if (currentMinSize !== undefined && baseItemSize < Number(currentMinSize)) {
+            return Number(currentMinSize);
+          }
+          return baseItemSize;
+        }
+        //xsy-bi 源码修改点-结束：添加漏斗图最小宽度，最小高度，优先级高于顶层
         labelLayout(data);
       });
     }
@@ -80612,6 +80923,15 @@
           return;
         }
         var params = dataModel.getDataParams(dataIndex, dataType);
+        //xsy-bi 源码修改点-开始 添加雷达图tip 数据 index
+        if (params.seriesType === 'radar') {
+          if (dispatcher && dispatcher.__dimIdx !== undefined) {
+            params.dimensionIndex = dispatcher.__dimIdx;
+          } else {
+            params.dimensionIndex = -1;
+          }
+        }
+        //xsy-bi 源码修改点-结束
         var markupStyleCreator = new TooltipMarkupStyleCreator();
         // Pre-create marker style for makers. Users can assemble richText
         // text in `formatter` callback and use those markers style.

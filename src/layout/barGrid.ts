@@ -17,7 +17,7 @@
 * under the License.
 */
 
-import { each, defaults, keys } from 'zrender/src/core/util';
+import { each, defaults, keys, clone, isNumber } from 'zrender/src/core/util';
 import { parsePercent } from '../util/number';
 import { isDimensionStacked } from '../data/helper/dataStackHelper';
 import createRenderPlanner from '../chart/helper/createRenderPlanner';
@@ -440,12 +440,54 @@ function retrieveColumnLayout(
 }
 export {retrieveColumnLayout};
 
+/**
+ * Intra group sorting interface-start
+ */
+interface layoutItemInfo {
+    dataIndex: number
+    value: number
+    baseValue: number
+    seriesIndex: number
+    stackId?: string
+    isOrderData?: boolean
+    [key: string]: any
+}
+interface layoutInfo {
+    orderLayoutDataList: Array<Array<layoutItemInfo>>
+    noOrderLayoutDataList: Array<Array<layoutItemInfo>>
+    columnOffsetList: Array<number>
+    groupOrder?: 'asc' | 'desc'
+}
+interface layoutRenderItemInfo {
+    value?: number
+    baseValue?: number
+    startValue?: number
+    columnOffset?: number
+    [key: string]: any
+}
+let layoutInfo: layoutInfo = {
+    orderLayoutDataList: [],
+    noOrderLayoutDataList: [],
+    columnOffsetList: []
+};
+/**
+ * Intra group sorting interface-end
+ */
+
 export function layout(seriesType: string, ecModel: GlobalModel) {
 
     const seriesModels = prepareLayoutBarSeries(seriesType, ecModel);
     const barWidthAndOffset = makeColumnLayout(seriesModels);
-
-    each(seriesModels, function (seriesModel) {
+    if (seriesModels.length === 0) {
+        return;
+    }
+    layoutInfo = {
+        groupOrder: getSeriesGroupOrder(seriesModels),
+        orderLayoutDataList: [],
+        noOrderLayoutDataList: [],
+        columnOffsetList: []
+    };
+    each(seriesModels, function (seriesModel, index) {
 
         const data = seriesModel.getData();
         const cartesian = seriesModel.coordinateSystem as Cartesian2D;
@@ -461,7 +503,135 @@ export function layout(seriesType: string, ecModel: GlobalModel) {
             offset: columnOffset,
             size: columnWidth
         });
+        collectingLayoutData(layoutInfo, seriesModel, index);
     });
+    if (layoutInfo.groupOrder !== undefined) {
+        orderLayoutData(layoutInfo);
+    }
+}
+
+function getSeriesGroupOrder(seriesModels: BarSeriesModel[]) {
+    for (let i = 0; i < seriesModels.length; i++) {
+        const seriesOrder = seriesModels[i].get('groupOrder');
+        if (seriesOrder !== undefined) {
+            return seriesOrder;
+        }
+    }
+}
+
+function collectingLayoutData(
+    layoutInfo: layoutInfo,
+    seriesModel: BarSeriesModel,
+    index: number
+) {
+    const data = seriesModel.getData();
+    const seriesIndex = seriesModel.seriesIndex;
+    const cartesian = seriesModel.coordinateSystem as Cartesian2D;
+    const baseAxis = cartesian.getBaseAxis();
+    const valueAxis = cartesian.getOtherAxis(baseAxis);
+    const valueDimIdx = data.getDimensionIndex(data.mapDimension(valueAxis.dim));
+    const baseDimIdx = data.getDimensionIndex(data.mapDimension(baseAxis.dim));
+    const columnOffset = data.getLayout('offset');
+    const stackId = getSeriesStackId(seriesModel);
+    const orderLayoutDataList = layoutInfo.orderLayoutDataList;
+    const noOrderLayoutDataList = layoutInfo.noOrderLayoutDataList;
+    const columnOffsetList = layoutInfo.columnOffsetList;
+    let layoutDataListItem: layoutItemInfo;
+    columnOffsetList[index] = columnOffset;
+    let value;
+    let baseValue;
+    const store = data.getStore();
+    const seriesOrder = seriesModel.get('groupOrder');
+
+    for (let idx = 0, len = store.count(); idx < len; idx++) {
+        baseValue = store.get(baseDimIdx, idx) as number;
+        if (!isNumber(baseValue)) {
+            continue;
+        }
+        value = store.get(valueDimIdx, idx) as number;
+        layoutDataListItem = {
+            dataIndex: idx,
+            value: value,
+            stackId: stackId,
+            baseValue: baseValue,
+            seriesIndex: seriesIndex
+        };
+        if (['asc', 'desc'].includes(seriesOrder)) {
+            if (orderLayoutDataList[baseValue] === undefined) {
+                orderLayoutDataList[baseValue] = [];
+            }
+            orderLayoutDataList[baseValue].push(clone(layoutDataListItem));
+            layoutDataListItem.isOrderData = true;
+        }
+        if (noOrderLayoutDataList[baseValue] === undefined) {
+            noOrderLayoutDataList[baseValue] = [];
+        }
+        noOrderLayoutDataList[baseValue].push(layoutDataListItem);
+    }
+}
+
+function orderLayoutData(layoutInfo: layoutInfo) {
+    const groupOrder = layoutInfo.groupOrder;
+    const orderLayoutDataList = layoutInfo.orderLayoutDataList;
+    const columnOffsetList = layoutInfo.columnOffsetList;
+    columnOffsetList.sort((a, b) => a - b);
+    each(orderLayoutDataList, function (layoutDataListItem) {
+        layoutDataListItem.sort(function (a, b) {
+            if (groupOrder === 'desc') {
+                return b.value - a.value;
+            }
+            if (groupOrder === 'asc') {
+                return a.value - b.value;
+            }
+        });
+    });
+}
+
+function getLayoutRenderItemInfo(seriesIndex: number, dataIndex: number, value: number, stackId: string): layoutRenderItemInfo {
+    const layoutDataList = [].concat(layoutInfo.orderLayoutDataList, layoutInfo.noOrderLayoutDataList);
+    const columnOffsetList = layoutInfo.columnOffsetList;
+    let layoutRenderItemInfo: layoutRenderItemInfo = {};
+    for (let i = 0; i < layoutDataList.length; i++) {
+        if (layoutDataList[i] === undefined) {
+            continue;
+        }
+        layoutRenderItemInfo = doGetLayoutRenderItemInfo(seriesIndex, dataIndex, value, layoutDataList[i], columnOffsetList, stackId);
+        if (layoutRenderItemInfo.columnOffset === undefined) {
+            continue;
+        }
+        return layoutRenderItemInfo;
+    }
+    return layoutRenderItemInfo;
+}
+
+function doGetLayoutRenderItemInfo(
+    seriesIndex: number,
+    dataIndex: number,
+    value: number,
+    layoutDataSingleList: layoutItemInfo[],
+    columnOffsetList: Array<number>,
+    stackId: string
+): layoutRenderItemInfo {
+    let startValue = 0;
+    for (let i = 0; i < layoutDataSingleList.length; i++) {
+        const dataItem = layoutDataSingleList[i];
+        if (
+            !dataItem.isOrderData &&
+            dataItem.dataIndex === dataIndex &&
+            dataItem.seriesIndex === seriesIndex
+        ) {
+            return {
+                value: dataItem.value,
+                baseValue: dataItem.baseValue,
+                startValue: startValue,
+                columnOffset: columnOffsetList[i]
+            };
+        }
+        if (value * dataItem.value >= 0 && dataItem.stackId === stackId) {
+            startValue += dataItem.value;
+        }
+    }
+    return {};
 }
 
 // TODO: Do not support stack in large mode yet.
@@ -478,6 +648,8 @@ export function createProgressiveLayout(seriesType: string): StageHandler {
 
             const data = seriesModel.getData();
 
+            const seriesIndex = seriesModel.seriesIndex;
+
             const cartesian = seriesModel.coordinateSystem as Cartesian2D;
             const baseAxis = cartesian.getBaseAxis();
             const valueAxis = cartesian.getOtherAxis(baseAxis);
@@ -486,17 +658,18 @@ export function createProgressiveLayout(seriesType: string): StageHandler {
             const drawBackground = seriesModel.get('showBackground', true);
             const valueDim = data.mapDimension(valueAxis.dim);
             const stackResultDim = data.getCalculationInfo('stackResultDimension');
-            const stacked = isDimensionStacked(data, valueDim) && !!data.getCalculationInfo('stackedOnSeries');
+            const stacked = isDimensionStacked(data, valueDim);
             const isValueAxisH = valueAxis.isHorizontal();
             const valueAxisStart = getValueAxisStart(baseAxis, valueAxis);
             const isLarge = isInLargeMode(seriesModel);
             const barMinHeight = seriesModel.get('barMinHeight') || 0;
 
             const stackedDimIdx = stackResultDim && data.getDimensionIndex(stackResultDim);
+            const stackId = getSeriesStackId(seriesModel);
 
             // Layout info.
             const columnWidth = data.getLayout('size');
-            const columnOffset = data.getLayout('offset');
+            // const columnOffset = data.getLayout('offset');
 
             return {
                 progress: function (params, data) {
@@ -513,15 +686,20 @@ export function createProgressiveLayout(seriesType: string): StageHandler {
                     let idxOffset = 0;
 
                     while ((dataIndex = params.next()) != null) {
-                        const value = store.get(stacked ? stackedDimIdx : valueDimIdx, dataIndex);
-                        const baseValue = store.get(baseDimIdx, dataIndex) as number;
+                        const value = store.get(valueDimIdx, dataIndex) as number;
+                        const layoutRenderItemInfoResult = getLayoutRenderItemInfo(seriesIndex, dataIndex, value, stackId);
+                        const columnOffset = layoutRenderItemInfoResult.columnOffset;
+                        if (columnOffset === undefined) {
+                            continue;
+                        }
+                        const baseValue = layoutRenderItemInfoResult.baseValue;
                         let baseCoord = valueAxisStart;
-                        let stackStartValue;
+                        let startValue = 0;
 
                         // Because of the barMinHeight, we can not use the value in
                         // stackResultDimension directly.
                         if (stacked) {
-                            stackStartValue = +value - (store.get(valueDimIdx, dataIndex) as number);
+                            startValue = layoutRenderItemInfoResult.startValue;
                         }
 
                         let x;
@@ -530,9 +708,9 @@ export function createProgressiveLayout(seriesType: string): StageHandler {
                         let height;
 
                         if (isValueAxisH) {
-                            const coord = cartesian.dataToPoint([value, baseValue]);
+                            const coord = cartesian.dataToPoint([value + startValue, baseValue]);
                             if (stacked) {
-                                const startCoord = cartesian.dataToPoint([stackStartValue, baseValue]);
+                                const startCoord = cartesian.dataToPoint([startValue, baseValue]);
                                 baseCoord = startCoord[0];
                             }
                             x = baseCoord;
@@ -545,9 +723,9 @@ export function createProgressiveLayout(seriesType: string): StageHandler {
                             }
                         }
                         else {
-                            const coord = cartesian.dataToPoint([baseValue, value]);
+                            const coord = cartesian.dataToPoint([baseValue, value + startValue]);
                             if (stacked) {
-                                const startCoord = cartesian.dataToPoint([baseValue, stackStartValue]);
+                                const startCoord = cartesian.dataToPoint([baseValue, startValue]);
                                 baseCoord = startCoord[1];
                             }
                             x = coord[0] + columnOffset;

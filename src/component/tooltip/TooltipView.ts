@@ -682,6 +682,16 @@ class TooltipView extends ComponentView {
         }
 
         const params = dataModel.getDataParams(dataIndex, dataType);
+        //xsy-bi 源码修改点-开始 添加雷达图tip 数据 index
+        if (params.seriesType === 'radar') {
+            if (dispatcher && (dispatcher as ECElement).__dimIdx !== undefined) {
+                (params as any).dimensionIndex = (dispatcher as ECElement).__dimIdx;
+            }
+            else {
+                (params as any).dimensionIndex = -1;
+            }
+        }
+        //xsy-bi 源码修改点-结束
         const markupStyleCreator = new TooltipMarkupStyleCreator();
         // Pre-create marker style for makers. Users can assemble richText
         // text in `formatter` callback and use those markers style.

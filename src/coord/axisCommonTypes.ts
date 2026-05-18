@@ -65,6 +65,9 @@ export interface AxisBaseOptionCommon extends ComponentOption,
      * PENDING: should it named as "nameOffset" or support `[offsetX, offsetY]`?
      */
     nameGap?: number;
+    //xsy-bi源码修改点： y轴添加水平Gap控制nameHorizontalGap.
+    nameHorizontalGap?: number;
+    //xsy-bi源码修改点： y轴添加水平Gap控制nameHorizontalGap.
     /**
      * Whether to auto move axis name to avoid overlap with axis labels.
      * The procedure of axis name layout:

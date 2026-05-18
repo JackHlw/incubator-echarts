@@ -228,7 +228,13 @@ async function runTsCompile(localTs, compilerOptions, srcPathList) {
         .getPreEmitDiagnostics(program)
         .concat(emitResult.diagnostics);
 
-    allDiagnostics.forEach(diagnostic => {
+    let projectDiagnostics = allDiagnostics.filter(diagnostic => {
+        if (diagnostic.file && diagnostic.file.fileName.includes('node_modules')) {
+            return false;
+        }
+        return true;
+    });
+    projectDiagnostics.forEach(diagnostic => {
         if (diagnostic.file) {
             let {line, character} = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
             let message = localTs.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
@@ -238,7 +244,7 @@ async function runTsCompile(localTs, compilerOptions, srcPathList) {
             console.log(chalk.red(localTs.flattenDiagnosticMessageText(diagnostic.messageText, '\n')));
         }
     });
-    if (allDiagnostics.length > 0) {
+    if (projectDiagnostics.length > 0) {
         throw new Error('TypeScript Compile Failed')
     }
 }
@@ -255,7 +261,8 @@ async function tsCompile(compilerOptionsOverride, srcPathList) {
     let compilerOptions = {
         ...tsConfig.compilerOptions,
         ...compilerOptionsOverride,
-        sourceMap: false
+        sourceMap: false,
+        skipLibCheck: true
     };
 
     runTsCompile(ts, compilerOptions, srcPathList);

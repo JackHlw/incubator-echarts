@@ -963,6 +963,19 @@ const getLayout: {
 
     polar(data, dataIndex, itemModel?): SectorLayout {
         const layout = data.getItemLayout(dataIndex);
+        //xsy-bi源码修改点： 偶现数据layout取值undefined
+        if (layout === undefined) {
+            return {
+                cx: 0,
+                cy: 0,
+                r0: 0,
+                r: 0,
+                startAngle: 0,
+                endAngle: 0,
+                clockwise: true
+            } as SectorLayout;
+        }
+        //xsy-bi源码修改点：偶现数据layout取值undefined
         return {
             cx: layout.cx,
             cy: layout.cy,

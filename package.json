@@ -1,7 +1,7 @@
 {
   "name": "echarts",
   "version": "6.0.0",
-  "description": "Apache ECharts is a powerful, interactive charting and data visualization library for browser",
+  "description": "BI团队修改源码版本",
   "license": "Apache-2.0",
   "keywords": [
     "echarts",
@@ -79,7 +79,9 @@
     "@rollup/plugin-commonjs": "^17.0.0",
     "@rollup/plugin-node-resolve": "^11.0.0",
     "@rollup/plugin-replace": "^2.3.4",
+    "@types/babel__traverse": "7.14.2",
     "@types/jest": "^26.0.14",
+    "@types/node": "16.18.0",
     "@typescript-eslint/eslint-plugin": "^4.33.0",
     "@typescript-eslint/parser": "^4.33.0",
     "chalk": "^3.0.0",

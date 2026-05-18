@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>dataSet vs groupOrder 缺陷对比</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, sans-serif; background: #f5f7fa; padding: 20px; }
+        h1 { text-align: center; color: #1a1a2e; margin-bottom: 8px; }
+        .subtitle { text-align: center; color: #666; margin-bottom: 30px; font-size: 14px; }
+        .section { margin-bottom: 50px; }
+        .section-title { font-size: 17px; font-weight: bold; color: #2c3e50; padding: 12px 20px; background: #fff; border-left: 4px solid #e74c3c; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .chart-row { display: flex; gap: 20px; }
+        .chart-box { flex: 1; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 15px; position: relative; }
+        .chart-box h4 { text-align: center; color: #555; margin-bottom: 5px; font-size: 13px; }
+        .chart-container { width: 100%; height: 420px; }
+        .badge { position: absolute; top: 10px; right: 10px; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; }
+        .badge-bad { background: #fdecea; color: #e74c3c; }
+        .badge-good { background: #e8f8f0; color: #27ae60; }
+        .note { background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 12px 16px; margin: 10px 0 15px; font-size: 13px; color: #856404; line-height: 1.6; }
+        .note b { color: #c0392b; }
+    </style>
+</head>
+<body>
+<h1>柱状图组内排序：dataSet 方案缺陷演示</h1>
+<p class="subtitle">左侧为 dataSet 前端预排序方案（有缺陷），右侧为 groupOrder 源码方案（正确）。数据来源于真实 BI 业务场景。</p>
+
+<!-- 缺陷1: 堆叠+稀疏数据 颜色/tooltip 错乱 -->
+<div class="section">
+    <div class="section-title">缺陷1（堆叠+稀疏数据）：多系列仅部分分类有数据 — 颜色标识丢失 + tooltip 错乱</div>
+    <div class="note">
+        <b>真实场景：</b>按"业务类型"分组，每个系列（销售漏斗/客户承诺/最佳案例）只在部分分类下有数据。
+        dataSet 方案排序后，同一颜色在不同分类代表不同系列，tooltip 也只能显示"位置1/2/3"。<br>
+        <b>对比右图：</b>groupOrder 方案中每个系列保持自己的颜色和名称，只是堆叠顺序按值动态调整。<br>
+        &#x1F449; <b>请将鼠标悬浮在柱子上对比 tooltip 内容。</b>
+    </div>
+    <div class="chart-row">
+        <div class="chart-box"><span class="badge badge-bad">&#x274C; 颜色/tooltip 错乱</span>
+            <h4>dataSet 方案 — 颜色含义丢失，tooltip 无法识别系列</h4>
+            <div id="c1a" class="chart-container"></div></div>
+        <div class="chart-box"><span class="badge badge-good">&#x2705; 正确</span>
+            <h4>groupOrder 方案 — 颜色=系列，tooltip 显示真实名称</h4>
+            <div id="c1b" class="chart-container"></div></div>
+    </div>
+</div>
+
+<!-- 缺陷2: 非堆叠+稀疏数据 -->
+<div class="section">
+    <div class="section-title">缺陷2（非堆叠+稀疏数据）：并排柱状图 — 部分系列仅在部分分类有数据</div>
+    <div class="note">
+        <b>真实场景：</b>按"所属部门"分组，各行业（新兴行业/金融/教育/能源/零售）只在部分部门有数据。
+        非堆叠模式下 groupOrder 控制同一分类内并排柱子的左右排列顺序（值大的靠左）。<br>
+        <b>左图问题：</b>dataSet 方案中同一颜色在不同分类代表不同行业，图例完全失去意义。<br>
+        <b>右图正确：</b>每个行业保持固定颜色，只是位置按值排序。
+    </div>
+    <div class="chart-row">
+        <div class="chart-box"><span class="badge badge-bad">&#x274C; 颜色不固定</span>
+            <h4>dataSet 方案 — 非堆叠，颜色随排序变化</h4>
+            <div id="c2a" class="chart-container"></div></div>
+        <div class="chart-box"><span class="badge badge-good">&#x2705; 颜色固定</span>
+            <h4>groupOrder 方案 — 非堆叠，颜色=行业</h4>
+            <div id="c2b" class="chart-container"></div></div>
+    </div>
+</div>
+
+<!-- 缺陷3: 堆叠+大量系列 极端稀疏 -->
+<div class="section">
+    <div class="section-title">缺陷3（堆叠+大量系列）：极端稀疏 — 大部分系列仅在1个分类有数据</div>
+    <div class="note">
+        <b>真实场景：</b>按"销售机会所有人"分组，27个阶段系列中大部分只在"刘蕊"这一个分类下有数据，其他分类极度稀疏。
+        这是 BI 报表中非常典型的长尾数据分布。<br>
+        <b>左图问题：</b>dataSet 方案需要 27 个"位置槽"，大部分槽位在大部分分类下为空，排序完全失去意义。
+        而且无法从图表中识别任何有意义的系列信息。<br>
+        <b>右图正确：</b>groupOrder 方案中每个系列保持身份，排序仅影响堆叠顺序。
+    </div>
+    <div class="chart-row">
+        <div class="chart-box"><span class="badge badge-bad">&#x274C; 完全不可用</span>
+            <h4>dataSet 方案 — 27个位置槽，信息完全丢失</h4>
+            <div id="c3a" class="chart-container"></div></div>
+        <div class="chart-box"><span class="badge badge-good">&#x2705; 正常可用</span>
+            <h4>groupOrder 方案 — 保持系列身份，按值排序</h4>
+            <div id="c3b" class="chart-container"></div></div>
+    </div>
+</div>
+
+<!-- 缺陷4: 图例联动 -->
+<div class="section">
+    <div class="section-title">缺陷4：图例交互后排序不更新</div>
+    <div class="note">
+        <b>操作：</b>点击右图图例隐藏"zly00312"后，剩余两个系列自动重排（值大的靠左）。
+        左图隐藏"位置3"后，位置1和位置2的数据不会重新排序。<br>
+        &#x1F449; <b>请点击图例尝试隐藏/显示系列。</b>
+    </div>
+    <div class="chart-row">
+        <div class="chart-box"><span class="badge badge-bad">&#x274C; 不重排</span>
+            <h4>dataSet 方案 — 隐藏后排序固定</h4>
+            <div id="c4a" class="chart-container"></div></div>
+        <div class="chart-box"><span class="badge badge-good">&#x2705; 自动重排</span>
+            <h4>groupOrder 方案 — 隐藏后动态重排</h4>
+            <div id="c4b" class="chart-container"></div></div>
+    </div>
+</div>
+
+<script src="../dist/echarts.js"></script>
+<script>
+var COLORS = ['#0564F5','#2EBEA2','#FF7D00','#FFC52E','#7C4DC9','#2EB7FF','#D93030','#FF8282','#0077B5','#A679EF'];
+
+// ===== 工具函数：dataSet方案前端预排序 =====
+function datasetSort(categories, rawSeriesMap, order) {
+    // rawSeriesMap: { seriesName: { category: value } }
+    var seriesNames = Object.keys(rawSeriesMap);
+    var n = seriesNames.length;
+    var slots = [];
+    for (var i = 0; i < n; i++) slots.push([]);
+
+    categories.forEach(function(cat) {
+        var items = seriesNames.map(function(name) {
+            return { name: name, value: rawSeriesMap[name][cat] || 0 };
+        });
+        items.sort(function(a, b) {
+            return order === 'desc' ? b.value - a.value : a.value - b.value;
+        });
+        items.forEach(function(item, si) {
+            slots[si].push(item.value);
+        });
+    });
+    return slots;
+}
+
+// ===== 缺陷1: 堆叠+稀疏数据（来自真实BI数据） =====
+(function(){
+    var categories = ['新销售漏斗','新的商机业务类型','销售漏斗','新加业务','默认业务类型','新版详情页'];
+    // 真实数据：每个系列只在部分分类有值
+    var rawMap = {
+        '--':       {'新销售漏斗':1, '销售漏斗':3, '新加业务':7, '默认业务类型':56, '新版详情页':16},
+        '销售漏斗': {'新的商机业务类型':1, '默认业务类型':222},
+        '客户承诺': {'默认业务类型':10},
+        '最佳案例': {'默认业务类型':72}
+    };
+
+    // dataSet 方案
+    var sorted = datasetSort(categories, rawMap, 'asc');
+    echarts.init(document.getElementById('c1a')).setOption({
+        tooltip: {trigger:'axis'},
+        legend: {data: sorted.map(function(_,i){return '位置'+(i+1);}), bottom:0, type:'scroll'},
+        grid: {top:30, bottom:60, left:10, right:10, containLabel:true},
+        xAxis: {type:'category', data:categories, axisLabel:{rotate:15,fontSize:11}},
+        yAxis: {type:'value'},
+        series: sorted.map(function(d,i){
+            return {
+                name:'位置'+(i+1), type:'bar', stack:'all', data:d,
+                itemStyle:{color:COLORS[i]}, barMinHeight:1, barWidth:'50%',
+                label:{show:true, position:'inside', color:'#fff', formatter:function(p){return p.value||'';}}
+            };
+        })
+    });
+
+    // groupOrder 方案（还原真实配置）
+    var seriesNames = Object.keys(rawMap);
+    echarts.init(document.getElementById('c1b')).setOption({
+        tooltip: {trigger:'axis'},
+        legend: {data: seriesNames, bottom:0, type:'scroll'},
+        grid: {top:30, bottom:60, left:10, right:10, containLabel:true},
+        xAxis: {type:'category', data:categories, axisLabel:{rotate:15,fontSize:11}},
+        yAxis: {type:'value'},
+        series: seriesNames.map(function(name, i){
+            var data = categories.map(function(cat){
+                var v = rawMap[name][cat];
+                return v !== undefined ? {value:[cat, v]} : null;
+            });
+            return {
+                name:name, type:'bar', stack:'all', data:data,
+                itemStyle:{color:COLORS[i]}, barMinHeight:1, barWidth:'50%',
+                groupOrder:'asc',
+                label:{show:true, position:'inside', color:'#fff', formatter:function(p){return p.value?p.value[1]:'';}}
+            };
+        })
+    });
+})();
+
+// ===== 缺陷2: 非堆叠+稀疏数据（来自真实BI数据） =====
+(function(){
+    var categories = ['全公司','销售一部','销售部'];
+    var rawMap = {
+        '--':     {'全公司':73},
+        '新兴行业': {'全公司':11},
+        '金融':   {'全公司':6, '销售一部':50, '销售部':19},
+        '教育':   {'销售一部':23},
+        '能源':   {'销售一部':15, '销售部':29},
+        '零售':   {'销售部':36}
+    };
+
+    // dataSet 方案
+    var sorted = datasetSort(categories, rawMap, 'desc');
+    var seriesNames = Object.keys(rawMap);
+    echarts.init(document.getElementById('c2a')).setOption({
+        tooltip: {trigger:'axis'},
+        legend: {data: sorted.map(function(_,i){return '位置'+(i+1);}), bottom:0, type:'scroll'},
+        grid: {top:30, bottom:55, left:10, right:10, containLabel:true},
+        xAxis: {type:'category', data:categories},
+        yAxis: {type:'value'},
+        series: sorted.map(function(d,i){
+            return {
+                name:'位置'+(i+1), type:'bar', data:d,
+                itemStyle:{color:COLORS[i]}, barMinHeight:1,
+                label:{show:true, position:'top', color:'#5C6773', fontWeight:'bold', fontSize:11}
+            };
+        })
+    });
+
+    // groupOrder 方案
+    echarts.init(document.getElementById('c2b')).setOption({
+        tooltip: {trigger:'axis'},
+        legend: {data: seriesNames, bottom:0, type:'scroll'},
+        grid: {top:30, bottom:55, left:10, right:10, containLabel:true},
+        xAxis: {type:'category', data:categories},
+        yAxis: {type:'value'},
+        series: seriesNames.map(function(name, i){
+            var data = categories.map(function(cat){
+                var v = rawMap[name][cat];
+                return v !== undefined ? {value:[cat, v]} : null;
+            });
+            return {
+                name:name, type:'bar', data:data,
+                itemStyle:{color:COLORS[i]}, barMinHeight:1,
+                groupOrder:'desc',
+                label:{show:true, position:'top', color:'#5C6773', fontWeight:'bold', fontSize:11}
+            };
+        })
+    });
+})();
+
+// ===== 缺陷3: 堆叠+大量系列极端稀疏（来自真实BI数据） =====
+(function(){
+    var categories = ['11','BIUAT测试账号','Justin','Justina','sq','testsfa003','测试管理员','陈晨','俊平','刘蕊','申丽莉'];
+    var rawMap = {
+        '赢单':{'11':1},
+        '输单':{'11':1},
+        '赢单(2)':{'11':3},
+        '初步接洽(2)':{'11':3,'BIUAT测试账号':5,'Justin':3,'Justina':7,'测试管理员':4,'陈晨':8,'刘蕊':240},
+        '初步接洽(4)':{'11':1,'刘蕊':18},
+        '需求确定':{'BIUAT测试账号':1,'刘蕊':1},
+        '输单(1)':{'BIUAT测试账号':1,'刘蕊':3},
+        '初步接洽(1)':{'Justin':1,'刘蕊':5,'申丽莉':1},
+        '赢单(4)':{'Justina':5,'testsfa003':11,'刘蕊':19},
+        '初步接洽(3)':{'sq':2,'刘蕊':3},
+        '输单(3)':{'俊平':1},
+        '需求确定(2)':{'刘蕊':7},
+        '方案/报价':{'刘蕊':5},
+        '谈判审核(1)':{'刘蕊':40},
+        '赢单(5)':{'刘蕊':7},
+        '初步接洽(6)':{'刘蕊':8},
+        '需求确定(1)':{'刘蕊':11},
+        '方案/报价(1)':{'刘蕊':2},
+        '初步接洽(7)':{'刘蕊':3},
+        '谈判审核':{'刘蕊':3},
+        '输单(2)':{'刘蕊':1},
+        '初步接洽(5)':{'刘蕊':6},
+        '需求确定(3)':{'刘蕊':1},
+        '赢单(3)':{'刘蕊':1},
+        '赢单(1)':{'刘蕊':4},
+        '需求确定(4)':{'刘蕊':2},
+        '初步接洽':{'申丽莉':1}
+    };
+
+    var seriesNames = Object.keys(rawMap);
+
+    // dataSet 方案
+    var sorted = datasetSort(categories, rawMap, 'desc');
+    echarts.init(document.getElementById('c3a')).setOption({
+        tooltip: {trigger:'axis'},
+        legend: {show:false},
+        grid: {top:10, bottom:30, left:10, right:10, containLabel:true},
+        xAxis: {type:'category', data:categories, axisLabel:{rotate:30,fontSize:10}},
+        yAxis: {type:'value'},
+        series: sorted.map(function(d,i){
+            return {
+                name:'位置'+(i+1), type:'bar', stack:'all', data:d,
+                itemStyle:{color:COLORS[i % COLORS.length]}, barMinHeight:1,
+                label:{show:false}
+            };
+        })
+    });
+
+    // groupOrder 方案
+    echarts.init(document.getElementById('c3b')).setOption({
+        tooltip: {trigger:'axis'},
+        legend: {show:false},
+        grid: {top:10, bottom:30, left:10, right:10, containLabel:true},
+        xAxis: {type:'category', data:categories, axisLabel:{rotate:30,fontSize:10}},
+        yAxis: {type:'value'},
+        series: seriesNames.map(function(name, i){
+            var data = categories.map(function(cat){
+                var v = rawMap[name][cat];
+                return v !== undefined ? {value:[cat, v]} : null;
+            });
+            return {
+                name:name, type:'bar', stack:'all', data:data,
+                itemStyle:{color:COLORS[i % COLORS.length]}, barMinHeight:1,
+                groupOrder:'desc',
+                label:{show:false}
+            };
+        })
+    });
+})();
+
+// ===== 缺陷4: 图例联动（非堆叠，来自真实BI数据） =====
+(function(){
+    var categories = ['审批通过','审批中','撤回','凑数据的审批','凑数据的审批中','凑数据的撤回'];
+    var rawMap = {
+        'zly13':   {'审批通过':8203,'审批中':3489,'撤回':9034,'凑数据的审批':1470,'凑数据的审批中':1344,'凑数据的撤回':6230},
+        'zly0031': {'审批通过':1803,'审批中':2349,'撤回':2903,'凑数据的审批':10470,'凑数据的审批中':1344,'凑数据的撤回':63030},
+        'zly00312':{'审批通过':18203,'审批中':23489,'撤回':2934,'凑数据的审批':1049,'凑数据的审批中':13174,'凑数据的撤回':633}
+    };
+    var seriesNames = Object.keys(rawMap);
+
+    // dataSet 方案
+    var sorted = datasetSort(categories, rawMap, 'desc');
+    echarts.init(document.getElementById('c4a')).setOption({
+        tooltip: {trigger:'axis'},
+        legend: {data: sorted.map(function(_,i){return '位置'+(i+1);}), bottom:0},
+        grid: {top:30, bottom:50, left:10, right:10, containLabel:true},
+        xAxis: {type:'category', data:categories, axisLabel:{rotate:15,fontSize:11}},
+        yAxis: {type:'value'},
+        series: sorted.map(function(d,i){
+            return {
+                name:'位置'+(i+1), type:'bar', data:d,
+                itemStyle:{color:COLORS[i]},
+                label:{show:true, position:'top', fontSize:10}
+            };
+        })
+    });
+
+    // groupOrder 方案
+    echarts.init(document.getElementById('c4b')).setOption({
+        tooltip: {trigger:'axis'},
+        legend: {data: seriesNames, bottom:0},
+        grid: {top:30, bottom:50, left:10, right:10, containLabel:true},
+        xAxis: {type:'category', data:categories, axisLabel:{rotate:15,fontSize:11}},
+        yAxis: {type:'value'},
+        series: seriesNames.map(function(name, i){
+            var data = categories.map(function(cat){ return rawMap[name][cat]; });
+            return {
+                name:name, type:'bar', data:data,
+                itemStyle:{color:COLORS[i]},
+                groupOrder:'desc',
+                label:{show:true, position:'top', fontSize:10}
+            };
+        })
+    });
+})();
+</script>
+</body>
+</html>
