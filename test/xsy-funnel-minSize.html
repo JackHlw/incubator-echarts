@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="lib/simpleRequire.js"></script>
+    <script src="lib/config.js"></script>
+    <script src="lib/jquery.min.js"></script>
+    <script src="lib/facePrint.js"></script>
+    <script src="lib/testHelper.js"></script>
+    <link rel="stylesheet" href="lib/reset.css">
+</head>
+<body>
+    <div id="main0"></div>
+    <div id="main1"></div>
+    <div id="main2"></div>
+    <div id="main3"></div>
+    <div id="main4"></div>
+    <div id="main5"></div>
+
+    <script>
+        require(['echarts'], function (echarts) {
+
+            // ===== minHeight tests (vertical funnel, many items to compress height) =====
+
+            // 1. no minHeight, many items compressed
+            testHelper.create(echarts, 'main0', {
+                title: '1. vertical funnel, no minHeight (small blocks compressed)',
+                height: 300,
+                option: {
+                    tooltip: { trigger: 'item' },
+                    series: [{
+                        name: 'Funnel',
+                        type: 'funnel',
+                        left: '10%', width: '80%', top: 40, bottom: 40,
+                        gap: 0,
+                        label: { show: true, position: 'inside', fontSize: 10 },
+                        data: [
+                            { value: 100, name: 'A' },
+                            { value: 90, name: 'B' },
+                            { value: 80, name: 'C' },
+                            { value: 70, name: 'D' },
+                            { value: 60, name: 'E' },
+                            { value: 50, name: 'F' },
+                            { value: 40, name: 'G' },
+                            { value: 30, name: 'H' },
+                            { value: 20, name: 'I' },
+                            { value: 10, name: 'J' },
+                            { value: 5, name: 'K' },
+                            { value: 3, name: 'L' },
+                            { value: 1, name: 'M' }
+                        ]
+                    }]
+                }
+            });
+
+            // 2. minHeight='25', all blocks have minimum 25px height
+            testHelper.create(echarts, 'main1', {
+                title: '2. vertical funnel, minHeight=25 (all blocks at least 25px tall)',
+                height: 300,
+                option: {
+                    tooltip: { trigger: 'item' },
+                    series: [{
+                        name: 'Funnel',
+                        type: 'funnel',
+                        left: '10%', width: '80%', top: 40, bottom: 40,
+                        gap: 0,
+                        minHeight: '25',
+                        label: { show: true, position: 'inside', fontSize: 10 },
+                        data: [
+                            { value: 100, name: 'A' },
+                            { value: 90, name: 'B' },
+                            { value: 80, name: 'C' },
+                            { value: 70, name: 'D' },
+                            { value: 60, name: 'E' },
+                            { value: 50, name: 'F' },
+                            { value: 40, name: 'G' },
+                            { value: 30, name: 'H' },
+                            { value: 20, name: 'I' },
+                            { value: 10, name: 'J' },
+                            { value: 5, name: 'K' },
+                            { value: 3, name: 'L' },
+                            { value: 1, name: 'M' }
+                        ]
+                    }]
+                }
+            });
+
+            // 3. item-level minHeight overrides series-level
+            testHelper.create(echarts, 'main2', {
+                title: '3. item-level minHeight=40 overrides series-level minHeight=20',
+                height: 300,
+                option: {
+                    tooltip: { trigger: 'item' },
+                    series: [{
+                        name: 'Funnel',
+                        type: 'funnel',
+                        left: '10%', width: '80%', top: 40, bottom: 40,
+                        gap: 0,
+                        minHeight: '20',
+                        label: { show: true, position: 'inside', fontSize: 10 },
+                        data: [
+                            { value: 100, name: 'A' },
+                            { value: 90, name: 'B' },
+                            { value: 80, name: 'C' },
+                            { value: 70, name: 'D' },
+                            { value: 60, name: 'E' },
+                            { value: 50, name: 'F' },
+                            { value: 40, name: 'G' },
+                            { value: 30, name: 'H' },
+                            { value: 20, name: 'I' },
+                            { value: 10, name: 'J', itemStyle: { minHeight: '40' } },
+                            { value: 5, name: 'K', itemStyle: { minHeight: '40' } },
+                            { value: 3, name: 'L', itemStyle: { minHeight: '40' } },
+                            { value: 1, name: 'M', itemStyle: { minHeight: '40' } }
+                        ]
+                    }]
+                }
+            });
+
+            // ===== minWidth tests (vertical funnel, small values have narrow width) =====
+
+            // 4. no minWidth (small values nearly invisible width)
+            testHelper.create(echarts, 'main3', {
+                title: '4. vertical funnel, no minWidth (small values very narrow)',
+                option: {
+                    tooltip: { trigger: 'item' },
+                    series: [{
+                        name: 'Funnel',
+                        type: 'funnel',
+                        left: '10%', width: '80%', top: 60, bottom: 60,
+                        label: { show: true, position: 'inside' },
+                        data: [
+                            { value: 1000, name: 'Visit' },
+                            { value: 500, name: 'Inquiry' },
+                            { value: 100, name: 'Order' },
+                            { value: 10, name: 'Click' },
+                            { value: 1, name: 'Show' }
+                        ]
+                    }]
+                }
+            });
+
+            // 5. minWidth='80' (narrow blocks become visible)
+            testHelper.create(echarts, 'main4', {
+                title: '5. vertical funnel, minWidth=80 (narrow blocks visible)',
+                option: {
+                    tooltip: { trigger: 'item' },
+                    series: [{
+                        name: 'Funnel',
+                        type: 'funnel',
+                        left: '10%', width: '80%', top: 60, bottom: 60,
+                        minWidth: '80',
+                        label: { show: true, position: 'inside' },
+                        data: [
+                            { value: 1000, name: 'Visit' },
+                            { value: 500, name: 'Inquiry' },
+                            { value: 100, name: 'Order' },
+                            { value: 10, name: 'Click' },
+                            { value: 1, name: 'Show' }
+                        ]
+                    }]
+                }
+            });
+
+            // 6. horizontal funnel + minHeight (controls narrow dimension in horizontal)
+            testHelper.create(echarts, 'main5', {
+                title: '6. horizontal funnel, minHeight=60 (narrow blocks visible)',
+                option: {
+                    tooltip: { trigger: 'item' },
+                    series: [{
+                        name: 'Funnel',
+                        type: 'funnel',
+                        orient: 'horizontal',
+                        left: '5%', right: '5%', top: 80, bottom: 60,
+                        minHeight: '60',
+                        label: { show: true, position: 'inside' },
+                        data: [
+                            { value: 1000, name: 'Visit' },
+                            { value: 500, name: 'Inquiry' },
+                            { value: 100, name: 'Order' },
+                            { value: 10, name: 'Click' },
+                            { value: 1, name: 'Show' }
+                        ]
+                    }]
+                }
+            });
+        });
+    </script>
+</body>
+</html>

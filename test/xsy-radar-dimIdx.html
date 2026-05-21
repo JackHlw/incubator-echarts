@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="lib/simpleRequire.js"></script>
+    <script src="lib/config.js"></script>
+    <script src="lib/jquery.min.js"></script>
+    <script src="lib/facePrint.js"></script>
+    <script src="lib/testHelper.js"></script>
+    <link rel="stylesheet" href="lib/reset.css">
+</head>
+<body>
+    <div id="main0"></div>
+    <div id="main1"></div>
+
+    <script>
+        require(['echarts'], function (echarts) {
+
+            var indicators = [
+                { name: 'Sales', max: 100 },
+                { name: 'Admin', max: 100 },
+                { name: 'IT', max: 100 },
+                { name: 'Support', max: 100 },
+                { name: 'Dev', max: 100 },
+                { name: 'Marketing', max: 100 }
+            ];
+
+            // 1. radar with dimensionIndex in tooltip formatter
+            testHelper.create(echarts, 'main0', {
+                title: '1. radar tooltip shows dimensionIndex (hover each axis point)',
+                option: {
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: function (params) {
+                            var dimIdx = params.dimensionIndex;
+                            if (dimIdx === undefined || dimIdx === -1) {
+                                return params.name + '<br/>' + params.value.join(', ');
+                            }
+                            var indicator = indicators[dimIdx];
+                            return '<b>' + indicator.name + '</b><br/>'
+                                + 'dimensionIndex: ' + dimIdx + '<br/>'
+                                + 'value: ' + params.value[dimIdx];
+                        }
+                    },
+                    radar: {
+                        indicator: indicators
+                    },
+                    series: [{
+                        name: 'Team Performance',
+                        type: 'radar',
+                        data: [{
+                            value: [80, 60, 90, 70, 85, 55],
+                            name: 'Team A'
+                        }]
+                    }]
+                }
+            });
+
+            // 2. radar with multiple series
+            testHelper.create(echarts, 'main1', {
+                title: '2. radar multi-series, tooltip shows dimensionIndex',
+                option: {
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: function (params) {
+                            var dimIdx = params.dimensionIndex;
+                            if (dimIdx === undefined || dimIdx === -1) {
+                                return params.name + ': ' + params.value.join(', ');
+                            }
+                            var indicator = indicators[dimIdx];
+                            return params.name + '<br/>'
+                                + '<b>' + indicator.name + '</b>: ' + params.value[dimIdx]
+                                + '<br/>dimensionIndex=' + dimIdx;
+                        }
+                    },
+                    legend: { bottom: 0 },
+                    radar: {
+                        indicator: indicators
+                    },
+                    series: [{
+                        name: 'Comparison',
+                        type: 'radar',
+                        data: [
+                            { value: [80, 60, 90, 70, 85, 55], name: 'Team A' },
+                            { value: [50, 80, 70, 90, 60, 75], name: 'Team B' }
+                        ]
+                    }]
+                }
+            });
+        });
+    </script>
+</body>
+</html>

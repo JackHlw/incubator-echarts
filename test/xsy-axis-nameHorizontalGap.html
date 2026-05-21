@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="lib/simpleRequire.js"></script>
+    <script src="lib/config.js"></script>
+    <script src="lib/jquery.min.js"></script>
+    <script src="lib/facePrint.js"></script>
+    <script src="lib/testHelper.js"></script>
+    <link rel="stylesheet" href="lib/reset.css">
+</head>
+<body>
+    <div id="main0"></div>
+    <div id="main1"></div>
+    <div id="main2"></div>
+    <div id="main3"></div>
+
+    <script>
+        require(['echarts'], function (echarts) {
+
+            // 1. nameLocation=end, no nameHorizontalGap (default)
+            testHelper.create(echarts, 'main0', {
+                title: '1. nameLocation=end, nameHorizontalGap=0 (default)',
+                option: {
+                    xAxis: { type: 'category', data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+                    yAxis: {
+                        type: 'value',
+                        name: 'Sales',
+                        nameLocation: 'end',
+                        nameGap: 15
+                    },
+                    grid: { left: 60, right: 20, top: 40, bottom: 40 },
+                    series: [{ type: 'bar', data: [120, 200, 150, 80, 70] }]
+                }
+            });
+
+            // 2. nameLocation=end, nameHorizontalGap=-50 (move name left)
+            testHelper.create(echarts, 'main1', {
+                title: '2. nameLocation=end, nameHorizontalGap=-50 (name moves left)',
+                option: {
+                    xAxis: { type: 'category', data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+                    yAxis: {
+                        type: 'value',
+                        name: 'Sales',
+                        nameLocation: 'end',
+                        nameGap: 15,
+                        nameHorizontalGap: -50
+                    },
+                    grid: { left: 60, right: 20, top: 40, bottom: 40 },
+                    series: [{ type: 'bar', data: [120, 200, 150, 80, 70] }]
+                }
+            });
+
+            // 3. nameLocation=end, nameHorizontalGap=30 (move name right)
+            testHelper.create(echarts, 'main2', {
+                title: '3. nameLocation=end, nameHorizontalGap=30 (name moves right)',
+                option: {
+                    xAxis: { type: 'category', data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+                    yAxis: {
+                        type: 'value',
+                        name: 'Sales',
+                        nameLocation: 'end',
+                        nameGap: 15,
+                        nameHorizontalGap: 30
+                    },
+                    grid: { left: 60, right: 20, top: 40, bottom: 40 },
+                    series: [{ type: 'bar', data: [120, 200, 150, 80, 70] }]
+                }
+            });
+
+            // 4. nameLocation=middle (nameHorizontalGap should NOT take effect)
+            testHelper.create(echarts, 'main3', {
+                title: '4. nameLocation=middle, nameHorizontalGap=-50 (should NOT take effect)',
+                option: {
+                    xAxis: { type: 'category', data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+                    yAxis: {
+                        type: 'value',
+                        name: 'Sales',
+                        nameLocation: 'middle',
+                        nameGap: 40,
+                        nameHorizontalGap: -50
+                    },
+                    grid: { left: 80, right: 20, top: 40, bottom: 40 },
+                    series: [{ type: 'bar', data: [120, 200, 150, 80, 70] }]
+                }
+            });
+        });
+    </script>
+</body>
+</html>

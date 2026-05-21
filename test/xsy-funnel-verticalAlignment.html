@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="lib/simpleRequire.js"></script>
+    <script src="lib/config.js"></script>
+    <script src="lib/jquery.min.js"></script>
+    <script src="lib/facePrint.js"></script>
+    <script src="lib/testHelper.js"></script>
+    <link rel="stylesheet" href="lib/reset.css">
+</head>
+<body>
+    <div id="main0"></div>
+    <div id="main1"></div>
+    <div id="main2"></div>
+    <div id="main3"></div>
+
+    <script>
+        require(['echarts'], function (echarts) {
+
+            // 1. verticalAlignment=false (default)
+            testHelper.create(echarts, 'main0', {
+                title: '1. verticalAlignment=false (default, labels not aligned)',
+                option: {
+                    tooltip: { trigger: 'item' },
+                    legend: { bottom: 0 },
+                    series: [{
+                        name: 'Funnel',
+                        type: 'funnel',
+                        left: '10%', width: '60%', top: 60, bottom: 60,
+                        label: { position: 'right' },
+                        labelLine: { show: true },
+                        data: [
+                            { value: 100, name: 'Visit' },
+                            { value: 80, name: 'Inquiry' },
+                            { value: 60, name: 'Order' },
+                            { value: 30, name: 'Click' },
+                            { value: 10, name: 'Show' }
+                        ]
+                    }]
+                }
+            });
+
+            // 2. verticalAlignment=true, position=right
+            testHelper.create(echarts, 'main1', {
+                title: '2. verticalAlignment=true, position=right (labels aligned)',
+                option: {
+                    tooltip: { trigger: 'item' },
+                    legend: { bottom: 0 },
+                    series: [{
+                        name: 'Funnel',
+                        type: 'funnel',
+                        left: '10%', width: '60%', top: 60, bottom: 60,
+                        label: { position: 'right', verticalAlignment: true },
+                        labelLine: { show: true },
+                        data: [
+                            { value: 100, name: 'Visit' },
+                            { value: 80, name: 'Inquiry' },
+                            { value: 60, name: 'Order' },
+                            { value: 30, name: 'Click' },
+                            { value: 10, name: 'Show' }
+                        ]
+                    }]
+                }
+            });
+
+            // 3. verticalAlignment=true, position=left
+            testHelper.create(echarts, 'main2', {
+                title: '3. verticalAlignment=true, position=left (labels aligned)',
+                option: {
+                    tooltip: { trigger: 'item' },
+                    legend: { bottom: 0 },
+                    series: [{
+                        name: 'Funnel',
+                        type: 'funnel',
+                        left: '30%', width: '60%', top: 60, bottom: 60,
+                        label: { position: 'left', verticalAlignment: true },
+                        labelLine: { show: true },
+                        data: [
+                            { value: 100, name: 'Visit' },
+                            { value: 80, name: 'Inquiry' },
+                            { value: 60, name: 'Order' },
+                            { value: 30, name: 'Click' },
+                            { value: 10, name: 'Show' }
+                        ]
+                    }]
+                }
+            });
+
+            // 4. verticalAlignment=true, horizontal orient
+            testHelper.create(echarts, 'main3', {
+                title: '4. verticalAlignment=true, orient=horizontal, position=bottom',
+                option: {
+                    tooltip: { trigger: 'item' },
+                    legend: { bottom: 0 },
+                    series: [{
+                        name: 'Funnel',
+                        type: 'funnel',
+                        orient: 'horizontal',
+                        left: '5%', right: '5%', top: 80, bottom: 80,
+                        label: { position: 'bottom', verticalAlignment: true },
+                        labelLine: { show: true },
+                        data: [
+                            { value: 100, name: 'Visit' },
+                            { value: 80, name: 'Inquiry' },
+                            { value: 60, name: 'Order' },
+                            { value: 30, name: 'Click' },
+                            { value: 10, name: 'Show' }
+                        ]
+                    }]
+                }
+            });
+        });
+    </script>
+</body>
+</html>

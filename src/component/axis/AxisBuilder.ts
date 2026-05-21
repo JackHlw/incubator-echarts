@@ -849,6 +849,8 @@ const builders: Record<AxisBuilderAxisPartName, AxisElementsBuilder> = {
         const nameDirection = cfg.nameDirection;
         const textStyleModel = axisModel.getModel('nameTextStyle');
         const gap = (axisModel.get('nameGap') || 0);
+        //xsy-bi源码修改点： y轴添加水平Gap控制nameHorizontalGap.
+        const nameHorizontalGap = axisModel.get('nameHorizontalGap') || 0;
 
         const extent = axisModel.axis.getExtent();
         const gapStartEndSignal = axisModel.axis.inverse ? -1 : 1;
@@ -856,17 +858,20 @@ const builders: Record<AxisBuilderAxisPartName, AxisElementsBuilder> = {
         const nameMoveDirVec = new Point(0, 0);
         if (nameLocation === 'start') {
             pos.x = extent[0] - gapStartEndSignal * gap;
+            pos.y = nameHorizontalGap;
             nameMoveDirVec.x = -gapStartEndSignal;
         }
         else if (nameLocation === 'end') {
             pos.x = extent[1] + gapStartEndSignal * gap;
+            pos.y = nameHorizontalGap;
             nameMoveDirVec.x = gapStartEndSignal;
         }
         else { // 'middle' or 'center'
             pos.x = (extent[0] + extent[1]) / 2;
+            //xsy-bi源码修改点： y轴添加水平Gap控制nameHorizontalGap.
             pos.y = cfg.labelOffset + nameDirection * gap;
             nameMoveDirVec.y = nameDirection;
-        }
+        }  
         const mt = matrixUtil.create();
         nameMoveDirVec.transform(matrixUtil.rotate(mt, mt, cfg.rotation));
 

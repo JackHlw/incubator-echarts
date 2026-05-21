@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="lib/simpleRequire.js"></script>
+    <script src="lib/config.js"></script>
+    <script src="lib/jquery.min.js"></script>
+    <script src="lib/facePrint.js"></script>
+    <script src="lib/testHelper.js"></script>
+    <link rel="stylesheet" href="lib/reset.css">
+</head>
+<body>
+    <div id="main0"></div>
+    <div id="main1"></div>
+    <div id="main2"></div>
+    <div id="main3"></div>
+    <div id="main4"></div>
+    <div id="main5"></div>
+
+    <script>
+        require(['echarts'], function (echarts) {
+            // 1. stacked + groupOrder desc
+            testHelper.create(echarts, 'main0', { title: '1. stacked + groupOrder desc', option: { tooltip:{trigger:'item'}, legend:{bottom:0}, xAxis:{type:'category',data:['Sales','Marketing','Tech','Ops','Product']}, yAxis:{type:'value'}, grid:{top:40,bottom:50}, series:[ {name:'Finance',type:'bar',stack:'t',groupOrder:'desc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[190,30,80,20,50]}, {name:'Education',type:'bar',stack:'t',groupOrder:'desc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[25,90,40,60,10]}, {name:'Retail',type:'bar',stack:'t',groupOrder:'desc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[84,50,120,30,70]}, {name:'Energy',type:'bar',stack:'t',groupOrder:'desc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[12,70,25,100,40]} ]} });
+
+            // 2. stacked + groupOrder asc
+            testHelper.create(echarts, 'main1', { title: '2. stacked + groupOrder asc', option: { tooltip:{trigger:'item'}, legend:{bottom:0}, xAxis:{type:'category',data:['Q1','Q2','Q3','Q4']}, yAxis:{type:'value'}, grid:{top:40,bottom:50}, series:[ {name:'A',type:'bar',stack:'a',groupOrder:'asc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[100,30,80,50]}, {name:'B',type:'bar',stack:'a',groupOrder:'asc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[50,90,20,70]}, {name:'C',type:'bar',stack:'a',groupOrder:'asc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[30,60,100,40]} ]} });
+
+            // 3. horizontal stacked + groupOrder desc
+            testHelper.create(echarts, 'main2', { title: '3. horizontal stacked + groupOrder desc', option: { tooltip:{trigger:'item'}, legend:{bottom:0}, xAxis:{type:'value'}, yAxis:{type:'category',data:['D1','D2','D3','D4']}, grid:{top:40,bottom:50,left:60}, series:[ {name:'A',type:'bar',stack:'a',groupOrder:'desc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[120,40,80,60]}, {name:'B',type:'bar',stack:'a',groupOrder:'desc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[50,100,30,90]}, {name:'C',type:'bar',stack:'a',groupOrder:'desc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[80,60,110,40]} ]} });
+
+            // 4. non-stacked + groupOrder desc
+            testHelper.create(echarts, 'main3', { title: '4. non-stacked + groupOrder desc', option: { tooltip:{trigger:'item'}, legend:{bottom:0}, xAxis:{type:'category',data:['ZoneA','ZoneB','ZoneC','ZoneD']}, yAxis:{type:'value'}, grid:{top:40,bottom:50}, series:[ {name:'Sales',type:'bar',groupOrder:'desc',label:{show:true,position:'top'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[200,60,100,80]}, {name:'Profit',type:'bar',groupOrder:'desc',label:{show:true,position:'top'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[80,150,50,120]}, {name:'Cost',type:'bar',groupOrder:'desc',label:{show:true,position:'top'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[120,90,180,60]} ]} });
+
+            // 5. sparse data + stacked + groupOrder
+            testHelper.create(echarts, 'main4', { title: '5. sparse data + stacked + groupOrder desc', option: { tooltip:{trigger:'item'}, legend:{bottom:0}, xAxis:{type:'category',data:['Jan','Feb','Mar','Apr','May','Jun']}, yAxis:{type:'value'}, grid:{top:40,bottom:50}, series:[ {name:'A',type:'bar',stack:'a',groupOrder:'desc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[100,null,80,60,null,120]}, {name:'B',type:'bar',stack:'a',groupOrder:'desc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[50,90,null,70,40,30]}, {name:'C',type:'bar',stack:'a',groupOrder:'desc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[null,60,110,null,80,50]}, {name:'D',type:'bar',stack:'a',groupOrder:'desc',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[30,40,50,90,60,null]} ]} });
+
+            // 6. stacked + no groupOrder (baseline)
+            testHelper.create(echarts, 'main5', { title: '6. stacked + no groupOrder (baseline)', option: { tooltip:{trigger:'item'}, legend:{bottom:0}, xAxis:{type:'category',data:['Q1','Q2','Q3','Q4']}, yAxis:{type:'value'}, grid:{top:40,bottom:50}, series:[ {name:'ProdA',type:'bar',stack:'t',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[120,80,150,60]}, {name:'ProdB',type:'bar',stack:'t',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[90,130,70,110]}, {name:'ProdC',type:'bar',stack:'t',label:{show:true,position:'inside'},emphasis:{focus:'series',blurScope:'coordinateSystem'},data:[60,100,120,80]} ]} });
+        });
+    </script>
+</body>
+</html>
